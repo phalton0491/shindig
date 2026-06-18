@@ -1,29 +1,40 @@
 import { ImageBackground, StyleSheet, Text, View } from 'react-native';
 
-import { OutingAlbum } from '../data/mockProfile';
+import { SavedShindig } from '../types/models';
 import { theme } from '../theme';
 
 type AlbumCardProps = {
-  album: OutingAlbum;
+  shindig: SavedShindig;
 };
 
-export function AlbumCard({ album }: AlbumCardProps) {
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
+export function AlbumCard({ shindig }: AlbumCardProps) {
+  const fallbackPhoto =
+    'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80';
+  const stopSummary = shindig.stops.map((stop) => stop.place.title).join(' / ');
+
   return (
     <ImageBackground
       imageStyle={styles.image}
-      source={{ uri: album.coverPhoto }}
+      source={{ uri: shindig.coverPhotoUrl || fallbackPhoto }}
       style={styles.card}
     >
       <View style={styles.overlay}>
         <View style={styles.pill}>
-          <Text style={styles.pillText}>{album.moment}</Text>
+          <Text style={styles.pillText}>ShinDig</Text>
         </View>
-        <Text style={styles.title}>{album.title}</Text>
+        <Text style={styles.title}>{shindig.title}</Text>
         <Text style={styles.meta}>
-          {album.date} / {album.location}
+          {formatDate(shindig.createdAt)} / {shindig.photoCount} photos
         </Text>
         <Text numberOfLines={2} style={styles.vibe}>
-          {album.vibe}
+          {stopSummary}
         </Text>
       </View>
     </ImageBackground>

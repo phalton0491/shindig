@@ -1,6 +1,6 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
 
-import { UserProfile } from '../data/mockProfile';
+import { UserProfile } from '../types/models';
 import { theme } from '../theme';
 
 type ProfileHeaderProps = {

@@ -23,6 +23,12 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
 ```
 
 4. Run the SQL in [supabase/schema.sql](/C:/Users/phalton/Documents/ShinDig/supabase/schema.sql).
+5. For production-quality place autocomplete, add a Google Maps Places API key as a Supabase Edge Function secret:
+
+```bash
+supabase secrets set GOOGLE_MAPS_API_KEY=your-google-maps-api-key
+supabase functions deploy places-autocomplete
+```
 
 ## Run locally
 

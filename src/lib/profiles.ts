@@ -1,6 +1,6 @@
 import { User } from '@supabase/supabase-js';
 
-import { UserProfile } from '../data/mockProfile';
+import { UserProfile } from '../types/models';
 import { supabase } from './supabase';
 
 type ProfileRow = {
@@ -41,9 +41,9 @@ function mapProfile(row: ProfileRow): UserProfile {
     bio: row.bio?.trim() || 'Tell people what your best days and nights look like.',
     avatar: row.avatar_url || defaultAvatar(firstName, lastName),
     stats: {
-      outings: 24,
-      friends: 182,
-      saves: 89,
+      outings: 0,
+      friends: 0,
+      saves: 0,
     },
   };
 }

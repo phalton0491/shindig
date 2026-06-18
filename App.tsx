@@ -3,23 +3,55 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, View } from 'react-native';
 
-import { UserProfile } from './src/data/mockProfile';
 import { supabase } from './src/lib/supabase';
+import { createShindig, listShindigsForUser } from './src/lib/shindigs';
 import { ensureProfileForUser, getProfileForUser, updateProfile } from './src/lib/profiles';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { BackendSetupScreen } from './src/screens/BackendSetupScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { theme } from './src/theme';
+import { SavedShindig, UserProfile } from './src/types/models';
 
 type ActiveRoute = 'home' | 'profile';
+const BOOTSTRAP_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out. Check your network and Supabase settings.`));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
+}
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [shindigs, setShindigs] = useState<SavedShindig[]>([]);
   const [route, setRoute] = useState<ActiveRoute>('home');
   const [bootError, setBootError] = useState('');
+
+  function withLiveStats(nextProfile: UserProfile, nextShindigs: SavedShindig[]) {
+    return {
+      ...nextProfile,
+      stats: {
+        ...nextProfile.stats,
+        outings: nextShindigs.length,
+      },
+    };
+  }
 
   useEffect(() => {
     if (!supabase) {
@@ -32,30 +64,53 @@ export default function App() {
     let isMounted = true;
 
     async function bootstrap() {
-      const {
-        data: { session: currentSession },
-      } = await client.auth.getSession();
+      try {
+        const {
+          data: { session: currentSession },
+        } = await withTimeout(
+          client.auth.getSession(),
+          BOOTSTRAP_TIMEOUT_MS,
+          'Session restore'
+        );
 
-      if (!isMounted) {
-        return;
-      }
+        if (!isMounted) {
+          return;
+        }
 
-      setSession(currentSession);
+        setSession(currentSession);
 
-      if (currentSession?.user) {
-        try {
-          const nextProfile = await ensureProfileForUser(currentSession.user);
+        if (currentSession?.user) {
+          const [nextProfile, nextShindigs] = await Promise.all([
+            withTimeout(
+              ensureProfileForUser(currentSession.user),
+              BOOTSTRAP_TIMEOUT_MS,
+              'Profile load'
+            ),
+            withTimeout(
+              listShindigsForUser(currentSession.user.id),
+              BOOTSTRAP_TIMEOUT_MS,
+              'ShinDig load'
+            ),
+          ]);
+
           if (isMounted) {
-            setProfile(nextProfile);
-          }
-        } catch (error) {
-          if (isMounted) {
-            setBootError(error instanceof Error ? error.message : 'Failed to load profile.');
+            setShindigs(nextShindigs);
+            setProfile(withLiveStats(nextProfile, nextShindigs));
           }
         }
+      } catch (error) {
+        if (isMounted) {
+          setBootError(
+            error instanceof Error ? error.message : 'Failed to finish app startup.'
+          );
+          setSession(null);
+          setProfile(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
-
-      setIsLoading(false);
     }
 
     bootstrap();
@@ -71,14 +126,19 @@ export default function App() {
 
         if (!nextSession?.user) {
           setProfile(null);
+          setShindigs([]);
           setRoute('home');
           return;
         }
 
         try {
-          const nextProfile = await ensureProfileForUser(nextSession.user);
+          const [nextProfile, nextShindigs] = await Promise.all([
+            ensureProfileForUser(nextSession.user),
+            listShindigsForUser(nextSession.user.id),
+          ]);
           if (isMounted) {
-            setProfile(nextProfile);
+            setShindigs(nextShindigs);
+            setProfile(withLiveStats(nextProfile, nextShindigs));
           }
         } catch (error) {
           if (isMounted) {
@@ -102,8 +162,20 @@ export default function App() {
     }
 
     const savedProfile = await updateProfile(session.user.id, nextProfile);
-    setProfile(savedProfile);
-    return savedProfile;
+    const nextWithStats = withLiveStats(savedProfile, shindigs);
+    setProfile(nextWithStats);
+    return nextWithStats;
+  }
+
+  async function handleShindigSaved(args: Parameters<typeof createShindig>[0]) {
+    const savedShindig = await createShindig(args);
+    const nextShindigs = [savedShindig, ...shindigs];
+    setShindigs(nextShindigs);
+    if (profile) {
+      setProfile(withLiveStats(profile, nextShindigs));
+    }
+    setRoute('profile');
+    return savedShindig;
   }
 
   if (!supabase) {
@@ -140,14 +212,17 @@ export default function App() {
       <StatusBar style="light" />
       {route === 'home' ? (
         <HomeScreen
+          onShindigSaved={handleShindigSaved}
           onOpenProfile={() => setRoute('profile')}
           profile={profile}
+          userId={session.user.id}
         />
       ) : (
         <ProfileScreen
           onBackHome={() => setRoute('home')}
           onProfileSaved={handleProfileSaved}
           profile={profile}
+          shindigs={shindigs}
           userId={session.user.id}
         />
       )}
