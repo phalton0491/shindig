@@ -1,9 +1,10 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import * as Contacts from 'expo-contacts';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as SMS from 'expo-sms';
 import {
   Image,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -23,129 +24,103 @@ type HomeScreenProps = {
   onOpenProfile: () => void;
   onShindigSaved: (args: {
     stops: {
-      photos: DraftStopPhoto[];
+      photos: DraftPhoto[];
       place: TimelinePlace;
       scheduledTime?: string;
     }[];
+    title: string;
     userId: string;
   }) => Promise<SavedShindig>;
   profile: UserProfile;
+  shindigs: SavedShindig[];
   userId: string;
 };
 
-type PlannerStep = 'places' | 'review' | 'timeline' | 'map';
+type FlowStep = 'welcome' | 'create' | 'invite' | 'feed';
 
-type DraftStopPhoto = {
+type DraftPhoto = {
   base64: string;
   contentType?: string;
   fileExtension?: string;
   localUri: string;
 };
 
-const APP_MARK = require('../../assets/android-icon-foreground.png');
+type InviteContact = {
+  id: string;
+  name: string;
+  phoneNumber: string;
+};
 
-function buildTimeline(stops: TimelinePlace[]) {
-  const startHour = 20;
-  const startMinute = 0;
+const HERO_LOGO = require('../../assets/auth-logo.png');
+const INVITE_SIGNUP_URL = 'shindig://signup';
 
-  return stops.map((stop, index) => {
-    const minutesBeforeStop = stops
-      .slice(0, index)
-      .reduce((total, current, currentIndex) => {
-        const stopMinutes = current.durationLabel.includes('2+')
-          ? 120
-          : current.durationLabel.includes('1 hr 45')
-            ? 105
-            : current.durationLabel.includes('1 hr 30')
-              ? 90
-              : current.durationLabel.includes('1 hr 20')
-                ? 80
-                : 70;
-        const transitMinutes =
-          currentIndex < stops.length - 1 ? current.transitMinutes : 0;
-
-        return total + stopMinutes + transitMinutes;
-      }, 0);
-
-    const totalMinutes = startHour * 60 + startMinute + minutesBeforeStop;
-    const hour24 = Math.floor(totalMinutes / 60);
-    const minute = totalMinutes % 60;
-    const period = hour24 >= 12 ? 'PM' : 'AM';
-    const hour12 = ((hour24 + 11) % 12) + 1;
-    const timeLabel = `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
-
-    return {
-      ...stop,
-      timeLabel,
-    };
+function formatDateLabel(value: string) {
+  return new Date(value).toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
   });
 }
 
-function summaryDistance(stops: TimelinePlace[]) {
-  return stops
-    .slice(0, Math.max(stops.length - 1, 0))
-    .reduce((total, stop) => total + stop.transitMiles, 0);
+function fileExtensionFromUri(uri: string) {
+  return uri.match(/\.(\w+)(?:\?|$)/)?.[1]?.toLowerCase() || 'jpg';
 }
 
 export function HomeScreen({
   onOpenProfile,
   onShindigSaved,
   profile,
+  shindigs,
   userId,
 }: HomeScreenProps) {
-  const [activeStep, setActiveStep] = useState<PlannerStep>('places');
-  const [selectedStops, setSelectedStops] = useState<TimelinePlace[]>([]);
-  const [search, setSearch] = useState('');
-  const [searchResults, setSearchResults] = useState<TimelinePlace[]>([]);
-  const [locationError, setLocationError] = useState('');
-  const [searchError, setSearchError] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [isSubmittingSearch, setIsSubmittingSearch] = useState(false);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const [isSavingShindig, setIsSavingShindig] = useState(false);
+  const [step, setStep] = useState<FlowStep>('welcome');
+  const [photos, setPhotos] = useState<DraftPhoto[]>([]);
+  const [shindigName, setShindigName] = useState('');
+  const [locationQuery, setLocationQuery] = useState('');
+  const [locationResults, setLocationResults] = useState<TimelinePlace[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<TimelinePlace | null>(null);
+  const [contacts, setContacts] = useState<InviteContact[]>([]);
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+  const [contactSearch, setContactSearch] = useState('');
+  const [activeFeedShindig, setActiveFeedShindig] = useState<SavedShindig | null>(null);
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObjectCoords | null>(
     null
   );
   const [locationHint, setLocationHint] = useState('');
-  const [stopPhotos, setStopPhotos] = useState<Record<string, DraftStopPhoto[]>>({});
-  const deferredSearch = useDeferredValue(search);
-  const searchRequestIdRef = useRef(0);
+  const [error, setError] = useState('');
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [isSearchingLocations, setIsSearchingLocations] = useState(false);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  const [isSavingShindig, setIsSavingShindig] = useState(false);
+  const deferredLocationQuery = useDeferredValue(locationQuery);
+  const deferredContactSearch = useDeferredValue(contactSearch);
 
-  const suggestedPlaces = useMemo(() => searchResults, [searchResults]);
-  const timelineStops = useMemo(() => buildTimeline(selectedStops), [selectedStops]);
-  const totalDistance = summaryDistance(selectedStops);
-  const totalPhotoCount = Object.values(stopPhotos).reduce(
-    (total, photos) => total + photos.length,
-    0
+  const filteredContacts = useMemo(() => {
+    const query = deferredContactSearch.trim().toLowerCase();
+    if (!query) {
+      return contacts;
+    }
+
+    return contacts.filter(
+      (contact) =>
+        contact.name.toLowerCase().includes(query) ||
+        contact.phoneNumber.toLowerCase().includes(query)
+    );
+  }, [contacts, deferredContactSearch]);
+
+  const selectedContacts = useMemo(
+    () => contacts.filter((contact) => selectedContactIds.includes(contact.id)),
+    [contacts, selectedContactIds]
   );
-  const stepIndex = ['places', 'review', 'timeline', 'map'].indexOf(activeStep) + 1;
-
-  useEffect(() => {
-    const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
-      setIsKeyboardVisible(true);
-    });
-    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
-      setIsKeyboardVisible(false);
-    });
-
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadCurrentLocation() {
+      setIsLoadingLocation(true);
       try {
         const permission = await Location.requestForegroundPermissionsAsync();
-        if (!isMounted) {
-          return;
-        }
-
-        if (permission.status !== 'granted') {
-          setLocationError('Location permission was denied. Search still works without it.');
+        if (!isMounted || permission.status !== 'granted') {
           return;
         }
 
@@ -161,7 +136,6 @@ export function HomeScreen({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
         });
-
         const firstResult = reverseGeocode[0];
         const hint = [firstResult?.city || firstResult?.district, firstResult?.region]
           .filter(Boolean)
@@ -170,13 +144,17 @@ export function HomeScreen({
         if (isMounted) {
           setLocationHint(hint);
         }
-      } catch (error) {
+      } catch (nextError) {
         if (isMounted) {
-          setLocationError(
-            error instanceof Error
-              ? error.message
+          setError(
+            nextError instanceof Error
+              ? nextError.message
               : 'Unable to determine your location right now.'
           );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingLocation(false);
         }
       }
     }
@@ -189,20 +167,16 @@ export function HomeScreen({
   }, []);
 
   useEffect(() => {
-    async function runSearch() {
-      const trimmedSearch = deferredSearch.trim();
-      const requestId = ++searchRequestIdRef.current;
+    let isMounted = true;
 
-      if (trimmedSearch.length < 2) {
-        setSearchResults([]);
-        setSearchError('');
-        setIsSearching(false);
+    async function runLocationSearch() {
+      const query = deferredLocationQuery.trim();
+      if (query.length < 2 || selectedLocation?.title === locationQuery.trim()) {
+        setLocationResults([]);
         return;
       }
 
-      setIsSearching(true);
-      setSearchError('');
-
+      setIsSearchingLocations(true);
       try {
         const results = await searchPlaces({
           localityHint: locationHint || undefined,
@@ -213,110 +187,101 @@ export function HomeScreen({
                 longitude: currentLocation.longitude,
               }
             : undefined,
-          query: trimmedSearch,
+          query,
         });
 
-        if (searchRequestIdRef.current === requestId) {
-          setSearchResults(results);
+        if (isMounted) {
+          setLocationResults(results);
         }
-      } catch (error) {
-        if (searchRequestIdRef.current === requestId) {
-          setSearchError(
-            error instanceof Error ? error.message : 'Could not search places right now.'
+      } catch (nextError) {
+        if (isMounted) {
+          setError(
+            nextError instanceof Error
+              ? nextError.message
+              : 'Could not search locations right now.'
           );
         }
       } finally {
-        if (searchRequestIdRef.current === requestId) {
-          setIsSearching(false);
+        if (isMounted) {
+          setIsSearchingLocations(false);
         }
       }
     }
 
-    runSearch();
-  }, [currentLocation, deferredSearch, locationHint]);
+    runLocationSearch();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentLocation, deferredLocationQuery, locationHint, locationQuery, selectedLocation]);
 
   useEffect(() => {
-    if (activeStep === 'review' && selectedStops.length === 0) {
-      setActiveStep('places');
-    }
-    if (activeStep === 'timeline' && selectedStops.length < 2) {
-      setActiveStep('review');
-    }
-    if (activeStep === 'map' && selectedStops.length < 2) {
-      setActiveStep('timeline');
-    }
-  }, [activeStep, selectedStops.length]);
-
-  async function handleSubmittedSearch() {
-    const trimmedSearch = search.trim();
-    const requestId = ++searchRequestIdRef.current;
-
-    if (trimmedSearch.length < 2) {
-      setSearchResults([]);
-      setSearchError('');
+    if (step !== 'invite' || contacts.length > 0) {
       return;
     }
 
-    setIsSubmittingSearch(true);
-    setSearchError('');
+    let isMounted = true;
 
-    try {
-      const results = await searchPlaces({
-        localityHint: locationHint || undefined,
-        mode: 'submit',
-        near: currentLocation
-          ? {
-              latitude: currentLocation.latitude,
-              longitude: currentLocation.longitude,
+    async function loadContacts() {
+      setIsLoadingContacts(true);
+      try {
+        const permission = await Contacts.requestPermissionsAsync();
+        if (!isMounted || permission.status !== 'granted') {
+          setError('Contacts permission is required to invite friends.');
+          return;
+        }
+
+        const result = await Contacts.getContactsAsync({
+          fields: [Contacts.Fields.PhoneNumbers],
+          pageSize: 200,
+          sort: Contacts.SortTypes.FirstName,
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        const nextContacts = (result.data || [])
+          .map((contact) => {
+            const firstPhone = contact.phoneNumbers?.[0]?.number?.trim();
+            if (!contact.id || !contact.name || !firstPhone) {
+              return null;
             }
-          : undefined,
-        query: trimmedSearch,
-      });
 
-      if (searchRequestIdRef.current === requestId) {
-        setSearchResults(results);
-      }
-    } catch (error) {
-      if (searchRequestIdRef.current === requestId) {
-        setSearchError(
-          error instanceof Error ? error.message : 'Could not search places right now.'
-        );
-      }
-    } finally {
-      if (searchRequestIdRef.current === requestId) {
-        setIsSubmittingSearch(false);
+            return {
+              id: contact.id,
+              name: contact.name,
+              phoneNumber: firstPhone,
+            } satisfies InviteContact;
+          })
+          .filter((contact): contact is InviteContact => Boolean(contact));
+
+        setContacts(nextContacts);
+      } catch (nextError) {
+        if (isMounted) {
+          setError(
+            nextError instanceof Error ? nextError.message : 'Could not load contacts.'
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingContacts(false);
+        }
       }
     }
-  }
 
-  function togglePlace(place: TimelinePlace) {
-    setSelectedStops((current) => {
-      if (current.some((item) => item.id === place.id)) {
-        return current.filter((item) => item.id !== place.id);
-      }
+    loadContacts();
 
-      return [...current, place];
-    });
-  }
+    return () => {
+      isMounted = false;
+    };
+  }, [contacts.length, step]);
 
-  function moveStop(index: number, direction: 'up' | 'down') {
-    setSelectedStops((current) => {
-      const next = [...current];
-      const targetIndex = direction === 'up' ? index - 1 : index + 1;
-
-      if (targetIndex < 0 || targetIndex >= next.length) {
-        return current;
-      }
-
-      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-      return next;
-    });
-  }
-
-  async function handlePickStopPhotos(stopId: string) {
+  async function handlePickFromLibrary() {
+    setError('');
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setSearchError('Photo library access is required to attach stop photos.');
+      setError('Photo library access is required to add photos.');
       return;
     }
 
@@ -325,53 +290,265 @@ export function HomeScreen({
       base64: true,
       mediaTypes: ['images'],
       quality: 0.8,
-      selectionLimit: 6,
+      selectionLimit: 10,
     });
 
     if (result.canceled) {
       return;
     }
 
-    const photos = result.assets
+    const nextPhotos = result.assets
       .filter((asset) => asset.base64 && asset.uri)
-      .map<DraftStopPhoto>((asset) => {
-        const extensionMatch = asset.uri.match(/\.(\w+)(?:\?|$)/);
-        return {
-          base64: asset.base64!,
-          contentType: asset.mimeType,
-          fileExtension: extensionMatch?.[1]?.toLowerCase() || 'jpg',
-          localUri: asset.uri,
-        };
-      });
+      .map<DraftPhoto>((asset) => ({
+        base64: asset.base64!,
+        contentType: asset.mimeType,
+        fileExtension: fileExtensionFromUri(asset.uri),
+        localUri: asset.uri,
+      }));
 
-    setStopPhotos((current) => ({
-      ...current,
-      [stopId]: [...(current[stopId] || []), ...photos],
-    }));
+    setPhotos((current) => [...current, ...nextPhotos]);
   }
 
-  async function handleSaveShindig() {
+  async function handleTakePhoto() {
+    setError('');
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      setError('Camera access is required to take a photo.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      base64: true,
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets[0]?.base64 || !result.assets[0]?.uri) {
+      return;
+    }
+
+    const asset = result.assets[0];
+    setPhotos((current) => [
+      ...current,
+      {
+        base64: asset.base64!,
+        contentType: asset.mimeType,
+        fileExtension: fileExtensionFromUri(asset.uri),
+        localUri: asset.uri,
+      },
+    ]);
+  }
+
+  function removePhoto(localUri: string) {
+    setPhotos((current) => current.filter((photo) => photo.localUri !== localUri));
+  }
+
+  function selectLocation(place: TimelinePlace) {
+    setSelectedLocation(place);
+    setLocationQuery(place.title);
+    setLocationResults([]);
+  }
+
+  function goToCreate() {
+    setError('');
+    setSelectedLocation(null);
+    setLocationQuery('');
+    setLocationResults([]);
+    setPhotos([]);
+    setShindigName('');
+    setSelectedContactIds([]);
+    setContactSearch('');
+    setActiveFeedShindig(null);
+    setStep('create');
+  }
+
+  async function continueToInvite() {
+    if (!shindigName.trim()) {
+      setError('Name your shindig before continuing.');
+      return;
+    }
+
+    if (photos.length === 0) {
+      setError('Add at least one photo before continuing.');
+      return;
+    }
+
+    if (!selectedLocation && !locationQuery.trim()) {
+      setError('Choose a starting location before continuing.');
+      return;
+    }
+
+    setError('');
+
+    if (!selectedLocation && locationQuery.trim()) {
+      setIsSearchingLocations(true);
+      try {
+        const results = await searchPlaces({
+          localityHint: locationHint || undefined,
+          mode: 'submit',
+          near: currentLocation
+            ? {
+                latitude: currentLocation.latitude,
+                longitude: currentLocation.longitude,
+              }
+            : undefined,
+          query: locationQuery.trim(),
+        });
+
+        if (results.length === 0) {
+          setError('Could not resolve that address or place. Try a more specific location.');
+          return;
+        }
+
+        setSelectedLocation(results[0]);
+        setLocationQuery(results[0].title);
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'Could not resolve that address or place right now.'
+        );
+        return;
+      } finally {
+        setIsSearchingLocations(false);
+      }
+    }
+
+    setStep('invite');
+  }
+
+  function toggleContact(contactId: string) {
+    setSelectedContactIds((current) =>
+      current.includes(contactId)
+        ? current.filter((id) => id !== contactId)
+        : [...current, contactId]
+    );
+  }
+
+  async function saveShindigAndOpenFeed() {
+    if (!selectedLocation) {
+      setError('Choose a starting location first.');
+      return;
+    }
+
     setIsSavingShindig(true);
-    setSearchError('');
+    setError('');
 
     try {
-      await onShindigSaved({
-        stops: timelineStops.map((stop) => ({
-          photos: stopPhotos[stop.id] || [],
-          place: stop,
-          scheduledTime: stop.timeLabel,
-        })),
+      if (selectedContacts.length > 0 && (await SMS.isAvailableAsync())) {
+        const inviteName = shindigName.trim() || 'ShinDig';
+        await SMS.sendSMSAsync(
+          selectedContacts.map((contact) => contact.phoneNumber),
+          `${profile.name} invited you to ${inviteName} at ${selectedLocation.title}. Sign up to join the ShinDig: ${INVITE_SIGNUP_URL}`
+        );
+      }
+
+      const savedShindig = await onShindigSaved({
+        stops: [
+          {
+            photos,
+            place: selectedLocation,
+          },
+        ],
+        title: shindigName.trim(),
         userId,
       });
-      setSelectedStops([]);
-      setStopPhotos({});
-      setSearch('');
-      setSearchResults([]);
-    } catch (error) {
-      setSearchError(error instanceof Error ? error.message : 'Failed to save ShinDig.');
+
+      setActiveFeedShindig(savedShindig);
+      setStep('feed');
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to start this ShinDig.'
+      );
     } finally {
       setIsSavingShindig(false);
     }
+  }
+
+  if (step === 'welcome') {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.topBar}>
+            <View />
+            <Pressable onPress={onOpenProfile} style={styles.avatarButton}>
+              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+            </Pressable>
+          </View>
+
+          <View style={styles.welcomeCard}>
+            <Image source={HERO_LOGO} style={styles.heroLogo} />
+            <Text style={styles.welcomeTitle}>Make memories with the people who were there.</Text>
+            <Pressable onPress={goToCreate} style={styles.ctaButton}>
+              <Text style={styles.ctaButtonText}>Start a Shindig</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>My Past Shindigs</Text>
+          </View>
+
+          {shindigs.length > 0 ? (
+            <View style={styles.pastList}>
+              {shindigs.map((shindig) => (
+                <View key={shindig.id} style={styles.pastCard}>
+                  <Image
+                    source={{
+                      uri:
+                        shindig.coverPhotoUrl ||
+                        'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
+                    }}
+                    style={styles.pastCardImage}
+                  />
+                  <View style={styles.pastCardCopy}>
+                    <Text style={styles.pastCardTitle}>{shindig.title}</Text>
+                    <Text style={styles.pastCardMeta}>{formatDateLabel(shindig.createdAt)}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>
+              Start your first ShinDig to build a shared photo feed and archive it here.
+            </Text>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (step === 'feed' && activeFeedShindig) {
+    const feedPhotos = activeFeedShindig.stops.flatMap((stop) => stop.photos);
+
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.feedHeader}>
+            <View>
+              <Text style={styles.feedLocation}>{activeFeedShindig.stops[0]?.place.title}</Text>
+              <Text style={styles.feedParticipants}>
+                {selectedContacts.length + 1} participants
+              </Text>
+            </View>
+            <Pressable onPress={onOpenProfile} style={styles.avatarButton}>
+              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+            </Pressable>
+          </View>
+
+          <View style={styles.feedStack}>
+            {feedPhotos.map((photo) => (
+              <View key={photo.id} style={styles.feedCard}>
+                <View style={styles.feedCardHeader}>
+                  <Text style={styles.feedAuthor}>{profile.name}</Text>
+                  <Text style={styles.feedTime}>Just now</Text>
+                </View>
+                <Image source={{ uri: photo.photoUrl }} style={styles.feedPhoto} />
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -386,331 +563,143 @@ export function HomeScreen({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.topBar}>
-            <View style={styles.brandRow}>
-              <Image source={APP_MARK} style={styles.brandMark} />
-              <Text style={styles.brandText}>SHINDIG</Text>
-            </View>
-
-            <Pressable onPress={onOpenProfile} style={styles.avatarButton}>
-              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+            <Pressable onPress={() => setStep('welcome')}>
+              <Text style={styles.backText}>Back</Text>
             </Pressable>
+            <Text style={styles.screenTitle}>
+              {step === 'create' ? 'Create Your Shindig' : 'Invite Friends'}
+            </Text>
+            <View style={styles.topSpacer} />
           </View>
 
-          <View style={[styles.stepRow, isKeyboardVisible && styles.stepRowCompact]}>
-            {[
-              { id: 'places', label: 'Add Places' },
-              { id: 'review', label: 'Review Stops' },
-              { id: 'timeline', label: 'View Timeline' },
-              { id: 'map', label: 'Save ShinDig' },
-            ].map((step, index) => {
-              const isActive = step.id === activeStep;
-              const isComplete = index + 1 < stepIndex;
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-              return (
-                <View key={step.id} style={styles.stepItem}>
-                  <View
-                    style={[
-                      styles.stepBadge,
-                      isActive && styles.stepBadgeActive,
-                      isComplete && styles.stepBadgeComplete,
-                    ]}
-                  >
-                    <Text style={styles.stepBadgeText}>{index + 1}</Text>
-                  </View>
-                  {!isKeyboardVisible ? (
-                    <Text style={[styles.stepLabel, isActive && styles.stepLabelActive]}>
-                      {step.label}
-                    </Text>
-                  ) : null}
-                </View>
-              );
-            })}
-          </View>
+          {step === 'create' ? (
+            <View style={styles.panel}>
+              <Text style={styles.fieldLabel}>Photos*</Text>
+              <Text style={styles.fieldLabel}>Shindig Name*</Text>
+              <TextInput
+                onChangeText={setShindigName}
+                placeholder="Give this ShinDig a name"
+                placeholderTextColor={theme.colors.textMuted}
+                style={styles.input}
+                value={shindigName}
+              />
 
-          {activeStep === 'places' ? (
-            <View style={[styles.sectionCard, isKeyboardVisible && styles.sectionCardTight]}>
-              <View style={styles.sectionHeader}>
-                <View>
-                  <Text style={styles.sectionTitle}>Add locations</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    Search nearby places and build your next ShinDig.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.searchRow}>
-                <TextInput
-                  onChangeText={setSearch}
-                  onSubmitEditing={handleSubmittedSearch}
-                  placeholder="Search for a real place"
-                  placeholderTextColor={theme.colors.textMuted}
-                  returnKeyType="search"
-                  style={styles.searchInput}
-                  value={search}
-                />
-                <Pressable onPress={handleSubmittedSearch} style={styles.searchButton}>
-                  <Text style={styles.searchButtonText}>Search</Text>
-                </Pressable>
-              </View>
-
-              {locationError ? <Text style={styles.inlineNote}>{locationError}</Text> : null}
-              {searchError ? <Text style={styles.inlineError}>{searchError}</Text> : null}
-              {isSearching ? <Text style={styles.inlineNote}>Searching nearby places...</Text> : null}
-              {isSubmittingSearch ? (
-                <Text style={styles.inlineNote}>Running a deeper location search...</Text>
-              ) : null}
-
-              <View style={styles.placeList}>
-                {suggestedPlaces.map((place) => {
-                  const isAdded = selectedStops.some((item) => item.id === place.id);
-
-                  return (
-                    <View key={place.id} style={styles.placeCard}>
-                      <View style={styles.placeImageFallback}>
-                        <Text style={styles.placeImageFallbackText}>
-                          {place.title.slice(0, 1).toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.placeCopy}>
-                        <Text style={styles.placeTitle}>{place.title}</Text>
-                        <Text style={styles.placeMeta}>
-                          {place.type}
-                          {typeof place.distanceMiles === 'number'
-                            ? ` . ${place.distanceMiles.toFixed(1)} mi`
-                            : ''}
-                        </Text>
-                        <Text style={styles.placeAddress}>{place.address}</Text>
-                      </View>
+              <Text style={[styles.fieldLabel, styles.spacedLabel]}>Photos*</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.photoRow}>
+                  <Pressable onPress={handlePickFromLibrary} style={styles.addPhotoCard}>
+                    <Text style={styles.addPhotoPlus}>+</Text>
+                    <Text style={styles.addPhotoText}>Add Photo</Text>
+                  </Pressable>
+                  {photos.map((photo) => (
+                    <View key={photo.localUri} style={styles.photoPreviewWrap}>
+                      <Image source={{ uri: photo.localUri }} style={styles.photoPreview} />
                       <Pressable
-                        onPress={() => togglePlace(place)}
-                        style={[styles.addButton, isAdded && styles.addButtonActive]}
+                        onPress={() => removePhoto(photo.localUri)}
+                        style={styles.removePhotoButton}
                       >
-                        <Text
-                          style={[
-                            styles.addButtonText,
-                            isAdded && styles.addButtonTextActive,
-                          ]}
-                        >
-                          {isAdded ? 'Added' : 'Add'}
-                        </Text>
+                        <Text style={styles.removePhotoText}>x</Text>
                       </Pressable>
                     </View>
+                  ))}
+                </View>
+              </ScrollView>
+
+              <Text style={styles.fieldCaption}>Choose Photo Source</Text>
+              <View style={styles.photoSourceRow}>
+                <Pressable onPress={handleTakePhoto} style={styles.sourceButton}>
+                  <Text style={styles.sourceButtonText}>Take Photo</Text>
+                </Pressable>
+                <Pressable onPress={handlePickFromLibrary} style={styles.sourceButton}>
+                  <Text style={styles.sourceButtonText}>Select From Library</Text>
+                </Pressable>
+              </View>
+
+              <Text style={styles.fieldLabel}>Starting Location*</Text>
+              <TextInput
+                onChangeText={(value) => {
+                  setLocationQuery(value);
+                  setSelectedLocation(null);
+                }}
+                placeholder="Search address"
+                placeholderTextColor={theme.colors.textMuted}
+                style={styles.input}
+                value={locationQuery}
+              />
+              {isLoadingLocation ? (
+                <Text style={styles.helperText}>Getting your location...</Text>
+              ) : null}
+              {isSearchingLocations ? (
+                <Text style={styles.helperText}>Searching nearby places...</Text>
+              ) : null}
+
+              <View style={styles.suggestionList}>
+                {locationResults.map((place) => (
+                  <Pressable
+                    key={place.id}
+                    onPress={() => selectLocation(place)}
+                    style={styles.suggestionItem}
+                  >
+                    <Text style={styles.suggestionTitle}>{place.title}</Text>
+                    <Text style={styles.suggestionMeta}>{place.address}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Pressable onPress={continueToInvite} style={styles.ctaButton}>
+                <Text style={styles.ctaButtonText}>Continue</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {step === 'invite' ? (
+            <View style={styles.panel}>
+              <Text style={styles.inviteSubtitle}>
+                People you invite can upload photos and see everyone else&apos;s pictures.
+              </Text>
+              <TextInput
+                onChangeText={setContactSearch}
+                placeholder="Search contacts..."
+                placeholderTextColor={theme.colors.textMuted}
+                style={styles.input}
+                value={contactSearch}
+              />
+              {isLoadingContacts ? <Text style={styles.helperText}>Loading contacts...</Text> : null}
+
+              <View style={styles.contactList}>
+                {filteredContacts.map((contact) => {
+                  const isSelected = selectedContactIds.includes(contact.id);
+                  return (
+                    <Pressable
+                      key={contact.id}
+                      onPress={() => toggleContact(contact.id)}
+                      style={styles.contactItem}
+                    >
+                      <View style={[styles.contactCheckbox, isSelected && styles.contactCheckboxActive]}>
+                        <Text style={styles.contactCheckboxText}>{isSelected ? 'x' : ''}</Text>
+                      </View>
+                      <View style={styles.contactCopy}>
+                        <Text style={styles.contactName}>{contact.name}</Text>
+                        <Text style={styles.contactPhone}>{contact.phoneNumber}</Text>
+                      </View>
+                    </Pressable>
                   );
                 })}
-                {!isSearching && search.trim().length >= 2 && searchResults.length === 0 ? (
-                  <Text style={styles.inlineNote}>
-                    No fast match yet. Press search to run a deeper lookup.
-                  </Text>
-                ) : null}
-                {search.trim().length < 2 ? (
-                  <Text style={styles.inlineNote}>
-                    Start typing at least 2 letters to see nearby place matches.
-                  </Text>
-                ) : null}
-              </View>
-
-              <View style={styles.footerBar}>
-                <Text style={styles.footerText}>{selectedStops.length} added</Text>
-                <Pressable
-                  disabled={selectedStops.length === 0}
-                  onPress={() => setActiveStep('review')}
-                  style={[
-                    styles.primaryButton,
-                    selectedStops.length === 0 && styles.buttonDisabled,
-                  ]}
-                >
-                  <Text style={styles.primaryButtonText}>Review list</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-
-          {activeStep === 'review' ? (
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <View>
-                  <Text style={styles.sectionTitle}>Your stops</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    Reorder the route and attach photos for each place.
-                  </Text>
-                </View>
-                <Pressable onPress={() => setActiveStep('places')}>
-                  <Text style={styles.headerAction}>Edit list</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.placeList}>
-                {selectedStops.map((place, index) => (
-                  <View key={place.id} style={styles.reviewCard}>
-                    <View style={styles.stopCard}>
-                      <View style={styles.stopIndex}>
-                        <Text style={styles.stopIndexText}>{index + 1}</Text>
-                      </View>
-                      <View style={styles.stopImageFallback}>
-                        <Text style={styles.placeImageFallbackText}>
-                          {place.title.slice(0, 1).toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.stopCopy}>
-                        <Text style={styles.placeTitle}>{place.title}</Text>
-                        <Text style={styles.placeMeta}>{place.type} . {place.address}</Text>
-                      </View>
-                      <View style={styles.stopActions}>
-                        <Pressable
-                          onPress={() => moveStop(index, 'up')}
-                          style={styles.orderButton}
-                        >
-                          <Text style={styles.orderButtonText}>Up</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => moveStop(index, 'down')}
-                          style={styles.orderButton}
-                        >
-                          <Text style={styles.orderButtonText}>Down</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-
-                    <Pressable
-                      onPress={() => handlePickStopPhotos(place.id)}
-                      style={styles.photoAttachButton}
-                    >
-                      <Text style={styles.photoAttachButtonText}>
-                        Upload photos for this stop
-                      </Text>
-                    </Pressable>
-
-                    {(stopPhotos[place.id] || []).length > 0 ? (
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        <View style={styles.photoStrip}>
-                          {(stopPhotos[place.id] || []).map((photo) => (
-                            <Image
-                              key={photo.localUri}
-                              source={{ uri: photo.localUri }}
-                              style={styles.photoThumb}
-                            />
-                          ))}
-                        </View>
-                      </ScrollView>
-                    ) : (
-                      <Text style={styles.inlineNote}>
-                        No photos attached to this stop yet.
-                      </Text>
-                    )}
-                  </View>
-                ))}
-              </View>
-
-              <Pressable
-                disabled={selectedStops.length < 2}
-                onPress={() => setActiveStep('timeline')}
-                style={[
-                  styles.primaryButton,
-                  selectedStops.length < 2 && styles.buttonDisabled,
-                ]}
-              >
-                <Text style={styles.primaryButtonText}>Create timeline</Text>
-              </Pressable>
-              <Text style={styles.helperText}>
-                {selectedStops.length > 0
-                  ? `${selectedStops.length} stops selected / ${totalPhotoCount} photos attached`
-                  : 'Add at least 2 stops to generate a timeline'}
-              </Text>
-            </View>
-          ) : null}
-
-          {activeStep === 'timeline' ? (
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <View>
-                  <Text style={styles.sectionTitle}>Your timeline</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    Your route is sequenced and ready to save.
-                  </Text>
-                </View>
-                <Pressable onPress={() => setActiveStep('review')}>
-                  <Text style={styles.headerAction}>Edit stops</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.timelineColumn}>
-                {timelineStops.map((stop, index) => (
-                  <View key={stop.id}>
-                    <View style={styles.timelineRow}>
-                      <View style={styles.timelineRail}>
-                        <View style={styles.timelineNode} />
-                        {index < timelineStops.length - 1 ? (
-                          <View style={styles.timelineLine} />
-                        ) : null}
-                      </View>
-                      <View style={styles.timelineCard}>
-                        <View style={styles.timelineImageFallback}>
-                          <Text style={styles.placeImageFallbackText}>
-                            {stop.title.slice(0, 1).toUpperCase()}
-                          </Text>
-                        </View>
-                        <View style={styles.timelineCopy}>
-                          <Text style={styles.timelineTime}>{stop.timeLabel}</Text>
-                          <Text style={styles.placeTitle}>{stop.title}</Text>
-                          <Text style={styles.placeMeta}>{stop.type}</Text>
-                          <Text numberOfLines={1} style={styles.placeAddress}>
-                            {stop.address}
-                          </Text>
-                          <Text style={styles.durationChip}>{stop.durationLabel}</Text>
-                        </View>
-                      </View>
-                    </View>
-                    {index < timelineStops.length - 1 ? (
-                      <Text style={styles.transitLabel}>
-                        {stop.transitMiles.toFixed(1)} mi . {stop.transitMinutes} min walk
-                      </Text>
-                    ) : null}
-                  </View>
-                ))}
-              </View>
-
-              <Pressable onPress={() => setActiveStep('map')} style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>Continue</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          {activeStep === 'map' ? (
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <View>
-                  <Text style={styles.sectionTitle}>Save ShinDig</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    This plan will be saved to your profile archive with all uploaded stop photos.
-                  </Text>
-                </View>
-                <Pressable onPress={() => setActiveStep('timeline')}>
-                  <Text style={styles.headerAction}>Timeline</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.summaryRow}>
-                <View style={styles.summaryCard}>
-                  <Text style={styles.summaryLabel}>Stops</Text>
-                  <Text style={styles.summaryValue}>{selectedStops.length}</Text>
-                </View>
-                <View style={styles.summaryCard}>
-                  <Text style={styles.summaryLabel}>Photos</Text>
-                  <Text style={styles.summaryValue}>{totalPhotoCount}</Text>
-                </View>
-                <View style={styles.summaryCard}>
-                  <Text style={styles.summaryLabel}>Distance</Text>
-                  <Text style={styles.summaryValue}>{totalDistance.toFixed(1)} mi</Text>
-                </View>
               </View>
 
               <Pressable
                 disabled={isSavingShindig}
-                onPress={handleSaveShindig}
-                style={[styles.primaryButton, isSavingShindig && styles.buttonDisabled]}
+                onPress={saveShindigAndOpenFeed}
+                style={[styles.ctaButton, isSavingShindig && styles.buttonDisabled]}
               >
-                <Text style={styles.primaryButtonText}>
-                  {isSavingShindig ? 'Saving...' : 'Save ShinDig'}
+                <Text style={styles.ctaButtonText}>
+                  {isSavingShindig
+                    ? 'Starting...'
+                    : selectedContacts.length > 0
+                      ? `Invite ${selectedContacts.length} Friends`
+                      : 'Start Feed'}
                 </Text>
               </Pressable>
             </View>
@@ -730,29 +719,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
+    padding: theme.spacing.lg,
     paddingBottom: theme.spacing.xxxl,
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
   },
   topBar: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  brandRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-  },
-  brandMark: {
-    height: 32,
-    width: 32,
-  },
-  brandText: {
-    color: theme.colors.textPrimary,
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: 1.2,
+  topSpacer: {
+    width: 40,
   },
   avatarButton: {
     borderColor: theme.colors.border,
@@ -765,387 +741,313 @@ const styles = StyleSheet.create({
     height: 52,
     width: 52,
   },
-  stepRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.lg,
-  },
-  stepRowCompact: {
-    marginTop: theme.spacing.md,
-  },
-  stepItem: {
+  welcomeCard: {
     alignItems: 'center',
-    flex: 1,
-    gap: theme.spacing.xs,
-  },
-  stepBadge: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surfaceRaised,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.round,
-    borderWidth: 1,
-    height: 34,
-    justifyContent: 'center',
-    width: 34,
-  },
-  stepBadgeActive: {
-    backgroundColor: '#8F5BFF',
-    borderColor: '#8F5BFF',
-  },
-  stepBadgeComplete: {
-    backgroundColor: '#5F8CFF',
-    borderColor: '#5F8CFF',
-  },
-  stepBadgeText: {
-    color: theme.colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  stepLabel: {
-    color: theme.colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  stepLabelActive: {
-    color: theme.colors.textPrimary,
-  },
-  sectionCard: {
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.xl,
     borderWidth: 1,
     marginTop: theme.spacing.lg,
-    padding: theme.spacing.lg,
+    padding: theme.spacing.xl,
   },
-  sectionCardTight: {
-    marginTop: theme.spacing.md,
-    paddingTop: theme.spacing.md,
+  heroLogo: {
+    height: 240,
+    resizeMode: 'contain',
+    width: 240,
+  },
+  welcomeTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 18,
+    lineHeight: 28,
+    marginTop: theme.spacing.lg,
+    maxWidth: 260,
+    textAlign: 'center',
+  },
+  ctaButton: {
+    alignItems: 'center',
+    backgroundColor: '#FF615A',
+    borderRadius: theme.radius.round,
+    marginTop: theme.spacing.xl,
+    paddingVertical: theme.spacing.md,
+    width: '100%',
+  },
+  ctaButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
   },
   sectionHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginTop: theme.spacing.xl,
     marginBottom: theme.spacing.md,
   },
   sectionTitle: {
     color: theme.colors.textPrimary,
-    fontSize: 24,
-    fontWeight: '700',
-    letterSpacing: -0.6,
-  },
-  sectionSubtitle: {
-    color: theme.colors.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: theme.spacing.xs,
-    maxWidth: 260,
-  },
-  headerAction: {
-    color: '#B18CFF',
-    fontSize: 14,
+    fontSize: 20,
     fontWeight: '700',
   },
-  searchRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
-  },
-  searchInput: {
-    backgroundColor: theme.colors.surfaceRaised,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    color: theme.colors.textPrimary,
-    flex: 1,
-    minHeight: 52,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-  },
-  searchButton: {
-    alignItems: 'center',
-    backgroundColor: '#8F5BFF',
-    borderRadius: theme.radius.lg,
-    justifyContent: 'center',
-    minWidth: 94,
-    paddingHorizontal: theme.spacing.md,
-  },
-  searchButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  inlineError: {
-    color: '#FF9F8A',
-    fontSize: 13,
-    marginBottom: theme.spacing.sm,
-  },
-  inlineNote: {
-    color: theme.colors.textMuted,
-    fontSize: 13,
-    marginBottom: theme.spacing.sm,
-  },
-  placeList: {
+  pastList: {
     gap: theme.spacing.sm,
   },
-  placeCard: {
+  pastCard: {
     alignItems: 'center',
-    backgroundColor: theme.colors.surfaceRaised,
+    backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
     flexDirection: 'row',
     padding: theme.spacing.sm,
   },
-  placeImageFallback: {
-    alignItems: 'center',
-    backgroundColor: '#2B3552',
-    borderRadius: 14,
-    height: 58,
-    justifyContent: 'center',
-    width: 58,
+  pastCardImage: {
+    borderRadius: 12,
+    height: 54,
+    width: 54,
   },
-  placeImageFallbackText: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  placeCopy: {
+  pastCardCopy: {
     flex: 1,
     marginLeft: theme.spacing.sm,
   },
-  placeTitle: {
+  pastCardTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  pastCardMeta: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  emptyText: {
+    color: theme.colors.textMuted,
+    lineHeight: 22,
+  },
+  backText: {
+    color: theme.colors.textPrimary,
+    fontSize: 16,
+  },
+  screenTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  panel: {
+    marginTop: theme.spacing.xl,
+  },
+  fieldLabel: {
     color: theme.colors.textPrimary,
     fontSize: 18,
     fontWeight: '700',
-    letterSpacing: -0.4,
+    marginBottom: theme.spacing.sm,
   },
-  placeMeta: {
-    color: theme.colors.textMuted,
-    fontSize: 13,
-    marginTop: 4,
-  },
-  placeAddress: {
-    color: theme.colors.textSecondary,
-    fontSize: 12,
-    marginTop: 4,
-  },
-  addButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.background,
-    borderRadius: theme.radius.round,
-    minWidth: 68,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 10,
-  },
-  addButtonActive: {
-    backgroundColor: '#8F5BFF',
-  },
-  addButtonText: {
-    color: theme.colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  addButtonTextActive: {
-    color: '#FFFFFF',
-  },
-  footerBar: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  spacedLabel: {
     marginTop: theme.spacing.lg,
   },
-  footerText: {
+  fieldCaption: {
+    color: theme.colors.textSecondary,
+    fontSize: 14,
+    marginBottom: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
+  },
+  photoRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  addPhotoCard: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderColor: '#FF615A',
+    borderRadius: theme.radius.lg,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    height: 108,
+    justifyContent: 'center',
+    width: 108,
+  },
+  addPhotoPlus: {
     color: theme.colors.textPrimary,
-    fontSize: 15,
+    fontSize: 30,
+    lineHeight: 34,
+  },
+  addPhotoText: {
+    color: theme.colors.textPrimary,
+    fontSize: 14,
+    marginTop: theme.spacing.xs,
+  },
+  photoPreviewWrap: {
+    position: 'relative',
+  },
+  photoPreview: {
+    borderRadius: theme.radius.lg,
+    height: 108,
+    width: 108,
+  },
+  removePhotoButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(8, 11, 22, 0.8)',
+    borderRadius: theme.radius.round,
+    height: 24,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 6,
+    top: 6,
+    width: 24,
+  },
+  removePhotoText: {
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '700',
   },
-  primaryButton: {
+  photoSourceRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  sourceButton: {
     alignItems: 'center',
-    backgroundColor: '#8F5BFF',
-    borderRadius: theme.radius.lg,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  reviewCard: {
-    backgroundColor: theme.colors.surfaceRaised,
+    backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
-    padding: theme.spacing.sm,
-  },
-  stopCard: {
-    alignItems: 'center',
-    flexDirection: 'row',
-  },
-  stopIndex: {
-    alignItems: 'center',
-    backgroundColor: '#8F5BFF',
-    borderRadius: theme.radius.round,
-    height: 34,
-    justifyContent: 'center',
-    width: 34,
-  },
-  stopIndexText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  stopImageFallback: {
-    alignItems: 'center',
-    backgroundColor: '#2B3552',
-    borderRadius: 14,
-    height: 54,
-    justifyContent: 'center',
-    marginLeft: theme.spacing.sm,
-    width: 54,
-  },
-  stopCopy: {
     flex: 1,
-    marginLeft: theme.spacing.sm,
+    paddingVertical: theme.spacing.lg,
   },
-  stopActions: {
-    gap: theme.spacing.xs,
-  },
-  orderButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.background,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  orderButtonText: {
-    color: theme.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  photoAttachButton: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 12,
-    marginTop: theme.spacing.sm,
-    paddingVertical: theme.spacing.sm,
-  },
-  photoAttachButtonText: {
+  sourceButtonText: {
     color: theme.colors.textPrimary,
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
   },
-  photoStrip: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.sm,
-  },
-  photoThumb: {
-    borderRadius: 12,
-    height: 72,
-    width: 72,
+  input: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    color: theme.colors.textPrimary,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
   },
   helperText: {
     color: theme.colors.textMuted,
     fontSize: 13,
     marginTop: theme.spacing.sm,
-    textAlign: 'center',
   },
-  timelineColumn: {
+  suggestionList: {
     gap: theme.spacing.sm,
-  },
-  timelineRow: {
-    flexDirection: 'row',
-  },
-  timelineRail: {
-    alignItems: 'center',
-    marginRight: theme.spacing.sm,
-    width: 20,
-  },
-  timelineNode: {
-    backgroundColor: '#8F5BFF',
-    borderRadius: theme.radius.round,
-    height: 16,
-    marginTop: 12,
-    width: 16,
-  },
-  timelineLine: {
-    backgroundColor: '#8F5BFF',
-    flex: 1,
-    marginTop: 4,
-    width: 2,
-  },
-  timelineCard: {
-    backgroundColor: theme.colors.surfaceRaised,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    flex: 1,
-    flexDirection: 'row',
-    padding: theme.spacing.sm,
-  },
-  timelineImageFallback: {
-    alignItems: 'center',
-    backgroundColor: '#2B3552',
-    borderRadius: 14,
-    height: 64,
-    justifyContent: 'center',
-    width: 64,
-  },
-  timelineCopy: {
-    flex: 1,
-    marginLeft: theme.spacing.sm,
-  },
-  timelineTime: {
-    color: '#B18CFF',
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  durationChip: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: theme.radius.round,
-    color: theme.colors.textSecondary,
-    fontSize: 12,
     marginTop: theme.spacing.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
   },
-  transitLabel: {
-    color: theme.colors.textMuted,
-    fontSize: 13,
-    marginBottom: theme.spacing.sm,
-    marginLeft: 30,
-    marginTop: theme.spacing.xs,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.lg,
-  },
-  summaryCard: {
-    backgroundColor: theme.colors.surfaceRaised,
+  suggestionItem: {
+    backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
-    flex: 1,
     padding: theme.spacing.md,
   },
-  summaryLabel: {
+  suggestionTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  suggestionMeta: {
     color: theme.colors.textMuted,
     fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    marginTop: 4,
   },
-  summaryValue: {
+  inviteSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: theme.spacing.lg,
+    textAlign: 'center',
+  },
+  contactList: {
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  contactItem: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    paddingVertical: theme.spacing.sm,
+  },
+  contactCheckbox: {
+    alignItems: 'center',
+    borderColor: theme.colors.textMuted,
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    height: 28,
+    justifyContent: 'center',
+    width: 28,
+  },
+  contactCheckboxActive: {
+    backgroundColor: '#FF615A',
+    borderColor: '#FF615A',
+  },
+  contactCheckboxText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  contactCopy: {
+    marginLeft: theme.spacing.md,
+  },
+  contactName: {
     color: theme.colors.textPrimary,
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
-    marginTop: theme.spacing.sm,
+  },
+  contactPhone: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  errorText: {
+    color: '#FF9F8A',
+    marginTop: theme.spacing.md,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  feedHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  feedLocation: {
+    color: theme.colors.textPrimary,
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  feedParticipants: {
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    marginTop: 4,
+  },
+  feedStack: {
+    gap: theme.spacing.lg,
+    marginTop: theme.spacing.xl,
+  },
+  feedCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    overflow: 'hidden',
+    padding: theme.spacing.md,
+  },
+  feedCardHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.sm,
+  },
+  feedAuthor: {
+    color: theme.colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  feedTime: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+  },
+  feedPhoto: {
+    borderRadius: theme.radius.lg,
+    height: 240,
+    width: '100%',
   },
 });

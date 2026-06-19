@@ -2478,6 +2478,11 @@ expo-constants@~18.0.13:
     "@expo/config" "~12.0.13"
     "@expo/env" "~2.0.8"
 
+expo-contacts@~15.0.11:
+  version "15.0.11"
+  resolved "https://registry.yarnpkg.com/expo-contacts/-/expo-contacts-15.0.11.tgz#f3164a1d8298d41b0bac9fcb3500bfa6027aa18b"
+  integrity sha512-buKkoQuWJgVSEvR1Yloa5SvGC/ud7T2YeYDe0R7Aa0oz8pwQpjk3W7OoL3QrXIfYcuKTrIz6ffqC8lc3peaAyg==
+
 expo-file-system@~19.0.23:
   version "19.0.23"
   resolved "https://registry.yarnpkg.com/expo-file-system/-/expo-file-system-19.0.23.tgz#ad2c88ed039ba0fd5a739338818f42304171eddd"
@@ -2534,6 +2539,11 @@ expo-server@^1.0.7:
   version "1.0.7"
   resolved "https://registry.yarnpkg.com/expo-server/-/expo-server-1.0.7.tgz#fe700518f73651cb0736e79e3a4f2f8b2e2671b7"
   integrity sha512-mcmyML3oXcqFUXUxtdtCL1O00ztNI2v76d+MdniXRUgHNxIcHZ05zo+DqBaOOT6LQnPk4vA4YHqQl7iGUfRb3g==
+
+expo-sms@~14.0.8:
+  version "14.0.8"
+  resolved "https://registry.yarnpkg.com/expo-sms/-/expo-sms-14.0.8.tgz#c1b17ab17eb9c7f7a8150e86131ff3fe3ebf7915"
+  integrity sha512-yNdUUP4Y+arvQByXsSzY8UFPadezxcFPH4u1Ubab2VIRNmDJZf7TIAFmDi8dAbm5CPxbzjKBEbBIkmkVKppHHA==
 
 expo-status-bar@~3.0.9:
   version "3.0.9"

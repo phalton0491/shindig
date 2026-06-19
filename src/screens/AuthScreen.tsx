@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,8 +22,11 @@ import {
 } from '../lib/auth';
 import { theme } from '../theme';
 
+const AUTH_LOGO = require('../../assets/auth-logo.png');
+
 type AuthScreenProps = {
   bootError?: string;
+  initialMode?: AuthMode;
 };
 
 type AuthMode = 'signup' | 'login';
@@ -43,12 +47,19 @@ const emptyForm: SignUpForm = {
   username: '',
 };
 
-export function AuthScreen({ bootError }: AuthScreenProps) {
-  const [mode, setMode] = useState<AuthMode>('signup');
+export function AuthScreen({
+  bootError,
+  initialMode = 'login',
+}: AuthScreenProps) {
+  const [mode, setMode] = useState<AuthMode>(initialMode);
   const [form, setForm] = useState<SignUpForm>(emptyForm);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setMode(initialMode);
+  }, [initialMode]);
 
   const isFormComplete = useMemo(() => {
     if (mode === 'login') {
@@ -110,12 +121,8 @@ export function AuthScreen({ bootError }: AuthScreenProps) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.hero}>
-            <Text style={styles.eyebrow}>ShinDig</Text>
+            <Image source={AUTH_LOGO} style={styles.logo} />
             <Text style={styles.title}>Track every day out and night out.</Text>
-            <Text style={styles.subtitle}>
-              Accounts now use Supabase Auth and a database-backed profile. If a
-              session already exists, the app opens directly to the home feed.
-            </Text>
           </View>
 
           <View style={styles.authCard}>
@@ -247,15 +254,14 @@ const styles = StyleSheet.create({
     padding: theme.spacing.lg,
   },
   hero: {
+    alignItems: 'center',
     marginBottom: theme.spacing.xl,
   },
-  eyebrow: {
-    color: theme.colors.accentSoft,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: theme.spacing.sm,
-    textTransform: 'uppercase',
+  logo: {
+    height: 180,
+    marginBottom: theme.spacing.md,
+    resizeMode: 'contain',
+    width: 260,
   },
   title: {
     color: theme.colors.textPrimary,
@@ -264,13 +270,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1.2,
     lineHeight: 42,
     maxWidth: 320,
-  },
-  subtitle: {
-    color: theme.colors.textSecondary,
-    fontSize: 16,
-    lineHeight: 24,
-    marginTop: theme.spacing.md,
-    maxWidth: 340,
+    textAlign: 'center',
   },
   authCard: {
     backgroundColor: theme.colors.surface,

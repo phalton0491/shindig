@@ -16,6 +16,12 @@
         {
           "locationWhenInUsePermission": "Allow ShinDig to use your location so it can suggest nearby places for your timeline."
         }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow ShinDig to access your contacts so you can invite friends to your ShinDig."
+        }
       ]
     ],
     "orientation": "portrait",

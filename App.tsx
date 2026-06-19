@@ -1,7 +1,13 @@
 import { Session } from '@supabase/supabase-js';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  SafeAreaView,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 import { supabase } from './src/lib/supabase';
 import { createShindig, listShindigsForUser } from './src/lib/shindigs';
@@ -14,7 +20,16 @@ import { theme } from './src/theme';
 import { SavedShindig, UserProfile } from './src/types/models';
 
 type ActiveRoute = 'home' | 'profile';
+type AuthMode = 'login' | 'signup';
 const BOOTSTRAP_TIMEOUT_MS = 8000;
+
+function authModeFromUrl(url: string | null): AuthMode {
+  if (!url) {
+    return 'login';
+  }
+
+  return url.toLowerCase().includes('signup') ? 'signup' : 'login';
+}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
   return new Promise<T>((resolve, reject) => {
@@ -41,6 +56,7 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [shindigs, setShindigs] = useState<SavedShindig[]>([]);
   const [route, setRoute] = useState<ActiveRoute>('home');
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [bootError, setBootError] = useState('');
 
   function withLiveStats(nextProfile: UserProfile, nextShindigs: SavedShindig[]) {
@@ -52,6 +68,36 @@ export default function App() {
       },
     };
   }
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadInitialAuthMode() {
+      try {
+        const initialUrl = await Linking.getInitialURL();
+        if (isMounted) {
+          setAuthMode(authModeFromUrl(initialUrl));
+        }
+      } catch {
+        if (isMounted) {
+          setAuthMode('login');
+        }
+      }
+    }
+
+    loadInitialAuthMode();
+
+    const linkSubscription = Linking.addEventListener('url', ({ url }) => {
+      if (isMounted) {
+        setAuthMode(authModeFromUrl(url));
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      linkSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!supabase) {
@@ -128,6 +174,7 @@ export default function App() {
           setProfile(null);
           setShindigs([]);
           setRoute('home');
+          setAuthMode('login');
           return;
         }
 
@@ -174,7 +221,6 @@ export default function App() {
     if (profile) {
       setProfile(withLiveStats(profile, nextShindigs));
     }
-    setRoute('profile');
     return savedShindig;
   }
 
@@ -202,7 +248,7 @@ export default function App() {
     return (
       <>
         <StatusBar style="light" />
-        <AuthScreen bootError={bootError} />
+        <AuthScreen bootError={bootError} initialMode={authMode} />
       </>
     );
   }
@@ -215,6 +261,7 @@ export default function App() {
           onShindigSaved={handleShindigSaved}
           onOpenProfile={() => setRoute('profile')}
           profile={profile}
+          shindigs={shindigs}
           userId={session.user.id}
         />
       ) : (

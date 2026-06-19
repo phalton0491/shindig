@@ -116,7 +116,13 @@ async function uploadStopPhoto(args: {
   return data.publicUrl;
 }
 
-function buildShindigTitle(stops: CreateShindigStopInput[]) {
+function buildShindigTitle(args: { providedTitle?: string; stops: CreateShindigStopInput[] }) {
+  const normalizedTitle = args.providedTitle?.trim();
+  if (normalizedTitle) {
+    return normalizedTitle;
+  }
+
+  const stops = args.stops;
   if (stops.length === 0) {
     return 'ShinDig';
   }
@@ -223,6 +229,7 @@ export async function listShindigsForUser(userId: string) {
 }
 
 export async function createShindig(args: {
+  title?: string;
   stops: CreateShindigStopInput[];
   userId: string;
 }) {
@@ -233,7 +240,7 @@ export async function createShindig(args: {
   const { data: shindigData, error: shindigError } = await client()
     .from('shindigs')
     .insert({
-      title: buildShindigTitle(args.stops),
+      title: buildShindigTitle({ providedTitle: args.title, stops: args.stops }),
       user_id: args.userId,
     })
     .select('id, title, created_at')
