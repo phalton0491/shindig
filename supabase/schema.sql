@@ -34,6 +34,30 @@ to authenticated
 using (auth.uid() = id)
 with check (auth.uid() = id);
 
+create table if not exists public.friendships (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  friend_id uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, friend_id),
+  constraint friendships_not_self check (user_id <> friend_id)
+);
+
+alter table public.friendships enable row level security;
+
+drop policy if exists "Users can read own friendships" on public.friendships;
+create policy "Users can read own friendships"
+on public.friendships
+for select
+to authenticated
+using (auth.uid() = user_id or auth.uid() = friend_id);
+
+drop policy if exists "Users can insert own friendships" on public.friendships;
+create policy "Users can insert own friendships"
+on public.friendships
+for insert
+to authenticated
+with check (auth.uid() = user_id or auth.uid() = friend_id);
+
 insert into storage.buckets (id, name, public)
 values ('avatars', 'avatars', true)
 on conflict (id) do nothing;
@@ -109,7 +133,19 @@ create policy "Users can read own shindigs"
 on public.shindigs
 for select
 to authenticated
-using (auth.uid() = user_id);
+using (
+  auth.uid() = user_id
+  or exists (
+    select 1 from public.friendships
+    where (
+      friendships.user_id = auth.uid()
+      and friendships.friend_id = shindigs.user_id
+    ) or (
+      friendships.friend_id = auth.uid()
+      and friendships.user_id = shindigs.user_id
+    )
+  )
+);
 
 drop policy if exists "Users can insert own shindigs" on public.shindigs;
 create policy "Users can insert own shindigs"
@@ -135,7 +171,19 @@ using (
   exists (
     select 1 from public.shindigs
     where public.shindigs.id = shindig_stops.shindig_id
-      and public.shindigs.user_id = auth.uid()
+      and (
+        public.shindigs.user_id = auth.uid()
+        or exists (
+          select 1 from public.friendships
+          where (
+            friendships.user_id = auth.uid()
+            and friendships.friend_id = public.shindigs.user_id
+          ) or (
+            friendships.friend_id = auth.uid()
+            and friendships.user_id = public.shindigs.user_id
+          )
+        )
+      )
   )
 );
 
@@ -181,7 +229,19 @@ using (
   exists (
     select 1 from public.shindigs
     where public.shindigs.id = shindig_photos.shindig_id
-      and public.shindigs.user_id = auth.uid()
+      and (
+        public.shindigs.user_id = auth.uid()
+        or exists (
+          select 1 from public.friendships
+          where (
+            friendships.user_id = auth.uid()
+            and friendships.friend_id = public.shindigs.user_id
+          ) or (
+            friendships.friend_id = auth.uid()
+            and friendships.user_id = public.shindigs.user_id
+          )
+        )
+      )
   )
 );
 

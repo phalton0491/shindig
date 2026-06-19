@@ -1,6 +1,6 @@
 import { User } from '@supabase/supabase-js';
 
-import { UserProfile } from '../types/models';
+import { FriendProfile, UserProfile } from '../types/models';
 import { supabase } from './supabase';
 
 type ProfileRow = {
@@ -45,6 +45,19 @@ function mapProfile(row: ProfileRow): UserProfile {
       friends: 0,
       saves: 0,
     },
+  };
+}
+
+function mapFriendProfile(row: ProfileRow): FriendProfile {
+  const firstName = row.first_name?.trim() || 'Shin';
+  const lastName = row.last_name?.trim() || 'User';
+
+  return {
+    avatar: row.avatar_url || defaultAvatar(firstName, lastName),
+    city: row.city?.trim() || 'Add your city',
+    handle: `@${row.username}`,
+    id: row.id,
+    name: `${firstName} ${lastName}`.trim(),
   };
 }
 
@@ -150,6 +163,53 @@ export async function updateProfile(userId: string, profile: UserProfile) {
   }
 
   return mapProfile(data as ProfileRow);
+}
+
+export async function getFriendProfilesByIds(userIds: string[]) {
+  if (userIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await client()
+    .from('profiles')
+    .select('id, username, first_name, last_name, city, bio, avatar_url')
+    .in('id', userIds);
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data || []) as ProfileRow[]).map(mapFriendProfile);
+}
+
+export async function searchProfilesByUsername(args: {
+  currentUserId: string;
+  excludedUserIds?: string[];
+  query: string;
+}) {
+  const normalizedQuery = args.query.trim().toLowerCase();
+  if (normalizedQuery.length < 2) {
+    return [];
+  }
+
+  const queryBuilder = client()
+    .from('profiles')
+    .select('id, username, first_name, last_name, city, bio, avatar_url')
+    .neq('id', args.currentUserId)
+    .ilike('username', `%${normalizedQuery}%`)
+    .limit(12);
+
+  const { data, error } = await queryBuilder;
+
+  if (error) {
+    throw error;
+  }
+
+  const excludedIds = new Set(args.excludedUserIds || []);
+
+  return ((data || []) as ProfileRow[])
+    .filter((row) => !excludedIds.has(row.id))
+    .map(mapFriendProfile);
 }
 
 function decodeBase64ToArrayBuffer(base64: string) {

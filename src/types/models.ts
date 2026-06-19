@@ -26,6 +26,14 @@ export type UserProfile = {
   };
 };
 
+export type FriendProfile = {
+  avatar: string;
+  city: string;
+  handle: string;
+  id: string;
+  name: string;
+};
+
 export type SavedShindigStop = {
   id: string;
   order: number;
@@ -44,7 +52,12 @@ export type SavedShindig = {
   coverPhotoUrl: string | null;
   createdAt: string;
   id: string;
+  ownerId: string;
   photoCount: number;
   stops: SavedShindigStop[];
   title: string;
+};
+
+export type FeedShindig = SavedShindig & {
+  owner: FriendProfile;
 };

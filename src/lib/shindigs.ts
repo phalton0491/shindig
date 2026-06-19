@@ -1,4 +1,11 @@
-import { SavedShindig, SavedShindigPhoto, SavedShindigStop, TimelinePlace } from '../types/models';
+import {
+  FeedShindig,
+  SavedShindig,
+  SavedShindigPhoto,
+  SavedShindigStop,
+  TimelinePlace,
+} from '../types/models';
+import { getFriendProfilesByIds } from './profiles';
 import { supabase } from './supabase';
 
 type DraftStopPhoto = {
@@ -18,6 +25,7 @@ type ShindigRow = {
   created_at: string;
   id: string;
   title: string;
+  user_id: string;
 };
 
 type ShindigStopRow = {
@@ -177,6 +185,7 @@ function mapShindigs(rows: {
       coverPhotoUrl: photos[0]?.photoUrl || null,
       createdAt: shindig.created_at,
       id: shindig.id,
+      ownerId: shindig.user_id,
       photoCount: photos.length,
       stops,
       title: shindig.title,
@@ -184,35 +193,34 @@ function mapShindigs(rows: {
   });
 }
 
-export async function listShindigsForUser(userId: string) {
-  const [{ data: shindigs, error: shindigsError }, { data: stops, error: stopsError }, { data: photos, error: photosError }] =
+async function loadStopsAndPhotos(shindigIds: string[]) {
+  if (shindigIds.length === 0) {
+    return {
+      photos: [] as ShindigPhotoRow[],
+      stops: [] as ShindigStopRow[],
+    };
+  }
+
+  const [{ data: stops, error: stopsError }, { data: photos, error: photosError }] =
     await Promise.all([
-      client()
-        .from('shindigs')
-        .select('id, title, created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false }),
       client()
         .from('shindig_stops')
         .select(
           'id, shindig_id, stop_order, title, place_type, address, latitude, longitude, transit_minutes, transit_miles, scheduled_time'
         )
+        .in('shindig_id', shindigIds)
         .order('stop_order', { ascending: true }),
-      client().from('shindig_photos').select('id, shindig_id, stop_id, photo_url'),
+      client()
+        .from('shindig_photos')
+        .select('id, shindig_id, stop_id, photo_url')
+        .in('shindig_id', shindigIds),
     ]);
 
-  if (shindigsError && isMissingShindigSchema(shindigsError)) {
-    return [];
-  }
   if (stopsError && isMissingShindigSchema(stopsError)) {
-    return [];
+    return { photos: [], stops: [] };
   }
   if (photosError && isMissingShindigSchema(photosError)) {
-    return [];
-  }
-
-  if (shindigsError) {
-    throw shindigsError;
+    return { photos: [], stops: [] };
   }
   if (stopsError) {
     throw stopsError;
@@ -221,11 +229,77 @@ export async function listShindigsForUser(userId: string) {
     throw photosError;
   }
 
-  return mapShindigs({
+  return {
     photos: (photos || []) as ShindigPhotoRow[],
-    shindigs: (shindigs || []) as ShindigRow[],
     stops: (stops || []) as ShindigStopRow[],
+  };
+}
+
+export async function listShindigsForUser(userId: string) {
+  const { data: shindigs, error: shindigsError } = await client()
+    .from('shindigs')
+    .select('id, title, created_at, user_id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (shindigsError && isMissingShindigSchema(shindigsError)) {
+    return [];
+  }
+  if (shindigsError) {
+    throw shindigsError;
+  }
+
+  const shindigRows = (shindigs || []) as ShindigRow[];
+  const childRows = await loadStopsAndPhotos(shindigRows.map((row) => row.id));
+
+  return mapShindigs({
+    photos: childRows.photos,
+    shindigs: shindigRows,
+    stops: childRows.stops,
   });
+}
+
+export async function listFeedShindigs(args: {
+  friendIds: string[];
+  userId: string;
+}) {
+  const ownerIds = Array.from(new Set([args.userId, ...args.friendIds]));
+  const { data: shindigs, error: shindigsError } = await client()
+    .from('shindigs')
+    .select('id, title, created_at, user_id')
+    .in('user_id', ownerIds)
+    .order('created_at', { ascending: false });
+
+  if (shindigsError && isMissingShindigSchema(shindigsError)) {
+    return [];
+  }
+  if (shindigsError) {
+    throw shindigsError;
+  }
+
+  const shindigRows = (shindigs || []) as ShindigRow[];
+  const childRows = await loadStopsAndPhotos(shindigRows.map((row) => row.id));
+  const savedShindigs = mapShindigs({
+    photos: childRows.photos,
+    shindigs: shindigRows,
+    stops: childRows.stops,
+  });
+  const ownerProfiles = await getFriendProfilesByIds(ownerIds);
+  const ownersById = new Map(ownerProfiles.map((owner) => [owner.id, owner]));
+
+  return savedShindigs
+    .map((shindig) => {
+      const owner = ownersById.get(shindig.ownerId);
+      if (!owner) {
+        return null;
+      }
+
+      return {
+        ...shindig,
+        owner,
+      } satisfies FeedShindig;
+    })
+    .filter((shindig): shindig is FeedShindig => Boolean(shindig));
 }
 
 export async function createShindig(args: {
@@ -243,7 +317,7 @@ export async function createShindig(args: {
       title: buildShindigTitle({ providedTitle: args.title, stops: args.stops }),
       user_id: args.userId,
     })
-    .select('id, title, created_at')
+    .select('id, title, created_at, user_id')
     .single();
 
   if (shindigError && isMissingShindigSchema(shindigError)) {

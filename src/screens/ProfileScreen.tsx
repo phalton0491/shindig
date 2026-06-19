@@ -20,6 +20,7 @@ import { SavedShindig, UserProfile } from '../types/models';
 
 type ProfileScreenProps = {
   onBackHome: () => void;
+  onOpenShindig: (shindig: SavedShindig) => void;
   onProfileSaved: (profile: UserProfile) => Promise<UserProfile>;
   profile: UserProfile;
   shindigs: SavedShindig[];
@@ -28,6 +29,7 @@ type ProfileScreenProps = {
 
 export function ProfileScreen({
   onBackHome,
+  onOpenShindig,
   onProfileSaved,
   profile,
   shindigs,
@@ -106,15 +108,6 @@ export function ProfileScreen({
     await signOut();
   }
 
-  const allPhotos = shindigs.flatMap((shindig) =>
-    shindig.stops.flatMap((stop) =>
-      stop.photos.map((photo) => ({
-        photoUrl: photo.photoUrl,
-        shindigId: shindig.id,
-      }))
-    )
-  );
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -186,31 +179,18 @@ export function ProfileScreen({
           {shindigs.length > 0 ? (
             <View style={styles.grid}>
               {shindigs.map((shindig) => (
-                <AlbumCard key={shindig.id} shindig={shindig} />
+                <Pressable
+                  key={shindig.id}
+                  onPress={() => onOpenShindig(shindig)}
+                  style={styles.albumTile}
+                >
+                  <AlbumCard shindig={shindig} />
+                </Pressable>
               ))}
             </View>
           ) : (
             <Text style={styles.emptyText}>
               Your saved ShinDigs will appear here after you plan and save one.
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Photo Wall</Text>
-            <Text style={styles.archiveCount}>{allPhotos.length} uploads</Text>
-          </View>
-
-          {allPhotos.length > 0 ? (
-            <View style={styles.photoGrid}>
-              {allPhotos.map((photo) => (
-                <Image key={photo.photoUrl} source={{ uri: photo.photoUrl }} style={styles.wallPhoto} />
-              ))}
-            </View>
-          ) : (
-            <Text style={styles.emptyText}>
-              Upload stop photos while planning a ShinDig and they will tile here.
             </Text>
           )}
         </View>
@@ -341,16 +321,10 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     paddingHorizontal: theme.spacing.lg,
   },
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-  },
-  wallPhoto: {
-    borderRadius: 16,
-    height: 108,
-    width: '31%',
+  albumTile: {
+    maxWidth: 260,
+    minWidth: 160,
+    width: '47%',
   },
   emptyText: {
     color: theme.colors.textMuted,

@@ -43,10 +43,12 @@ export function AlbumCard({ shindig }: AlbumCardProps) {
 
 const styles = StyleSheet.create({
   card: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
     height: 240,
     justifyContent: 'flex-end',
     overflow: 'hidden',
-    width: '47%',
+    width: '100%',
   },
   image: {
     borderRadius: theme.radius.lg,

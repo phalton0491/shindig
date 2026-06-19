@@ -21,6 +21,8 @@ import { theme } from '../theme';
 import { SavedShindig, TimelinePlace, UserProfile } from '../types/models';
 
 type HomeScreenProps = {
+  initialFeedShindig?: SavedShindig | null;
+  onConsumeInitialFeedShindig?: () => void;
   onOpenProfile: () => void;
   onShindigSaved: (args: {
     stops: {
@@ -54,6 +56,23 @@ type InviteContact = {
 const HERO_LOGO = require('../../assets/auth-logo.png');
 const INVITE_SIGNUP_URL = 'shindig://signup';
 
+function buildManualPlace(query: string): TimelinePlace {
+  const normalizedQuery = query.trim();
+
+  return {
+    address: normalizedQuery,
+    durationLabel: '',
+    id: `manual-${normalizedQuery.toLowerCase().replace(/\s+/g, '-')}`,
+    latitude: 0,
+    longitude: 0,
+    title: normalizedQuery,
+    transitMinutes: 0,
+    transitMiles: 0,
+    type: 'Custom location',
+    vibeIds: [],
+  };
+}
+
 function formatDateLabel(value: string) {
   return new Date(value).toLocaleDateString('en-US', {
     day: 'numeric',
@@ -67,6 +86,8 @@ function fileExtensionFromUri(uri: string) {
 }
 
 export function HomeScreen({
+  initialFeedShindig,
+  onConsumeInitialFeedShindig,
   onOpenProfile,
   onShindigSaved,
   profile,
@@ -112,6 +133,17 @@ export function HomeScreen({
     () => contacts.filter((contact) => selectedContactIds.includes(contact.id)),
     [contacts, selectedContactIds]
   );
+
+  useEffect(() => {
+    if (!initialFeedShindig) {
+      return;
+    }
+
+    setError('');
+    setActiveFeedShindig(initialFeedShindig);
+    setStep('feed');
+    onConsumeInitialFeedShindig?.();
+  }, [initialFeedShindig, onConsumeInitialFeedShindig]);
 
   useEffect(() => {
     let isMounted = true;
@@ -168,10 +200,10 @@ export function HomeScreen({
 
   useEffect(() => {
     let isMounted = true;
+    const searchQuery = deferredLocationQuery.trim();
 
     async function runLocationSearch() {
-      const query = deferredLocationQuery.trim();
-      if (query.length < 2 || selectedLocation?.title === locationQuery.trim()) {
+      if (searchQuery.length < 2) {
         setLocationResults([]);
         return;
       }
@@ -187,7 +219,7 @@ export function HomeScreen({
                 longitude: currentLocation.longitude,
               }
             : undefined,
-          query,
+          query: searchQuery,
         });
 
         if (isMounted) {
@@ -213,7 +245,7 @@ export function HomeScreen({
     return () => {
       isMounted = false;
     };
-  }, [currentLocation, deferredLocationQuery, locationHint, locationQuery, selectedLocation]);
+  }, [currentLocation, deferredLocationQuery, locationHint]);
 
   useEffect(() => {
     if (step !== 'invite' || contacts.length > 0) {
@@ -227,7 +259,7 @@ export function HomeScreen({
       try {
         const permission = await Contacts.requestPermissionsAsync();
         if (!isMounted || permission.status !== 'granted') {
-          setError('Contacts permission is required to invite friends.');
+          setContacts([]);
           return;
         }
 
@@ -362,6 +394,12 @@ export function HomeScreen({
     setStep('create');
   }
 
+  function openPastShindig(shindig: SavedShindig) {
+    setError('');
+    setActiveFeedShindig(shindig);
+    setStep('feed');
+  }
+
   async function continueToInvite() {
     if (!shindigName.trim()) {
       setError('Name your shindig before continuing.');
@@ -395,20 +433,17 @@ export function HomeScreen({
           query: locationQuery.trim(),
         });
 
-        if (results.length === 0) {
-          setError('Could not resolve that address or place. Try a more specific location.');
-          return;
+        if (results.length > 0) {
+          setSelectedLocation(results[0]);
+          setLocationQuery(results[0].title);
+        } else {
+          setSelectedLocation(buildManualPlace(locationQuery));
         }
-
-        setSelectedLocation(results[0]);
-        setLocationQuery(results[0].title);
       } catch (nextError) {
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : 'Could not resolve that address or place right now.'
-        );
-        return;
+        setSelectedLocation(buildManualPlace(locationQuery));
+        if (nextError instanceof Error) {
+          setError(`${nextError.message} Continuing with your typed location instead.`);
+        }
       } finally {
         setIsSearchingLocations(false);
       }
@@ -426,7 +461,9 @@ export function HomeScreen({
   }
 
   async function saveShindigAndOpenFeed() {
-    if (!selectedLocation) {
+    const startingPlace = selectedLocation || (locationQuery.trim() ? buildManualPlace(locationQuery) : null);
+
+    if (!startingPlace) {
       setError('Choose a starting location first.');
       return;
     }
@@ -439,7 +476,7 @@ export function HomeScreen({
         const inviteName = shindigName.trim() || 'ShinDig';
         await SMS.sendSMSAsync(
           selectedContacts.map((contact) => contact.phoneNumber),
-          `${profile.name} invited you to ${inviteName} at ${selectedLocation.title}. Sign up to join the ShinDig: ${INVITE_SIGNUP_URL}`
+          `${profile.name} invited you to ${inviteName} at ${startingPlace.title}. Sign up to join the ShinDig: ${INVITE_SIGNUP_URL}`
         );
       }
 
@@ -447,7 +484,7 @@ export function HomeScreen({
         stops: [
           {
             photos,
-            place: selectedLocation,
+            place: startingPlace,
           },
         ],
         title: shindigName.trim(),
@@ -491,7 +528,11 @@ export function HomeScreen({
           {shindigs.length > 0 ? (
             <View style={styles.pastList}>
               {shindigs.map((shindig) => (
-                <View key={shindig.id} style={styles.pastCard}>
+                <Pressable
+                  key={shindig.id}
+                  onPress={() => openPastShindig(shindig)}
+                  style={styles.pastCard}
+                >
                   <Image
                     source={{
                       uri:
@@ -504,7 +545,7 @@ export function HomeScreen({
                     <Text style={styles.pastCardTitle}>{shindig.title}</Text>
                     <Text style={styles.pastCardMeta}>{formatDateLabel(shindig.createdAt)}</Text>
                   </View>
-                </View>
+                </Pressable>
               ))}
             </View>
           ) : (
@@ -523,11 +564,19 @@ export function HomeScreen({
     return (
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.topBar}>
+            <Pressable onPress={() => setStep('welcome')}>
+              <Text style={styles.backText}>Back</Text>
+            </Pressable>
+            <Text style={styles.screenTitle}>Shindig Feed</Text>
+            <View style={styles.topSpacer} />
+          </View>
+
           <View style={styles.feedHeader}>
             <View>
               <Text style={styles.feedLocation}>{activeFeedShindig.stops[0]?.place.title}</Text>
               <Text style={styles.feedParticipants}>
-                {selectedContacts.length + 1} participants
+                {feedPhotos.length} photo{feedPhotos.length === 1 ? '' : 's'}
               </Text>
             </View>
             <Pressable onPress={onOpenProfile} style={styles.avatarButton}>
@@ -622,8 +671,9 @@ export function HomeScreen({
                 onChangeText={(value) => {
                   setLocationQuery(value);
                   setSelectedLocation(null);
+                  setError('');
                 }}
-                placeholder="Search address"
+                placeholder="Search address or type any place"
                 placeholderTextColor={theme.colors.textMuted}
                 style={styles.input}
                 value={locationQuery}
@@ -646,6 +696,13 @@ export function HomeScreen({
                     <Text style={styles.suggestionMeta}>{place.address}</Text>
                   </Pressable>
                 ))}
+                {!isSearchingLocations &&
+                deferredLocationQuery.trim().length >= 2 &&
+                locationResults.length === 0 ? (
+                  <Text style={styles.helperText}>
+                    No exact match found. You can still continue with the typed location.
+                  </Text>
+                ) : null}
               </View>
 
               <Pressable onPress={continueToInvite} style={styles.ctaButton}>
@@ -657,7 +714,7 @@ export function HomeScreen({
           {step === 'invite' ? (
             <View style={styles.panel}>
               <Text style={styles.inviteSubtitle}>
-                People you invite can upload photos and see everyone else&apos;s pictures.
+                Invite friends if you want. You can also skip this step and start the feed now.
               </Text>
               <TextInput
                 onChangeText={setContactSearch}
@@ -667,6 +724,11 @@ export function HomeScreen({
                 value={contactSearch}
               />
               {isLoadingContacts ? <Text style={styles.helperText}>Loading contacts...</Text> : null}
+              {!isLoadingContacts && contacts.length === 0 ? (
+                <Text style={styles.helperText}>
+                  No contacts selected. You can continue without inviting anyone.
+                </Text>
+              ) : null}
 
               <View style={styles.contactList}>
                 {filteredContacts.map((contact) => {
