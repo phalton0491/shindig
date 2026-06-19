@@ -1,36 +1,29 @@
-import {
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AlbumCard } from '../components/AlbumCard';
 import { ProfileHeader } from '../components/ProfileHeader';
 import { theme } from '../theme';
 import { SavedShindig, UserProfile } from '../types/models';
 
-type ProfileScreenProps = {
-  onBackHome: () => void;
+type FriendProfileScreenProps = {
+  onBack: () => void;
   onOpenShindig: (shindig: SavedShindig) => void;
   profile: UserProfile;
   shindigs: SavedShindig[];
 };
 
-export function ProfileScreen({
-  onBackHome,
+export function FriendProfileScreen({
+  onBack,
   onOpenShindig,
   profile,
   shindigs,
-}: ProfileScreenProps) {
+}: FriendProfileScreenProps) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
-          <Pressable onPress={onBackHome} style={styles.topButton}>
-            <Text style={styles.topButtonText}>Home</Text>
+          <Pressable onPress={onBack} style={styles.topButton}>
+            <Text style={styles.topButtonText}>Back</Text>
           </Pressable>
         </View>
 
@@ -38,7 +31,7 @@ export function ProfileScreen({
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Your ShinDigs</Text>
+            <Text style={styles.sectionTitle}>{profile.name.split(' ')[0]}&apos;s ShinDigs</Text>
             <Text style={styles.archiveCount}>{shindigs.length} saved</Text>
           </View>
 
@@ -55,9 +48,7 @@ export function ProfileScreen({
               ))}
             </View>
           ) : (
-            <Text style={styles.emptyText}>
-              Your saved ShinDigs will appear here after you plan and save one.
-            </Text>
+            <Text style={styles.emptyText}>No public ShinDigs to show yet.</Text>
           )}
         </View>
       </ScrollView>

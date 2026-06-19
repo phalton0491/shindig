@@ -2,18 +2,16 @@ import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } fr
 
 import { AlbumCard } from '../components/AlbumCard';
 import { theme } from '../theme';
-import { FeedShindig, UserProfile } from '../types/models';
+import { FeedShindig } from '../types/models';
 
 type HomeFeedScreenProps = {
   feedShindigs: FeedShindig[];
-  onOpenProfile: () => void;
-  profile: UserProfile;
+  onOpenFriend: (friendId: string) => void;
 };
 
 export function HomeFeedScreen({
   feedShindigs,
-  onOpenProfile,
-  profile,
+  onOpenFriend,
 }: HomeFeedScreenProps) {
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -23,9 +21,7 @@ export function HomeFeedScreen({
             <Text style={styles.kicker}>SHINDIG FEED</Text>
             <Text style={styles.title}>Yours and your friends&apos; ShinDigs.</Text>
           </View>
-          <Pressable onPress={onOpenProfile} style={styles.avatarButton}>
-            <Image source={{ uri: profile.avatar }} style={styles.avatar} />
-          </Pressable>
+          <View style={styles.topSpacer} />
         </View>
 
         {feedShindigs.length > 0 ? (
@@ -33,13 +29,16 @@ export function HomeFeedScreen({
             {feedShindigs.map((shindig) => (
               <View key={shindig.id} style={styles.feedCard}>
                 <View style={styles.feedCardHeader}>
-                  <View style={styles.ownerRow}>
+                  <Pressable
+                    onPress={() => onOpenFriend(shindig.owner.id)}
+                    style={styles.ownerRow}
+                  >
                     <Image source={{ uri: shindig.owner.avatar }} style={styles.ownerAvatar} />
                     <View style={styles.ownerCopy}>
                       <Text style={styles.ownerName}>{shindig.owner.name}</Text>
                       <Text style={styles.ownerHandle}>{shindig.owner.handle}</Text>
                     </View>
-                  </View>
+                  </Pressable>
                   <Text style={styles.dateText}>
                     {new Date(shindig.createdAt).toLocaleDateString('en-US', {
                       day: 'numeric',
@@ -86,6 +85,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  topSpacer: {
+    width: 44,
+  },
   kicker: {
     color: theme.colors.accentSoft,
     fontSize: 12,
@@ -99,17 +101,6 @@ const styles = StyleSheet.create({
     lineHeight: 36,
     marginTop: theme.spacing.sm,
     maxWidth: 260,
-  },
-  avatarButton: {
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.round,
-    borderWidth: 2,
-    padding: 2,
-  },
-  avatar: {
-    borderRadius: theme.radius.round,
-    height: 52,
-    width: 52,
   },
   stack: {
     gap: theme.spacing.lg,

@@ -1,5 +1,14 @@
 import { useDeferredValue, useEffect, useState } from 'react';
-import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Image,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { addFriend } from '../lib/friends';
 import { searchProfilesByUsername } from '../lib/profiles';
@@ -9,6 +18,7 @@ import { FriendProfile, UserProfile } from '../types/models';
 type FriendsScreenProps = {
   friends: FriendProfile[];
   onFriendsChanged: () => Promise<void>;
+  onOpenFriend: (friendId: string) => void;
   onOpenProfile: () => void;
   profile: UserProfile;
   userId: string;
@@ -17,6 +27,7 @@ type FriendsScreenProps = {
 export function FriendsScreen({
   friends,
   onFriendsChanged,
+  onOpenFriend,
   onOpenProfile,
   profile,
   userId,
@@ -149,7 +160,11 @@ export function FriendsScreen({
         {friends.length > 0 ? (
           <View style={styles.friendList}>
             {friends.map((friend) => (
-              <View key={friend.id} style={styles.friendCard}>
+              <Pressable
+                key={friend.id}
+                onPress={() => onOpenFriend(friend.id)}
+                style={styles.friendCard}
+              >
                 <Image source={{ uri: friend.avatar }} style={styles.friendAvatar} />
                 <View style={styles.friendText}>
                   <Text style={styles.friendName}>{friend.name}</Text>
@@ -157,7 +172,7 @@ export function FriendsScreen({
                     {friend.handle} · {friend.city}
                   </Text>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </View>
         ) : (

@@ -9,17 +9,21 @@ import {
   View,
 } from 'react-native';
 
+import { signOut } from './src/lib/auth';
+import { AuthMenu } from './src/components/AuthMenu';
 import { supabase } from './src/lib/supabase';
 import { listFriendsForUser } from './src/lib/friends';
 import { createShindig, listFeedShindigs, listShindigsForUser } from './src/lib/shindigs';
-import { ensureProfileForUser, updateProfile } from './src/lib/profiles';
+import { ensureProfileForUser, getProfileForUser, updateProfile } from './src/lib/profiles';
 import { BottomNav, AppTab } from './src/components/BottomNav';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { BackendSetupScreen } from './src/screens/BackendSetupScreen';
+import { FriendProfileScreen } from './src/screens/FriendProfileScreen';
 import { FriendsScreen } from './src/screens/FriendsScreen';
 import { HomeFeedScreen } from './src/screens/HomeFeedScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
 import { theme } from './src/theme';
 import { FeedShindig, FriendProfile, SavedShindig, UserProfile } from './src/types/models';
 
@@ -62,6 +66,11 @@ export default function App() {
   const [feedShindigs, setFeedShindigs] = useState<FeedShindig[]>([]);
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [feedShindig, setFeedShindig] = useState<SavedShindig | null>(null);
+  const [friendProfileDetail, setFriendProfileDetail] = useState<{
+    profile: UserProfile;
+    shindigs: SavedShindig[];
+  } | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [bootError, setBootError] = useState('');
 
@@ -207,6 +216,8 @@ export default function App() {
           setFeedShindigs([]);
           setActiveTab('home');
           setFeedShindig(null);
+          setFriendProfileDetail(null);
+          setShowSettings(false);
           setAuthMode('login');
           return;
         }
@@ -301,6 +312,23 @@ export default function App() {
     setFeedShindigs(nextFeed);
   }
 
+  async function handleOpenFriendProfile(friendId: string) {
+    const [nextProfile, nextShindigs] = await Promise.all([
+      getProfileForUser(friendId),
+      listShindigsForUser(friendId),
+    ]);
+
+    if (!nextProfile) {
+      throw new Error('That friend profile could not be loaded.');
+    }
+
+    setShowSettings(false);
+    setFriendProfileDetail({
+      profile: nextProfile,
+      shindigs: nextShindigs,
+    });
+  }
+
   if (!supabase) {
     return (
       <>
@@ -335,48 +363,76 @@ export default function App() {
       <StatusBar style="light" />
       <View style={styles.appShell}>
         <View style={styles.screenShell}>
-          {activeTab === 'home' ? (
+          {showSettings ? (
+            <SettingsScreen
+              onProfileSaved={handleProfileSaved}
+              profile={profile}
+              userId={session.user.id}
+            />
+          ) : friendProfileDetail ? (
+            <FriendProfileScreen
+              onBack={() => setFriendProfileDetail(null)}
+              onOpenShindig={(shindig) => {
+                setFeedShindig(shindig);
+                setFriendProfileDetail(null);
+                setActiveTab('shindigs');
+              }}
+              profile={friendProfileDetail.profile}
+              shindigs={friendProfileDetail.shindigs}
+            />
+          ) : activeTab === 'home' ? (
             <HomeFeedScreen
               feedShindigs={feedShindigs}
-              onOpenProfile={() => setActiveTab('profile')}
-              profile={profile}
+              onOpenFriend={handleOpenFriendProfile}
             />
           ) : null}
-          {activeTab === 'friends' ? (
+          {!showSettings && !friendProfileDetail && activeTab === 'friends' ? (
             <FriendsScreen
               friends={friends}
               onFriendsChanged={refreshFriends}
+              onOpenFriend={handleOpenFriendProfile}
               onOpenProfile={() => setActiveTab('profile')}
               profile={profile}
               userId={session.user.id}
             />
           ) : null}
-          {activeTab === 'shindigs' ? (
+          {!showSettings && !friendProfileDetail && activeTab === 'shindigs' ? (
             <HomeScreen
               initialFeedShindig={feedShindig}
               onConsumeInitialFeedShindig={() => setFeedShindig(null)}
               onShindigSaved={handleShindigSaved}
-              onOpenProfile={() => setActiveTab('profile')}
               profile={profile}
               shindigs={shindigs}
               userId={session.user.id}
             />
           ) : null}
-          {activeTab === 'profile' ? (
+          {!showSettings && !friendProfileDetail && activeTab === 'profile' ? (
             <ProfileScreen
               onBackHome={() => setActiveTab('home')}
               onOpenShindig={(shindig) => {
                 setFeedShindig(shindig);
                 setActiveTab('shindigs');
               }}
-              onProfileSaved={handleProfileSaved}
               profile={profile}
               shindigs={shindigs}
-              userId={session.user.id}
             />
           ) : null}
         </View>
-        <BottomNav activeTab={activeTab} onSelectTab={setActiveTab} />
+        <AuthMenu
+          onOpenSettings={() => {
+            setFriendProfileDetail(null);
+            setShowSettings(true);
+          }}
+          onSignOut={signOut}
+        />
+        <BottomNav
+          activeTab={activeTab}
+          onSelectTab={(tab) => {
+            setShowSettings(false);
+            setFriendProfileDetail(null);
+            setActiveTab(tab);
+          }}
+        />
       </View>
     </>
   );

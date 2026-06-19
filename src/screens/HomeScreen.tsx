@@ -23,7 +23,6 @@ import { SavedShindig, TimelinePlace, UserProfile } from '../types/models';
 type HomeScreenProps = {
   initialFeedShindig?: SavedShindig | null;
   onConsumeInitialFeedShindig?: () => void;
-  onOpenProfile: () => void;
   onShindigSaved: (args: {
     stops: {
       photos: DraftPhoto[];
@@ -88,7 +87,6 @@ function fileExtensionFromUri(uri: string) {
 export function HomeScreen({
   initialFeedShindig,
   onConsumeInitialFeedShindig,
-  onOpenProfile,
   onShindigSaved,
   profile,
   shindigs,
@@ -508,9 +506,7 @@ export function HomeScreen({
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.topBar}>
             <View />
-            <Pressable onPress={onOpenProfile} style={styles.avatarButton}>
-              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
-            </Pressable>
+            <View style={styles.topSpacer} />
           </View>
 
           <View style={styles.welcomeCard}>
@@ -579,9 +575,7 @@ export function HomeScreen({
                 {feedPhotos.length} photo{feedPhotos.length === 1 ? '' : 's'}
               </Text>
             </View>
-            <Pressable onPress={onOpenProfile} style={styles.avatarButton}>
-              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
-            </Pressable>
+            <View style={styles.topSpacer} />
           </View>
 
           <View style={styles.feedStack}>
