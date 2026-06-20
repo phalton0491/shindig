@@ -1,33 +1,18 @@
-import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '../theme';
 
 type AuthMenuProps = {
   notificationCount: number;
+  onOpenMenu: () => void;
   onOpenNotifications: () => void;
-  onOpenSettings: () => void;
-  onSignOut: () => void | Promise<void>;
 };
 
 export function AuthMenu({
   notificationCount,
+  onOpenMenu,
   onOpenNotifications,
-  onOpenSettings,
-  onSignOut,
 }: AuthMenuProps) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  function handleOpenSettings() {
-    setIsOpen(false);
-    onOpenSettings();
-  }
-
-  async function handleSignOut() {
-    setIsOpen(false);
-    await onSignOut();
-  }
-
   return (
     <View pointerEvents="box-none" style={styles.shell}>
       <View style={styles.row}>
@@ -37,7 +22,7 @@ export function AuthMenu({
             <View style={styles.dot} />
           ) : null}
         </Pressable>
-        <Pressable onPress={() => setIsOpen((current) => !current)} style={styles.button}>
+        <Pressable onPress={onOpenMenu} style={styles.button}>
           <View style={styles.hamburger}>
             <View style={styles.hamburgerLine} />
             <View style={styles.hamburgerLine} />
@@ -45,16 +30,6 @@ export function AuthMenu({
           </View>
         </Pressable>
       </View>
-      {isOpen ? (
-        <View style={styles.menu}>
-          <Pressable onPress={handleOpenSettings} style={styles.menuItem}>
-            <Text style={styles.menuText}>User settings</Text>
-          </Pressable>
-          <Pressable onPress={handleSignOut} style={styles.menuItem}>
-            <Text style={styles.menuText}>Sign out</Text>
-          </Pressable>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -101,23 +76,5 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     height: 2,
     width: '100%',
-  },
-  menu: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    marginTop: 8,
-    minWidth: 176,
-    overflow: 'hidden',
-  },
-  menuItem: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-  },
-  menuText: {
-    color: theme.colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

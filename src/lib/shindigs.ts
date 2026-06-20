@@ -808,6 +808,43 @@ export async function createPhotoAddRequest(args: {
   return data as ShindigPhotoRequestRow;
 }
 
+export async function addPhotoToShindig(args: {
+  photo: DraftStopPhoto;
+  shindigId: string;
+  userId: string;
+}) {
+  const stopId = await getFirstStopIdForShindig(args.shindigId);
+  const photoUrl = await uploadStopPhoto({
+    photo: args.photo,
+    shindigId: args.shindigId,
+    stopId,
+    userId: args.userId,
+  });
+
+  const { data, error } = await client()
+    .from('shindig_photos')
+    .insert({
+      contributor_user_id: null,
+      photo_url: photoUrl,
+      shindig_id: args.shindigId,
+      stop_id: stopId,
+    })
+    .select('id, shindig_id, stop_id, photo_url, contributor_user_id')
+    .single();
+
+  if (error && isMissingShindigSchema(error)) {
+    throw new Error(
+      'Your Supabase database is missing the ShinDig photo tables. Run the latest supabase/schema.sql first.'
+    );
+  }
+
+  if (error || !data) {
+    throw error || new Error('Failed to add the photo to this ShinDig.');
+  }
+
+  return data as ShindigPhotoRow;
+}
+
 export async function approvePhotoAddRequest(args: {
   requestId: string;
   userId: string;

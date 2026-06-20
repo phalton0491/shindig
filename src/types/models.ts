@@ -96,6 +96,7 @@ export type AppNotification = {
   shindigId?: string;
   type:
     | 'friend_accept'
+    | 'friend_reject'
     | 'friend_request'
     | 'photo_add_request'
     | 'photo_comment'

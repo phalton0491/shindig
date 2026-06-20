@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   Pressable,
   SafeAreaView,
@@ -15,12 +16,14 @@ import { theme } from '../theme';
 import { UserProfile } from '../types/models';
 
 type SettingsScreenProps = {
+  onBack: () => void;
   onProfileSaved: (profile: UserProfile) => Promise<UserProfile>;
   profile: UserProfile;
   userId: string;
 };
 
 export function SettingsScreen({
+  onBack,
   onProfileSaved,
   profile,
   userId,
@@ -97,6 +100,13 @@ export function SettingsScreen({
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.topBar}>
+          <Pressable onPress={onBack} style={styles.backButton}>
+            <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
+          </Pressable>
+          <View style={styles.topSpacer} />
+        </View>
+
         <View style={styles.panel}>
           <Text style={styles.title}>User settings</Text>
           <Text style={styles.subtitle}>Update your photo and profile details.</Text>
@@ -158,7 +168,23 @@ const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.lg,
     paddingBottom: theme.spacing.xxxl,
-    paddingTop: 76,
+    paddingTop: 16,
+  },
+  topBar: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.lg,
+  },
+  backButton: {
+    alignItems: 'center',
+    height: 52,
+    justifyContent: 'center',
+    marginLeft: -14,
+    width: 52,
+  },
+  topSpacer: {
+    width: 52,
   },
   panel: {
     backgroundColor: theme.colors.surface,

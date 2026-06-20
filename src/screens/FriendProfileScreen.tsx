@@ -1,4 +1,5 @@
-import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AlbumCard } from '../components/AlbumCard';
 import { ProfileHeader } from '../components/ProfileHeader';
@@ -23,7 +24,7 @@ export function FriendProfileScreen({
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <Pressable onPress={onBack} style={styles.topButton}>
-            <Text style={styles.topButtonText}>{'‹'}</Text>
+            <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
           </Pressable>
         </View>
 
@@ -69,19 +70,12 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.md,
   },
   topButton: {
+    alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.round,
-    borderWidth: 1,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-  },
-  topButtonText: {
-    color: theme.colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    height: 52,
+    justifyContent: 'center',
+    marginLeft: -14,
+    width: 52,
   },
   section: {
     marginTop: theme.spacing.xl,

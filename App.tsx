@@ -13,9 +13,9 @@ import { signOut } from './src/lib/auth';
 import { AuthMenu } from './src/components/AuthMenu';
 import {
   createNotification,
-  dismissFriendRequestNotification,
   listNotificationsForUser,
   markNotificationsRead,
+  resolveFriendRequestNotification,
 } from './src/lib/notifications';
 import { supabase } from './src/lib/supabase';
 import { acceptFriendRequest, listFriendsForUser, rejectFriendRequest } from './src/lib/friends';
@@ -34,6 +34,7 @@ import { FriendProfileScreen } from './src/screens/FriendProfileScreen';
 import { FriendsScreen } from './src/screens/FriendsScreen';
 import { HomeFeedScreen } from './src/screens/HomeFeedScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { MoreScreen } from './src/screens/MoreScreen';
 import { NotificationsScreen } from './src/screens/NotificationsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
@@ -88,11 +89,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [feedShindig, setFeedShindig] = useState<SavedShindig | null>(null);
   const [highlightedPhotoId, setHighlightedPhotoId] = useState<string | null>(null);
+  const [pendingShindigStep, setPendingShindigStep] = useState<'create' | null>(null);
   const [friendProfileDetail, setFriendProfileDetail] = useState<{
     profile: UserProfile;
     shindigs: SavedShindig[];
   } | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [bootError, setBootError] = useState('');
@@ -248,8 +251,10 @@ export default function App() {
           setActiveTab('home');
           setFeedShindig(null);
           setHighlightedPhotoId(null);
+          setPendingShindigStep(null);
           setFriendProfileDetail(null);
           setShowNotifications(false);
+          setShowMore(false);
           setShowSettings(false);
           setAuthMode('login');
           return;
@@ -361,6 +366,7 @@ export default function App() {
     }
 
     setFriendProfileDetail(null);
+    setShowMore(false);
     setShowSettings(false);
     setShowNotifications(true);
     await markNotificationsRead(session.user.id);
@@ -378,6 +384,7 @@ export default function App() {
     }
 
     setShowSettings(false);
+    setShowMore(false);
     setFriendProfileDetail({
       profile: nextProfile,
       shindigs: nextShindigs,
@@ -400,6 +407,7 @@ export default function App() {
     }
 
     setShowNotifications(false);
+    setShowMore(false);
     setShowSettings(false);
     setFriendProfileDetail(null);
     setFeedShindig(targetShindig);
@@ -415,26 +423,34 @@ export default function App() {
     await acceptFriendRequest({ friendId, userId: session.user.id });
     await createNotification({
       actorUserId: session.user.id,
-      message: `${profile.name} accepted your friend request.`,
+      message: `Accepted friend request from ${profile.name}.`,
       recipientUserId: friendId,
       type: 'friend_accept',
     });
-    await dismissFriendRequestNotification({
+    await resolveFriendRequestNotification({
       actorUserId: friendId,
       recipientUserId: session.user.id,
+      resolution: 'accepted',
     });
     await Promise.all([refreshFriends(), refreshNotifications()]);
   }
 
   async function handleRejectFriendRequest(friendId: string) {
-    if (!session?.user) {
+    if (!session?.user || !profile) {
       return;
     }
 
     await rejectFriendRequest({ friendId, userId: session.user.id });
-    await dismissFriendRequestNotification({
+    await createNotification({
+      actorUserId: session.user.id,
+      message: `Rejected friend request from ${profile.name}.`,
+      recipientUserId: friendId,
+      type: 'friend_reject',
+    });
+    await resolveFriendRequestNotification({
       actorUserId: friendId,
       recipientUserId: session.user.id,
+      resolution: 'rejected',
     });
     await Promise.all([refreshFriends(), refreshNotifications()]);
   }
@@ -518,9 +534,22 @@ export default function App() {
             />
           ) : showSettings ? (
             <SettingsScreen
+              onBack={() => {
+                setShowSettings(false);
+                setShowMore(true);
+              }}
               onProfileSaved={handleProfileSaved}
               profile={profile}
               userId={session.user.id}
+            />
+          ) : showMore ? (
+            <MoreScreen
+              onBack={() => setShowMore(false)}
+              onOpenSettings={() => {
+                setShowMore(false);
+                setShowSettings(true);
+              }}
+              onSignOut={signOut}
             />
           ) : friendProfileDetail ? (
             <FriendProfileScreen
@@ -539,6 +568,13 @@ export default function App() {
               onOpenFriend={handleOpenFriendProfile}
               onOpenShindig={(shindig) => {
                 setFeedShindig(shindig);
+                setPendingShindigStep(null);
+                setActiveTab('shindigs');
+              }}
+              onStartShindig={() => {
+                setFeedShindig(null);
+                setHighlightedPhotoId(null);
+                setPendingShindigStep('create');
                 setActiveTab('shindigs');
               }}
             />
@@ -557,8 +593,10 @@ export default function App() {
             <HomeScreen
               initialFeedShindig={feedShindig}
               initialHighlightedPhotoId={highlightedPhotoId}
+              initialStep={pendingShindigStep}
               onConsumeInitialFeedShindig={() => setFeedShindig(null)}
               onConsumeInitialHighlightedPhotoId={() => setHighlightedPhotoId(null)}
+              onConsumeInitialStep={() => setPendingShindigStep(null)}
               onShindigSaved={handleShindigSaved}
               profile={profile}
               shindigs={shindigs}
@@ -577,20 +615,23 @@ export default function App() {
             />
           ) : null}
         </View>
-        <AuthMenu
-          notificationCount={notifications.filter((item) => !item.readAt).length}
-          onOpenNotifications={handleOpenNotifications}
-          onOpenSettings={() => {
-            setFriendProfileDetail(null);
-            setShowNotifications(false);
-            setShowSettings(true);
-          }}
-          onSignOut={signOut}
-        />
+        {!showNotifications && !showMore && !showSettings && !friendProfileDetail ? (
+          <AuthMenu
+            notificationCount={notifications.filter((item) => !item.readAt).length}
+            onOpenMenu={() => {
+              setFriendProfileDetail(null);
+              setShowNotifications(false);
+              setShowSettings(false);
+              setShowMore(true);
+            }}
+            onOpenNotifications={handleOpenNotifications}
+          />
+        ) : null}
         <BottomNav
           activeTab={activeTab}
           onSelectTab={(tab) => {
             setShowNotifications(false);
+            setShowMore(false);
             setShowSettings(false);
             setFriendProfileDetail(null);
             setActiveTab(tab);

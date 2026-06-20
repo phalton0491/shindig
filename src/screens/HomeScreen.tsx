@@ -5,6 +5,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
 import {
+  ActionSheetIOS,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -20,6 +22,7 @@ import {
 import { searchPlaces } from '../lib/places';
 import { createNotification } from '../lib/notifications';
 import {
+  addPhotoToShindig,
   addPhotoComment,
   addShindigComment,
   createPhotoAddRequest,
@@ -35,8 +38,10 @@ import { SavedShindig, TimelinePlace, UserProfile } from '../types/models';
 type HomeScreenProps = {
   initialFeedShindig?: SavedShindig | null;
   initialHighlightedPhotoId?: string | null;
+  initialStep?: 'create' | null;
   onConsumeInitialFeedShindig?: () => void;
   onConsumeInitialHighlightedPhotoId?: () => void;
+  onConsumeInitialStep?: () => void;
   onShindigSaved: (args: {
     stops: {
       photos: DraftPhoto[];
@@ -106,11 +111,21 @@ function fileExtensionFromUri(uri: string) {
   return uri.match(/\.(\w+)(?:\?|$)/)?.[1]?.toLowerCase() || 'jpg';
 }
 
+function getPhotoNotificationRecipient(
+  shindig: SavedShindig,
+  photoId: string
+) {
+  const targetPhoto = shindig.stops.flatMap((stop) => stop.photos).find((photo) => photo.id === photoId);
+  return targetPhoto?.contributor?.id || shindig.ownerId;
+}
+
 export function HomeScreen({
   initialFeedShindig,
   initialHighlightedPhotoId,
+  initialStep,
   onConsumeInitialFeedShindig,
   onConsumeInitialHighlightedPhotoId,
+  onConsumeInitialStep,
   onShindigSaved,
   profile,
   shindigs,
@@ -137,10 +152,12 @@ export function HomeScreen({
   const [isSavingShindig, setIsSavingShindig] = useState(false);
   const [isRefreshingFeed, setIsRefreshingFeed] = useState(false);
   const [isSubmittingPhotoRequest, setIsSubmittingPhotoRequest] = useState(false);
+  const [isAddingPhotoToShindig, setIsAddingPhotoToShindig] = useState(false);
   const [shindigCommentDraft, setShindigCommentDraft] = useState('');
   const [photoCommentDrafts, setPhotoCommentDrafts] = useState<Record<string, string>>({});
   const [requestedPhotoShindigIds, setRequestedPhotoShindigIds] = useState<string[]>([]);
   const [showPhotoRequestPrompt, setShowPhotoRequestPrompt] = useState(false);
+  const [showOwnerPhotoPrompt, setShowOwnerPhotoPrompt] = useState(false);
   const [highlightedPhotoId, setHighlightedPhotoId] = useState('');
   const deferredLocationQuery = useDeferredValue(locationQuery);
   const deferredContactSearch = useDeferredValue(contactSearch);
@@ -175,6 +192,15 @@ export function HomeScreen({
     setStep('feed');
     onConsumeInitialFeedShindig?.();
   }, [initialFeedShindig, onConsumeInitialFeedShindig]);
+
+  useEffect(() => {
+    if (initialStep !== 'create') {
+      return;
+    }
+
+    goToCreate();
+    onConsumeInitialStep?.();
+  }, [initialStep, onConsumeInitialStep]);
 
   useEffect(() => {
     if (!initialHighlightedPhotoId) {
@@ -427,6 +453,101 @@ export function HomeScreen({
     ]);
   }
 
+  function openPhotoSourcePicker() {
+    const options = ['Take Photo', 'Select From Library', 'Cancel'];
+    const cancelButtonIndex = 2;
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          cancelButtonIndex,
+          options,
+          title: 'Add Photo',
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) {
+            void handleTakePhoto();
+          }
+
+          if (buttonIndex === 1) {
+            void handlePickFromLibrary();
+          }
+        }
+      );
+      return;
+    }
+
+    Alert.alert('Add Photo', 'Choose a photo source.', [
+      {
+        onPress: () => {
+          void handleTakePhoto();
+        },
+        text: 'Take Photo',
+      },
+      {
+        onPress: () => {
+          void handlePickFromLibrary();
+        },
+        text: 'Select From Library',
+      },
+      {
+        style: 'cancel',
+        text: 'Cancel',
+      },
+    ]);
+  }
+
+  async function pickSinglePhoto(source: 'camera' | 'library', messages: {
+    cameraPermission: string;
+    libraryPermission: string;
+  }) {
+    let result: ImagePicker.ImagePickerResult;
+
+    if (source === 'camera') {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setError(messages.cameraPermission);
+        return null;
+      }
+
+      result = await ImagePicker.launchCameraAsync({
+        base64: true,
+        mediaTypes: ['images'],
+        quality: 0.8,
+      });
+    } else {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError(messages.libraryPermission);
+        return null;
+      }
+
+      result = await ImagePicker.launchImageLibraryAsync({
+        base64: true,
+        mediaTypes: ['images'],
+        quality: 0.8,
+        selectionLimit: 1,
+      });
+    }
+
+    if (result.canceled || !result.assets[0]?.base64 || !result.assets[0]?.uri) {
+      return null;
+    }
+
+    const asset = result.assets[0];
+    const base64 = asset.base64;
+    if (!base64) {
+      return null;
+    }
+
+    return {
+      base64,
+      contentType: asset.mimeType,
+      fileExtension: fileExtensionFromUri(asset.uri),
+      localUri: asset.uri,
+    } satisfies DraftPhoto;
+  }
+
   function removePhoto(localUri: string) {
     setPhotos((current) => current.filter((photo) => photo.localUri !== localUri));
   }
@@ -584,7 +705,7 @@ export function HomeScreen({
       shindigId: activeFeedShindig.id,
       userId,
     });
-    if (!wasLiked) {
+    if (!wasLiked && activeFeedShindig.ownerId !== userId) {
       await createNotification({
         actorUserId: userId,
         message: `${profile.name} liked your ShinDig "${activeFeedShindig.title}".`,
@@ -606,13 +727,15 @@ export function HomeScreen({
       shindigId: activeFeedShindig.id,
       userId,
     });
-    await createNotification({
-      actorUserId: userId,
-      message: `${profile.name} commented on your ShinDig "${activeFeedShindig.title}".`,
-      recipientUserId: activeFeedShindig.ownerId,
-      shindigId: activeFeedShindig.id,
-      type: 'shindig_comment',
-    });
+    if (activeFeedShindig.ownerId !== userId) {
+      await createNotification({
+        actorUserId: userId,
+        message: `${profile.name} commented on your ShinDig "${activeFeedShindig.title}".`,
+        recipientUserId: activeFeedShindig.ownerId,
+        shindigId: activeFeedShindig.id,
+        type: 'shindig_comment',
+      });
+    }
     setShindigCommentDraft('');
     await refreshActiveFeed(activeFeedShindig.id);
   }
@@ -624,16 +747,17 @@ export function HomeScreen({
 
     const targetPhoto = activeFeedShindig.stops.flatMap((stop) => stop.photos).find((photo) => photo.id === photoId);
     const wasLiked = targetPhoto?.likedByMe;
+    const recipientUserId = getPhotoNotificationRecipient(activeFeedShindig, photoId);
     await togglePhotoLike({
       photoId,
       userId,
     });
-    if (!wasLiked) {
+    if (!wasLiked && recipientUserId !== userId) {
       await createNotification({
         actorUserId: userId,
         message: `${profile.name} liked a photo in your ShinDig "${activeFeedShindig.title}".`,
         photoId,
-        recipientUserId: activeFeedShindig.ownerId,
+        recipientUserId,
         shindigId: activeFeedShindig.id,
         type: 'photo_like',
       });
@@ -651,19 +775,23 @@ export function HomeScreen({
       return;
     }
 
+    const recipientUserId = getPhotoNotificationRecipient(activeFeedShindig, photoId);
+
     await addPhotoComment({
       body: nextBody,
       photoId,
       userId,
     });
-    await createNotification({
-      actorUserId: userId,
-      message: `${profile.name} commented on a photo in your ShinDig "${activeFeedShindig.title}".`,
-      photoId,
-      recipientUserId: activeFeedShindig.ownerId,
-      shindigId: activeFeedShindig.id,
-      type: 'photo_comment',
-    });
+    if (recipientUserId !== userId) {
+      await createNotification({
+        actorUserId: userId,
+        message: `${profile.name} commented on a photo in your ShinDig "${activeFeedShindig.title}".`,
+        photoId,
+        recipientUserId,
+        shindigId: activeFeedShindig.id,
+        type: 'photo_comment',
+      });
+    }
     setPhotoCommentDrafts((current) => ({ ...current, [photoId]: '' }));
     await refreshActiveFeed(activeFeedShindig.id);
   }
@@ -697,7 +825,50 @@ export function HomeScreen({
       return;
     }
 
+    setShowOwnerPhotoPrompt(false);
     setShowPhotoRequestPrompt((current) => !current);
+  }
+
+  function handleAddPhotoToOwnedShindig() {
+    if (!activeFeedShindig || activeFeedShindig.ownerId !== userId) {
+      return;
+    }
+
+    setShowPhotoRequestPrompt(false);
+    setShowOwnerPhotoPrompt((current) => !current);
+  }
+
+  async function addPhotoToOwnedShindig(source: 'camera' | 'library') {
+    if (!activeFeedShindig || activeFeedShindig.ownerId !== userId) {
+      return;
+    }
+
+    setError('');
+    const photo = await pickSinglePhoto(source, {
+      cameraPermission: 'Camera access is required to add a new photo to this ShinDig.',
+      libraryPermission: 'Photo library access is required to add a new photo to this ShinDig.',
+    });
+
+    if (!photo) {
+      return;
+    }
+
+    setIsAddingPhotoToShindig(true);
+    try {
+      await addPhotoToShindig({
+        photo,
+        shindigId: activeFeedShindig.id,
+        userId,
+      });
+      setShowOwnerPhotoPrompt(false);
+      await refreshActiveFeed(activeFeedShindig.id);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to add the photo.'
+      );
+    } finally {
+      setIsAddingPhotoToShindig(false);
+    }
   }
 
   async function submitPhotoRequest(source: 'camera' | 'library') {
@@ -706,49 +877,19 @@ export function HomeScreen({
     }
 
     setError('');
-    let result: ImagePicker.ImagePickerResult;
+    const photo = await pickSinglePhoto(source, {
+      cameraPermission: 'Camera access is required to request a photo contribution.',
+      libraryPermission: 'Photo library access is required to request a photo contribution.',
+    });
 
-    if (source === 'camera') {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        setError('Camera access is required to request a photo contribution.');
-        return;
-      }
-
-      result = await ImagePicker.launchCameraAsync({
-        base64: true,
-        mediaTypes: ['images'],
-        quality: 0.8,
-      });
-    } else {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setError('Photo library access is required to request a photo contribution.');
-        return;
-      }
-
-      result = await ImagePicker.launchImageLibraryAsync({
-        base64: true,
-        mediaTypes: ['images'],
-        quality: 0.8,
-        selectionLimit: 1,
-      });
-    }
-
-    if (result.canceled || !result.assets[0]?.base64 || !result.assets[0]?.uri) {
+    if (!photo) {
       return;
     }
 
-    const asset = result.assets[0];
     setIsSubmittingPhotoRequest(true);
     try {
       const request = await createPhotoAddRequest({
-        photo: {
-          base64: asset.base64!,
-          contentType: asset.mimeType,
-          fileExtension: fileExtensionFromUri(asset.uri),
-          localUri: asset.uri,
-        },
+        photo,
         recipientUserId: activeFeedShindig.ownerId,
         requesterUserId: userId,
         shindigId: activeFeedShindig.id,
@@ -844,7 +985,7 @@ export function HomeScreen({
           >
             <View style={styles.topBar}>
               <Pressable onPress={() => setStep('welcome')} style={styles.backButton}>
-                <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={24} />
+                <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
               </Pressable>
               <Text style={styles.screenTitle}>Shindig Feed</Text>
               <View style={styles.topSpacer} />
@@ -857,181 +998,220 @@ export function HomeScreen({
                   {feedPhotos.length} photo{feedPhotos.length === 1 ? '' : 's'}
                 </Text>
               </View>
-              <View style={styles.topSpacer} />
-            </View>
-
-            <View style={styles.shindigSocialCard}>
-              <View style={styles.socialRow}>
-                <Pressable onPress={handleToggleShindigLike} style={styles.socialButton}>
-                  <Text style={styles.socialButtonText}>
-                    {activeFeedShindig.likedByMe ? 'Liked' : 'Like'} {activeFeedShindig.likeCount}
-                  </Text>
-                </Pressable>
-                <Text style={styles.socialMeta}>
-                  {activeFeedShindig.comments.length} comment
-                  {activeFeedShindig.comments.length === 1 ? '' : 's'}
-                </Text>
-                {isRefreshingFeed ? <Text style={styles.socialMeta}>Updating...</Text> : null}
-              </View>
-
-              {activeFeedShindig.ownerId !== userId ? (
-                <View style={styles.requestPhotoWrap}>
+              {activeFeedShindig.ownerId === userId ? (
+                <View style={styles.feedHeaderActions}>
                   <Pressable
-                    disabled={requestedPhotoShindigIds.includes(activeFeedShindig.id)}
-                    onPress={handleRequestToAddPhoto}
-                    style={[
-                      styles.requestPhotoButton,
-                      requestedPhotoShindigIds.includes(activeFeedShindig.id) &&
-                        styles.requestPhotoButtonDisabled,
-                    ]}
+                    onPress={handleAddPhotoToOwnedShindig}
+                    style={styles.addPhotoHeaderButton}
                   >
-                    <Text style={styles.requestPhotoButtonText}>
-                      {requestedPhotoShindigIds.includes(activeFeedShindig.id)
-                        ? 'Photo request sent'
-                        : 'Request to add photo'}
-                    </Text>
+                    <Text style={styles.addPhotoHeaderButtonText}>Add Photo</Text>
                   </Pressable>
 
-                  {showPhotoRequestPrompt &&
-                  !requestedPhotoShindigIds.includes(activeFeedShindig.id) ? (
-                    <View style={styles.requestPromptCard}>
-                      <Text style={styles.requestPromptTitle}>Add a photo request</Text>
+                  {showOwnerPhotoPrompt ? (
+                    <View style={styles.headerPromptCard}>
+                      <Text style={styles.requestPromptTitle}>Add another photo</Text>
                       <Text style={styles.requestPromptText}>
-                        Choose a photo from your library or take a new one for this ShinDig.
+                        Take a new photo or choose one from your library for this ShinDig.
                       </Text>
                       <View style={styles.requestPromptActions}>
                         <Pressable
-                          disabled={isSubmittingPhotoRequest}
-                          onPress={() => submitPhotoRequest('camera')}
+                          disabled={isAddingPhotoToShindig}
+                          onPress={() => addPhotoToOwnedShindig('camera')}
                           style={styles.requestPromptButton}
                         >
                           <Text style={styles.requestPromptButtonText}>Take photo</Text>
                         </Pressable>
                         <Pressable
-                          disabled={isSubmittingPhotoRequest}
-                          onPress={() => submitPhotoRequest('library')}
+                          disabled={isAddingPhotoToShindig}
+                          onPress={() => addPhotoToOwnedShindig('library')}
                           style={styles.requestPromptButton}
                         >
                           <Text style={styles.requestPromptButtonText}>Choose photo</Text>
                         </Pressable>
                       </View>
-                      {isSubmittingPhotoRequest ? (
-                        <Text style={styles.helperText}>Uploading request...</Text>
+                      {isAddingPhotoToShindig ? (
+                        <Text style={styles.helperText}>Adding photo...</Text>
                       ) : null}
                     </View>
                   ) : null}
                 </View>
               ) : null}
+            </View>
 
-              <View style={styles.commentComposer}>
-                <TextInput
-                  onChangeText={setShindigCommentDraft}
-                  placeholder="Comment on this ShinDig"
-                  placeholderTextColor={theme.colors.textMuted}
-                  style={styles.commentInput}
-                  value={shindigCommentDraft}
-                />
-                <Pressable onPress={handleAddShindigComment} style={styles.commentButton}>
-                  <Text style={styles.commentButtonText}>Post</Text>
+            {activeFeedShindig.ownerId !== userId ? (
+              <View style={styles.requestPhotoWrap}>
+                <Pressable
+                  disabled={requestedPhotoShindigIds.includes(activeFeedShindig.id)}
+                  onPress={handleRequestToAddPhoto}
+                  style={[
+                    styles.requestPhotoButton,
+                    requestedPhotoShindigIds.includes(activeFeedShindig.id) &&
+                      styles.requestPhotoButtonDisabled,
+                  ]}
+                >
+                  <Text style={styles.requestPhotoButtonText}>
+                    {requestedPhotoShindigIds.includes(activeFeedShindig.id)
+                      ? 'Photo request sent'
+                      : 'Request to add photo'}
+                  </Text>
                 </Pressable>
-              </View>
 
-              <View style={styles.commentList}>
-                {activeFeedShindig.comments.map((comment) => (
-                  <View key={comment.id} style={styles.commentItem}>
-                    <View style={styles.commentHeader}>
-                      <View style={styles.commentHeaderCopy}>
-                        <Text style={styles.commentAuthor}>{comment.author.name}</Text>
-                        <Text style={styles.commentTimestamp}>
-                          {formatCommentTimestamp(comment.createdAt)}
-                        </Text>
-                      </View>
-                      {comment.author.id === userId ? (
-                        <Pressable onPress={() => handleDeleteShindigComment(comment.id)}>
-                          <Text style={styles.commentDelete}>Delete</Text>
-                        </Pressable>
-                      ) : null}
+                {showPhotoRequestPrompt &&
+                !requestedPhotoShindigIds.includes(activeFeedShindig.id) ? (
+                  <View style={styles.requestPromptCard}>
+                    <Text style={styles.requestPromptTitle}>Add a photo request</Text>
+                    <Text style={styles.requestPromptText}>
+                      Choose a photo from your library or take a new one for this ShinDig.
+                    </Text>
+                    <View style={styles.requestPromptActions}>
+                      <Pressable
+                        disabled={isSubmittingPhotoRequest}
+                        onPress={() => submitPhotoRequest('camera')}
+                        style={styles.requestPromptButton}
+                      >
+                        <Text style={styles.requestPromptButtonText}>Take photo</Text>
+                      </Pressable>
+                      <Pressable
+                        disabled={isSubmittingPhotoRequest}
+                        onPress={() => submitPhotoRequest('library')}
+                        style={styles.requestPromptButton}
+                      >
+                        <Text style={styles.requestPromptButtonText}>Choose photo</Text>
+                      </Pressable>
                     </View>
-                    <Text style={styles.commentBody}>{comment.body}</Text>
+                    {isSubmittingPhotoRequest ? (
+                      <Text style={styles.helperText}>Uploading request...</Text>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            <View style={styles.feedCollectionCard}>
+              <View style={styles.feedStack}>
+                {feedPhotos.map((photo) => (
+                  <View
+                    key={photo.id}
+                    onLayout={(event) => {
+                      photoOffsetsRef.current[photo.id] = event.nativeEvent.layout.y;
+                    }}
+                    style={[
+                      styles.feedCard,
+                      highlightedPhotoId === photo.id && styles.feedCardHighlighted,
+                    ]}
+                  >
+                    <View style={styles.feedCardHeader}>
+                      <View style={styles.feedAuthorRow}>
+                        <Text style={styles.feedAuthor}>{profile.name}</Text>
+                        {photo.contributor ? (
+                          <Text style={styles.photoCredit}>via {photo.contributor.handle}</Text>
+                        ) : null}
+                      </View>
+                      <Text style={styles.feedTime}>Just now</Text>
+                    </View>
+                    <Image source={{ uri: photo.photoUrl }} style={styles.feedPhoto} />
+                    <View style={styles.socialRow}>
+                      <Pressable
+                        onPress={() => handleTogglePhotoLike(photo.id)}
+                        style={styles.socialButton}
+                      >
+                        <Text style={styles.socialButtonText}>
+                          {photo.likedByMe ? 'Liked' : 'Like'} {photo.likeCount}
+                        </Text>
+                      </Pressable>
+                      <Text style={styles.socialMeta}>
+                        {photo.comments.length} comment{photo.comments.length === 1 ? '' : 's'}
+                      </Text>
+                    </View>
+                    <View style={styles.commentComposer}>
+                      <TextInput
+                        onChangeText={(value) =>
+                          setPhotoCommentDrafts((current) => ({ ...current, [photo.id]: value }))
+                        }
+                        placeholder="Comment on this photo"
+                        placeholderTextColor={theme.colors.textMuted}
+                        style={styles.commentInput}
+                        value={photoCommentDrafts[photo.id] || ''}
+                      />
+                      <Pressable
+                        onPress={() => handleAddPhotoComment(photo.id)}
+                        style={styles.commentButton}
+                      >
+                        <Text style={styles.commentButtonText}>Post</Text>
+                      </Pressable>
+                    </View>
+                    <View style={styles.commentList}>
+                      {photo.comments.map((comment) => (
+                        <View key={comment.id} style={styles.commentItem}>
+                          <View style={styles.commentHeader}>
+                            <View style={styles.commentHeaderCopy}>
+                              <Text style={styles.commentAuthor}>{comment.author.name}</Text>
+                              <Text style={styles.commentTimestamp}>
+                                {formatCommentTimestamp(comment.createdAt)}
+                              </Text>
+                            </View>
+                            {comment.author.id === userId ? (
+                              <Pressable onPress={() => handleDeletePhotoComment(comment.id)}>
+                                <Text style={styles.commentDelete}>Delete</Text>
+                              </Pressable>
+                            ) : null}
+                          </View>
+                          <Text style={styles.commentBody}>{comment.body}</Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
                 ))}
               </View>
-            </View>
 
-            <View style={styles.feedStack}>
-              {feedPhotos.map((photo) => (
-                <View
-                  key={photo.id}
-                  onLayout={(event) => {
-                    photoOffsetsRef.current[photo.id] = event.nativeEvent.layout.y;
-                  }}
-                  style={[
-                    styles.feedCard,
-                    highlightedPhotoId === photo.id && styles.feedCardHighlighted,
-                  ]}
-                >
-                  <View style={styles.feedCardHeader}>
-                    <View style={styles.feedAuthorRow}>
-                      <Text style={styles.feedAuthor}>{profile.name}</Text>
-                      {photo.contributor ? (
-                        <Text style={styles.photoCredit}>via {photo.contributor.handle}</Text>
-                      ) : null}
-                    </View>
-                    <Text style={styles.feedTime}>Just now</Text>
-                  </View>
-                  <Image source={{ uri: photo.photoUrl }} style={styles.feedPhoto} />
-                  <View style={styles.socialRow}>
-                    <Pressable
-                      onPress={() => handleTogglePhotoLike(photo.id)}
-                      style={styles.socialButton}
-                    >
-                      <Text style={styles.socialButtonText}>
-                        {photo.likedByMe ? 'Liked' : 'Like'} {photo.likeCount}
-                      </Text>
-                    </Pressable>
-                    <Text style={styles.socialMeta}>
-                      {photo.comments.length} comment{photo.comments.length === 1 ? '' : 's'}
+              <View style={styles.shindigSocialFooter}>
+                <View style={styles.socialRow}>
+                  <Pressable onPress={handleToggleShindigLike} style={styles.socialButton}>
+                    <Text style={styles.socialButtonText}>
+                      {activeFeedShindig.likedByMe ? 'Liked' : 'Like'} {activeFeedShindig.likeCount}
                     </Text>
-                  </View>
-                  <View style={styles.commentComposer}>
-                    <TextInput
-                      onChangeText={(value) =>
-                        setPhotoCommentDrafts((current) => ({ ...current, [photo.id]: value }))
-                      }
-                      placeholder="Comment on this photo"
-                      placeholderTextColor={theme.colors.textMuted}
-                      style={styles.commentInput}
-                      value={photoCommentDrafts[photo.id] || ''}
-                    />
-                    <Pressable
-                      onPress={() => handleAddPhotoComment(photo.id)}
-                      style={styles.commentButton}
-                    >
-                      <Text style={styles.commentButtonText}>Post</Text>
-                    </Pressable>
-                  </View>
-                  <View style={styles.commentList}>
-                    {photo.comments.map((comment) => (
-                      <View key={comment.id} style={styles.commentItem}>
-                        <View style={styles.commentHeader}>
-                          <View style={styles.commentHeaderCopy}>
-                            <Text style={styles.commentAuthor}>{comment.author.name}</Text>
-                            <Text style={styles.commentTimestamp}>
-                              {formatCommentTimestamp(comment.createdAt)}
-                            </Text>
-                          </View>
-                          {comment.author.id === userId ? (
-                            <Pressable onPress={() => handleDeletePhotoComment(comment.id)}>
-                              <Text style={styles.commentDelete}>Delete</Text>
-                            </Pressable>
-                          ) : null}
-                        </View>
-                        <Text style={styles.commentBody}>{comment.body}</Text>
-                      </View>
-                    ))}
-                  </View>
+                  </Pressable>
+                  <Text style={styles.socialMeta}>
+                    {activeFeedShindig.comments.length} comment
+                    {activeFeedShindig.comments.length === 1 ? '' : 's'}
+                  </Text>
+                  {isRefreshingFeed ? <Text style={styles.socialMeta}>Updating...</Text> : null}
                 </View>
-              ))}
+
+                <View style={styles.commentComposer}>
+                  <TextInput
+                    onChangeText={setShindigCommentDraft}
+                    placeholder="Comment on this ShinDig"
+                    placeholderTextColor={theme.colors.textMuted}
+                    style={styles.commentInput}
+                    value={shindigCommentDraft}
+                  />
+                  <Pressable onPress={handleAddShindigComment} style={styles.commentButton}>
+                    <Text style={styles.commentButtonText}>Post</Text>
+                  </Pressable>
+                </View>
+
+                <View style={styles.commentList}>
+                  {activeFeedShindig.comments.map((comment) => (
+                    <View key={comment.id} style={styles.commentItem}>
+                      <View style={styles.commentHeader}>
+                        <View style={styles.commentHeaderCopy}>
+                          <Text style={styles.commentAuthor}>{comment.author.name}</Text>
+                          <Text style={styles.commentTimestamp}>
+                            {formatCommentTimestamp(comment.createdAt)}
+                          </Text>
+                        </View>
+                        {comment.author.id === userId ? (
+                          <Pressable onPress={() => handleDeleteShindigComment(comment.id)}>
+                            <Text style={styles.commentDelete}>Delete</Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
+                      <Text style={styles.commentBody}>{comment.body}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -1052,7 +1232,7 @@ export function HomeScreen({
         >
           <View style={styles.topBar}>
             <Pressable onPress={() => setStep('welcome')} style={styles.backButton}>
-              <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={24} />
+              <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
             </Pressable>
             <Text style={styles.screenTitle}>
               {step === 'create' ? 'Create Your Shindig' : 'Invite Friends'}
@@ -1064,7 +1244,6 @@ export function HomeScreen({
 
           {step === 'create' ? (
             <View style={styles.panel}>
-              <Text style={styles.fieldLabel}>Photos*</Text>
               <Text style={styles.fieldLabel}>Shindig Name*</Text>
               <TextInput
                 onChangeText={setShindigName}
@@ -1074,38 +1253,7 @@ export function HomeScreen({
                 value={shindigName}
               />
 
-              <Text style={[styles.fieldLabel, styles.spacedLabel]}>Photos*</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.photoRow}>
-                  <Pressable onPress={handlePickFromLibrary} style={styles.addPhotoCard}>
-                    <Text style={styles.addPhotoPlus}>+</Text>
-                    <Text style={styles.addPhotoText}>Add Photo</Text>
-                  </Pressable>
-                  {photos.map((photo) => (
-                    <View key={photo.localUri} style={styles.photoPreviewWrap}>
-                      <Image source={{ uri: photo.localUri }} style={styles.photoPreview} />
-                      <Pressable
-                        onPress={() => removePhoto(photo.localUri)}
-                        style={styles.removePhotoButton}
-                      >
-                        <Text style={styles.removePhotoText}>x</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                </View>
-              </ScrollView>
-
-              <Text style={styles.fieldCaption}>Choose Photo Source</Text>
-              <View style={styles.photoSourceRow}>
-                <Pressable onPress={handleTakePhoto} style={styles.sourceButton}>
-                  <Text style={styles.sourceButtonText}>Take Photo</Text>
-                </Pressable>
-                <Pressable onPress={handlePickFromLibrary} style={styles.sourceButton}>
-                  <Text style={styles.sourceButtonText}>Select From Library</Text>
-                </Pressable>
-              </View>
-
-              <Text style={styles.fieldLabel}>Starting Location*</Text>
+              <Text style={[styles.fieldLabel, styles.spacedLabel]}>Location*</Text>
               <TextInput
                 onChangeText={(value) => {
                   setLocationQuery(value);
@@ -1143,6 +1291,27 @@ export function HomeScreen({
                   </Text>
                 ) : null}
               </View>
+
+              <Text style={[styles.fieldLabel, styles.spacedLabel]}>Add Photo</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.photoRow}>
+                  <Pressable onPress={openPhotoSourcePicker} style={styles.addPhotoCard}>
+                    <Text style={styles.addPhotoPlus}>+</Text>
+                    <Text style={styles.addPhotoText}>Add Photo</Text>
+                  </Pressable>
+                  {photos.map((photo) => (
+                    <View key={photo.localUri} style={styles.photoPreviewWrap}>
+                      <Image source={{ uri: photo.localUri }} style={styles.photoPreview} />
+                      <Pressable
+                        onPress={() => removePhoto(photo.localUri)}
+                        style={styles.removePhotoButton}
+                      >
+                        <Text style={styles.removePhotoText}>x</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
 
               <Pressable onPress={continueToInvite} style={styles.ctaButton}>
                 <Text style={styles.ctaButtonText}>Continue</Text>
@@ -1230,14 +1399,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   topSpacer: {
-    width: 40,
+    width: 52,
   },
   backButton: {
     alignItems: 'center',
-    height: 44,
+    height: 52,
     justifyContent: 'center',
-    marginLeft: -10,
-    width: 44,
+    marginLeft: -14,
+    width: 52,
   },
   avatarButton: {
     borderColor: theme.colors.border,
@@ -1324,12 +1493,6 @@ const styles = StyleSheet.create({
   spacedLabel: {
     marginTop: theme.spacing.lg,
   },
-  fieldCaption: {
-    color: theme.colors.textSecondary,
-    fontSize: 14,
-    marginBottom: theme.spacing.sm,
-    marginTop: theme.spacing.lg,
-  },
   photoRow: {
     flexDirection: 'row',
     gap: theme.spacing.sm,
@@ -1377,24 +1540,6 @@ const styles = StyleSheet.create({
   removePhotoText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '700',
-  },
-  photoSourceRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-  },
-  sourceButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    flex: 1,
-    paddingVertical: theme.spacing.lg,
-  },
-  sourceButtonText: {
-    color: theme.colors.textPrimary,
-    fontSize: 15,
     fontWeight: '700',
   },
   input: {
@@ -1487,9 +1632,15 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   feedHeader: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: theme.spacing.md,
+  },
+  feedHeaderActions: {
+    alignItems: 'flex-end',
+    flexShrink: 0,
+    marginLeft: theme.spacing.md,
   },
   feedLocation: {
     color: theme.colors.textPrimary,
@@ -1501,11 +1652,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
   },
+  addPhotoHeaderButton: {
+    alignItems: 'center',
+    backgroundColor: '#FF615A',
+    borderRadius: theme.radius.round,
+    minWidth: 132,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+  },
+  addPhotoHeaderButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  headerPromptCard: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    marginTop: theme.spacing.sm,
+    maxWidth: 280,
+    padding: theme.spacing.md,
+  },
   feedStack: {
     gap: theme.spacing.lg,
-    marginTop: theme.spacing.xl,
   },
-  shindigSocialCard: {
+  feedCollectionCard: {
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.xl,
@@ -1513,11 +1685,17 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.lg,
     padding: theme.spacing.md,
   },
+  shindigSocialFooter: {
+    borderTopColor: theme.colors.border,
+    borderTopWidth: 1,
+    marginTop: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+  },
   feedCard: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: 'transparent',
     borderRadius: theme.radius.xl,
-    borderWidth: 1,
+    borderWidth: 2,
     overflow: 'hidden',
     padding: theme.spacing.md,
   },

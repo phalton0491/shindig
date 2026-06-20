@@ -123,14 +123,26 @@ export function FriendsScreen({
     setError('');
 
     try {
-      await sendFriendRequest({ friendId: friend.id, userId });
-      await createNotification({
-        actorUserId: userId,
-        message: `${profile.name} sent you a friend request.`,
-        recipientUserId: friend.id,
-        type: 'friend_request',
-      });
-      await refreshRequests();
+      const result = await sendFriendRequest({ friendId: friend.id, userId });
+
+      if (result.status === 'pending') {
+        await createNotification({
+          actorUserId: userId,
+          message: `${profile.name} sent you a friend request.`,
+          recipientUserId: friend.id,
+          type: 'friend_request',
+        });
+        await refreshRequests();
+      } else {
+        await createNotification({
+          actorUserId: userId,
+          message: `${profile.name} accepted your friend request.`,
+          recipientUserId: friend.id,
+          type: 'friend_accept',
+        });
+        await Promise.all([refreshRequests(), onFriendsChanged()]);
+      }
+
       setResults((current) => current.filter((result) => result.id !== friend.id));
       setQuery('');
     } catch (nextError) {

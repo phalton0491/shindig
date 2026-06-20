@@ -65,12 +65,24 @@ export function NotificationsScreen({
     }
   }
 
+  function notificationMessage(notification: AppNotification) {
+    if (notification.type === 'friend_accept') {
+      return `Accepted friend request from ${notification.actor.name}.`;
+    }
+
+    if (notification.type === 'friend_reject') {
+      return `Rejected friend request from ${notification.actor.name}.`;
+    }
+
+    return notification.message;
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <Pressable onPress={onBack} style={styles.backButton}>
-            <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={24} />
+            <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
           </Pressable>
         </View>
 
@@ -85,7 +97,11 @@ export function NotificationsScreen({
               <View key={notification.id} style={styles.row}>
                 <Pressable
                   onPress={() => {
-                    if (notification.type === 'friend_request' || notification.type === 'friend_accept') {
+                    if (
+                      notification.type === 'friend_request' ||
+                      notification.type === 'friend_accept' ||
+                      notification.type === 'friend_reject'
+                    ) {
                       onOpenFriend(notification.actor.id);
                       return;
                     }
@@ -96,7 +112,7 @@ export function NotificationsScreen({
                 >
                   <Image source={{ uri: notification.actor.avatar }} style={styles.avatar} />
                   <View style={styles.copy}>
-                    <Text style={styles.message}>{notification.message}</Text>
+                    <Text style={styles.message}>{notificationMessage(notification)}</Text>
                     <Text style={styles.time}>
                       {new Date(notification.createdAt).toLocaleString('en-US', {
                         day: 'numeric',
@@ -206,10 +222,10 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignItems: 'center',
-    height: 44,
+    height: 52,
     justifyContent: 'center',
-    marginLeft: -10,
-    width: 44,
+    marginLeft: -14,
+    width: 52,
   },
   title: {
     color: theme.colors.textPrimary,

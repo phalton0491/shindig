@@ -189,6 +189,37 @@ export async function dismissFriendRequestNotification(args: {
   }
 }
 
+export async function resolveFriendRequestNotification(args: {
+  actorUserId: string;
+  recipientUserId: string;
+  resolution: 'accepted' | 'rejected';
+}) {
+  const nextType = args.resolution === 'accepted' ? 'friend_accept' : 'friend_reject';
+  const nextMessage =
+    args.resolution === 'accepted'
+      ? 'Accepted friend request.'
+      : 'Rejected friend request.';
+
+  const { error } = await client()
+    .from('notifications')
+    .update({
+      message: nextMessage,
+      read_at: new Date().toISOString(),
+      type: nextType,
+    })
+    .eq('actor_user_id', args.actorUserId)
+    .eq('recipient_user_id', args.recipientUserId)
+    .eq('type', 'friend_request');
+
+  if (error && isMissingNotificationSchema(error)) {
+    return;
+  }
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function dismissPhotoRequestNotification(args: {
   recipientUserId: string;
   requestId: string;

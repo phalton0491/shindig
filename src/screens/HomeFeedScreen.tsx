@@ -8,12 +8,14 @@ type HomeFeedScreenProps = {
   feedShindigs: FeedShindig[];
   onOpenFriend: (friendId: string) => void;
   onOpenShindig: (shindig: FeedShindig) => void;
+  onStartShindig: () => void;
 };
 
 export function HomeFeedScreen({
   feedShindigs,
   onOpenFriend,
   onOpenShindig,
+  onStartShindig,
 }: HomeFeedScreenProps) {
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -21,10 +23,13 @@ export function HomeFeedScreen({
         <View style={styles.topBar}>
           <View>
             <Text style={styles.kicker}>SHINDIG FEED</Text>
-            <Text style={styles.title}>Yours and your friends&apos; ShinDigs.</Text>
           </View>
           <View style={styles.topSpacer} />
         </View>
+
+        <Pressable onPress={onStartShindig} style={styles.ctaButton}>
+          <Text style={styles.ctaButtonText}>Start a Shindig</Text>
+        </Pressable>
 
         {feedShindigs.length > 0 ? (
           <View style={styles.stack}>
@@ -98,17 +103,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1.4,
   },
-  title: {
-    color: theme.colors.textPrimary,
-    fontSize: 30,
-    fontWeight: '800',
-    lineHeight: 36,
-    marginTop: theme.spacing.sm,
-    maxWidth: 260,
-  },
   stack: {
     gap: theme.spacing.lg,
     marginTop: theme.spacing.xl,
+  },
+  ctaButton: {
+    alignItems: 'center',
+    backgroundColor: '#FF615A',
+    borderRadius: theme.radius.round,
+    marginTop: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    width: '100%',
+  },
+  ctaButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
   },
   feedCard: {
     backgroundColor: theme.colors.surface,
