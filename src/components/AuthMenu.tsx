@@ -1,14 +1,21 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '../theme';
 
 type AuthMenuProps = {
+  notificationCount: number;
+  onOpenNotifications: () => void;
   onOpenSettings: () => void;
   onSignOut: () => void | Promise<void>;
 };
 
-export function AuthMenu({ onOpenSettings, onSignOut }: AuthMenuProps) {
+export function AuthMenu({
+  notificationCount,
+  onOpenNotifications,
+  onOpenSettings,
+  onSignOut,
+}: AuthMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   function handleOpenSettings() {
@@ -23,9 +30,21 @@ export function AuthMenu({ onOpenSettings, onSignOut }: AuthMenuProps) {
 
   return (
     <View pointerEvents="box-none" style={styles.shell}>
-      <Pressable onPress={() => setIsOpen((current) => !current)} style={styles.button}>
-        <Text style={styles.buttonText}>☰</Text>
-      </Pressable>
+      <View style={styles.row}>
+        <Pressable onPress={onOpenNotifications} style={styles.button}>
+          <Text style={styles.buttonText}>🔔</Text>
+          {notificationCount > 0 ? (
+            <View style={styles.dot} />
+          ) : null}
+        </Pressable>
+        <Pressable onPress={() => setIsOpen((current) => !current)} style={styles.button}>
+          <View style={styles.hamburger}>
+            <View style={styles.hamburgerLine} />
+            <View style={styles.hamburgerLine} />
+            <View style={styles.hamburgerLine} />
+          </View>
+        </Pressable>
+      </View>
       {isOpen ? (
         <View style={styles.menu}>
           <Pressable onPress={handleOpenSettings} style={styles.menuItem}>
@@ -44,23 +63,44 @@ const styles = StyleSheet.create({
   shell: {
     position: 'absolute',
     right: 16,
-    top: 16,
+    top: Platform.OS === 'ios' ? 44 : 20,
     zIndex: 20,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'flex-end',
   },
   button: {
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.round,
-    borderWidth: 1,
     height: 44,
     justifyContent: 'center',
+    position: 'relative',
     width: 44,
   },
   buttonText: {
     color: theme.colors.textPrimary,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
+  },
+  dot: {
+    backgroundColor: '#FF615A',
+    borderRadius: theme.radius.round,
+    height: 10,
+    position: 'absolute',
+    right: 6,
+    top: 6,
+    width: 10,
+  },
+  hamburger: {
+    gap: 4,
+    width: 18,
+  },
+  hamburgerLine: {
+    backgroundColor: theme.colors.textPrimary,
+    borderRadius: 999,
+    height: 2,
+    width: '100%',
   },
   menu: {
     backgroundColor: theme.colors.surface,

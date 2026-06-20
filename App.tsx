@@ -2,7 +2,7 @@ import { Session } from '@supabase/supabase-js';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
+  Image,
   Linking,
   SafeAreaView,
   StyleSheet,
@@ -11,9 +11,21 @@ import {
 
 import { signOut } from './src/lib/auth';
 import { AuthMenu } from './src/components/AuthMenu';
+import {
+  createNotification,
+  dismissFriendRequestNotification,
+  listNotificationsForUser,
+  markNotificationsRead,
+} from './src/lib/notifications';
 import { supabase } from './src/lib/supabase';
-import { listFriendsForUser } from './src/lib/friends';
-import { createShindig, listFeedShindigs, listShindigsForUser } from './src/lib/shindigs';
+import { acceptFriendRequest, listFriendsForUser, rejectFriendRequest } from './src/lib/friends';
+import {
+  approvePhotoAddRequest,
+  createShindig,
+  listFeedShindigs,
+  listShindigsForUser,
+  rejectPhotoAddRequest,
+} from './src/lib/shindigs';
 import { ensureProfileForUser, getProfileForUser, updateProfile } from './src/lib/profiles';
 import { BottomNav, AppTab } from './src/components/BottomNav';
 import { AuthScreen } from './src/screens/AuthScreen';
@@ -22,13 +34,21 @@ import { FriendProfileScreen } from './src/screens/FriendProfileScreen';
 import { FriendsScreen } from './src/screens/FriendsScreen';
 import { HomeFeedScreen } from './src/screens/HomeFeedScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { NotificationsScreen } from './src/screens/NotificationsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { theme } from './src/theme';
-import { FeedShindig, FriendProfile, SavedShindig, UserProfile } from './src/types/models';
+import {
+  AppNotification,
+  FeedShindig,
+  FriendProfile,
+  SavedShindig,
+  UserProfile,
+} from './src/types/models';
 
 type AuthMode = 'login' | 'signup';
 const BOOTSTRAP_TIMEOUT_MS = 8000;
+const BOOT_LOGO = require('./assets/auth-logo.png');
 
 function authModeFromUrl(url: string | null): AuthMode {
   if (!url) {
@@ -64,22 +84,30 @@ export default function App() {
   const [shindigs, setShindigs] = useState<SavedShindig[]>([]);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [feedShindigs, setFeedShindigs] = useState<FeedShindig[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [feedShindig, setFeedShindig] = useState<SavedShindig | null>(null);
+  const [highlightedPhotoId, setHighlightedPhotoId] = useState<string | null>(null);
   const [friendProfileDetail, setFriendProfileDetail] = useState<{
     profile: UserProfile;
     shindigs: SavedShindig[];
   } | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [bootError, setBootError] = useState('');
 
   async function loadAuthedData(nextSession: Session) {
-    const [nextFriends, nextProfile, nextShindigs] = await Promise.all([
+    const [nextFriends, nextNotifications, nextProfile, nextShindigs] = await Promise.all([
       withTimeout(
         listFriendsForUser(nextSession.user.id),
         BOOTSTRAP_TIMEOUT_MS,
         'Friends load'
+      ),
+      withTimeout(
+        listNotificationsForUser(nextSession.user.id),
+        BOOTSTRAP_TIMEOUT_MS,
+        'Notifications load'
       ),
       withTimeout(
         ensureProfileForUser(nextSession.user),
@@ -105,6 +133,7 @@ export default function App() {
     return {
       feed: nextFeed,
       friends: nextFriends,
+      notifications: nextNotifications,
       profile: {
         ...nextProfile,
         stats: {
@@ -179,6 +208,7 @@ export default function App() {
           if (isMounted) {
             setFriends(loaded.friends);
             setFeedShindigs(loaded.feed);
+            setNotifications(loaded.notifications);
             setShindigs(loaded.shindigs);
             setProfile(loaded.profile);
           }
@@ -214,9 +244,12 @@ export default function App() {
           setShindigs([]);
           setFriends([]);
           setFeedShindigs([]);
+          setNotifications([]);
           setActiveTab('home');
           setFeedShindig(null);
+          setHighlightedPhotoId(null);
           setFriendProfileDetail(null);
+          setShowNotifications(false);
           setShowSettings(false);
           setAuthMode('login');
           return;
@@ -227,6 +260,7 @@ export default function App() {
           if (isMounted) {
             setFriends(loaded.friends);
             setFeedShindigs(loaded.feed);
+            setNotifications(loaded.notifications);
             setShindigs(loaded.shindigs);
             setProfile(loaded.profile);
           }
@@ -312,6 +346,27 @@ export default function App() {
     setFeedShindigs(nextFeed);
   }
 
+  async function refreshNotifications() {
+    if (!session?.user) {
+      return;
+    }
+
+    const nextNotifications = await listNotificationsForUser(session.user.id);
+    setNotifications(nextNotifications);
+  }
+
+  async function handleOpenNotifications() {
+    if (!session?.user) {
+      return;
+    }
+
+    setFriendProfileDetail(null);
+    setShowSettings(false);
+    setShowNotifications(true);
+    await markNotificationsRead(session.user.id);
+    await refreshNotifications();
+  }
+
   async function handleOpenFriendProfile(friendId: string) {
     const [nextProfile, nextShindigs] = await Promise.all([
       getProfileForUser(friendId),
@@ -329,6 +384,95 @@ export default function App() {
     });
   }
 
+  function handleOpenNotification(notification: AppNotification) {
+    if (!notification.shindigId) {
+      handleOpenFriendProfile(notification.actor.id);
+      return;
+    }
+
+    const targetShindig =
+      shindigs.find((item) => item.id === notification.shindigId) ||
+      feedShindigs.find((item) => item.id === notification.shindigId) ||
+      null;
+
+    if (!targetShindig) {
+      return;
+    }
+
+    setShowNotifications(false);
+    setShowSettings(false);
+    setFriendProfileDetail(null);
+    setFeedShindig(targetShindig);
+    setHighlightedPhotoId(notification.photoId || null);
+    setActiveTab('shindigs');
+  }
+
+  async function handleAcceptFriendRequest(friendId: string) {
+    if (!session?.user || !profile) {
+      return;
+    }
+
+    await acceptFriendRequest({ friendId, userId: session.user.id });
+    await createNotification({
+      actorUserId: session.user.id,
+      message: `${profile.name} accepted your friend request.`,
+      recipientUserId: friendId,
+      type: 'friend_accept',
+    });
+    await dismissFriendRequestNotification({
+      actorUserId: friendId,
+      recipientUserId: session.user.id,
+    });
+    await Promise.all([refreshFriends(), refreshNotifications()]);
+  }
+
+  async function handleRejectFriendRequest(friendId: string) {
+    if (!session?.user) {
+      return;
+    }
+
+    await rejectFriendRequest({ friendId, userId: session.user.id });
+    await dismissFriendRequestNotification({
+      actorUserId: friendId,
+      recipientUserId: session.user.id,
+    });
+    await Promise.all([refreshFriends(), refreshNotifications()]);
+  }
+
+  async function handleApprovePhotoRequest(requestId: string) {
+    if (!session?.user) {
+      return;
+    }
+
+    await approvePhotoAddRequest({
+      requestId,
+      userId: session.user.id,
+    });
+    const [nextShindigs, nextFeed, nextNotifications] = await Promise.all([
+      listShindigsForUser(session.user.id),
+      listFeedShindigs({
+        friendIds: friends.map((friend) => friend.id),
+        userId: session.user.id,
+      }),
+      listNotificationsForUser(session.user.id),
+    ]);
+    setShindigs(nextShindigs);
+    setFeedShindigs(nextFeed);
+    setNotifications(nextNotifications);
+  }
+
+  async function handleRejectPhotoRequest(requestId: string) {
+    if (!session?.user) {
+      return;
+    }
+
+    await rejectPhotoAddRequest({
+      requestId,
+      userId: session.user.id,
+    });
+    await refreshNotifications();
+  }
+
   if (!supabase) {
     return (
       <>
@@ -342,9 +486,7 @@ export default function App() {
     return (
       <SafeAreaView style={styles.loadingScreen}>
         <StatusBar style="light" />
-        <View style={styles.loadingCard}>
-          <ActivityIndicator color={theme.colors.accent} size="large" />
-        </View>
+        <Image source={BOOT_LOGO} style={styles.loadingLogo} />
       </SafeAreaView>
     );
   }
@@ -363,7 +505,18 @@ export default function App() {
       <StatusBar style="light" />
       <View style={styles.appShell}>
         <View style={styles.screenShell}>
-          {showSettings ? (
+          {showNotifications ? (
+            <NotificationsScreen
+              notifications={notifications}
+              onAcceptFriendRequest={handleAcceptFriendRequest}
+              onOpenNotification={handleOpenNotification}
+              onApprovePhotoRequest={handleApprovePhotoRequest}
+              onBack={() => setShowNotifications(false)}
+              onOpenFriend={handleOpenFriendProfile}
+              onRejectPhotoRequest={handleRejectPhotoRequest}
+              onRejectFriendRequest={handleRejectFriendRequest}
+            />
+          ) : showSettings ? (
             <SettingsScreen
               onProfileSaved={handleProfileSaved}
               profile={profile}
@@ -384,9 +537,13 @@ export default function App() {
             <HomeFeedScreen
               feedShindigs={feedShindigs}
               onOpenFriend={handleOpenFriendProfile}
+              onOpenShindig={(shindig) => {
+                setFeedShindig(shindig);
+                setActiveTab('shindigs');
+              }}
             />
           ) : null}
-          {!showSettings && !friendProfileDetail && activeTab === 'friends' ? (
+          {!showNotifications && !showSettings && !friendProfileDetail && activeTab === 'friends' ? (
             <FriendsScreen
               friends={friends}
               onFriendsChanged={refreshFriends}
@@ -396,17 +553,19 @@ export default function App() {
               userId={session.user.id}
             />
           ) : null}
-          {!showSettings && !friendProfileDetail && activeTab === 'shindigs' ? (
+          {!showNotifications && !showSettings && !friendProfileDetail && activeTab === 'shindigs' ? (
             <HomeScreen
               initialFeedShindig={feedShindig}
+              initialHighlightedPhotoId={highlightedPhotoId}
               onConsumeInitialFeedShindig={() => setFeedShindig(null)}
+              onConsumeInitialHighlightedPhotoId={() => setHighlightedPhotoId(null)}
               onShindigSaved={handleShindigSaved}
               profile={profile}
               shindigs={shindigs}
               userId={session.user.id}
             />
           ) : null}
-          {!showSettings && !friendProfileDetail && activeTab === 'profile' ? (
+          {!showNotifications && !showSettings && !friendProfileDetail && activeTab === 'profile' ? (
             <ProfileScreen
               onBackHome={() => setActiveTab('home')}
               onOpenShindig={(shindig) => {
@@ -419,8 +578,11 @@ export default function App() {
           ) : null}
         </View>
         <AuthMenu
+          notificationCount={notifications.filter((item) => !item.readAt).length}
+          onOpenNotifications={handleOpenNotifications}
           onOpenSettings={() => {
             setFriendProfileDetail(null);
+            setShowNotifications(false);
             setShowSettings(true);
           }}
           onSignOut={signOut}
@@ -428,6 +590,7 @@ export default function App() {
         <BottomNav
           activeTab={activeTab}
           onSelectTab={(tab) => {
+            setShowNotifications(false);
             setShowSettings(false);
             setFriendProfileDetail(null);
             setActiveTab(tab);
@@ -449,15 +612,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
-  loadingCard: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.xl,
-    borderWidth: 1,
-    height: 120,
-    justifyContent: 'center',
-    width: 120,
+  loadingLogo: {
+    height: 220,
+    resizeMode: 'contain',
+    width: 300,
   },
   screenShell: {
     flex: 1,

@@ -1,5 +1,6 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import * as Contacts from 'expo-contacts';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
@@ -17,12 +18,25 @@ import {
 } from 'react-native';
 
 import { searchPlaces } from '../lib/places';
+import { createNotification } from '../lib/notifications';
+import {
+  addPhotoComment,
+  addShindigComment,
+  createPhotoAddRequest,
+  deletePhotoComment,
+  deleteShindigComment,
+  getShindigById,
+  togglePhotoLike,
+  toggleShindigLike,
+} from '../lib/shindigs';
 import { theme } from '../theme';
 import { SavedShindig, TimelinePlace, UserProfile } from '../types/models';
 
 type HomeScreenProps = {
   initialFeedShindig?: SavedShindig | null;
+  initialHighlightedPhotoId?: string | null;
   onConsumeInitialFeedShindig?: () => void;
+  onConsumeInitialHighlightedPhotoId?: () => void;
   onShindigSaved: (args: {
     stops: {
       photos: DraftPhoto[];
@@ -52,7 +66,6 @@ type InviteContact = {
   phoneNumber: string;
 };
 
-const HERO_LOGO = require('../../assets/auth-logo.png');
 const INVITE_SIGNUP_URL = 'shindig://signup';
 
 function buildManualPlace(query: string): TimelinePlace {
@@ -80,13 +93,24 @@ function formatDateLabel(value: string) {
   });
 }
 
+function formatCommentTimestamp(value: string) {
+  return new Date(value).toLocaleString('en-US', {
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    month: 'short',
+  });
+}
+
 function fileExtensionFromUri(uri: string) {
   return uri.match(/\.(\w+)(?:\?|$)/)?.[1]?.toLowerCase() || 'jpg';
 }
 
 export function HomeScreen({
   initialFeedShindig,
+  initialHighlightedPhotoId,
   onConsumeInitialFeedShindig,
+  onConsumeInitialHighlightedPhotoId,
   onShindigSaved,
   profile,
   shindigs,
@@ -111,8 +135,17 @@ export function HomeScreen({
   const [isSearchingLocations, setIsSearchingLocations] = useState(false);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [isSavingShindig, setIsSavingShindig] = useState(false);
+  const [isRefreshingFeed, setIsRefreshingFeed] = useState(false);
+  const [isSubmittingPhotoRequest, setIsSubmittingPhotoRequest] = useState(false);
+  const [shindigCommentDraft, setShindigCommentDraft] = useState('');
+  const [photoCommentDrafts, setPhotoCommentDrafts] = useState<Record<string, string>>({});
+  const [requestedPhotoShindigIds, setRequestedPhotoShindigIds] = useState<string[]>([]);
+  const [showPhotoRequestPrompt, setShowPhotoRequestPrompt] = useState(false);
+  const [highlightedPhotoId, setHighlightedPhotoId] = useState('');
   const deferredLocationQuery = useDeferredValue(locationQuery);
   const deferredContactSearch = useDeferredValue(contactSearch);
+  const feedScrollRef = useRef<ScrollView | null>(null);
+  const photoOffsetsRef = useRef<Record<string, number>>({});
 
   const filteredContacts = useMemo(() => {
     const query = deferredContactSearch.trim().toLowerCase();
@@ -142,6 +175,31 @@ export function HomeScreen({
     setStep('feed');
     onConsumeInitialFeedShindig?.();
   }, [initialFeedShindig, onConsumeInitialFeedShindig]);
+
+  useEffect(() => {
+    if (!initialHighlightedPhotoId) {
+      return;
+    }
+
+    setHighlightedPhotoId(initialHighlightedPhotoId);
+    onConsumeInitialHighlightedPhotoId?.();
+  }, [initialHighlightedPhotoId, onConsumeInitialHighlightedPhotoId]);
+
+  useEffect(() => {
+    if (step !== 'feed' || !highlightedPhotoId) {
+      return;
+    }
+
+    const nextOffset = photoOffsetsRef.current[highlightedPhotoId];
+    if (typeof nextOffset !== 'number') {
+      return;
+    }
+
+    feedScrollRef.current?.scrollTo({
+      animated: true,
+      y: Math.max(nextOffset - 120, 0),
+    });
+  }, [highlightedPhotoId, step, activeFeedShindig]);
 
   useEffect(() => {
     let isMounted = true;
@@ -398,6 +456,22 @@ export function HomeScreen({
     setStep('feed');
   }
 
+  async function refreshActiveFeed(shindigId: string) {
+    setIsRefreshingFeed(true);
+    try {
+      const refreshed = await getShindigById({
+        shindigId,
+        userId,
+      });
+
+      if (refreshed) {
+        setActiveFeedShindig(refreshed);
+      }
+    } finally {
+      setIsRefreshingFeed(false);
+    }
+  }
+
   async function continueToInvite() {
     if (!shindigName.trim()) {
       setError('Name your shindig before continuing.');
@@ -500,6 +574,209 @@ export function HomeScreen({
     }
   }
 
+  async function handleToggleShindigLike() {
+    if (!activeFeedShindig) {
+      return;
+    }
+
+    const wasLiked = activeFeedShindig.likedByMe;
+    await toggleShindigLike({
+      shindigId: activeFeedShindig.id,
+      userId,
+    });
+    if (!wasLiked) {
+      await createNotification({
+        actorUserId: userId,
+        message: `${profile.name} liked your ShinDig "${activeFeedShindig.title}".`,
+        recipientUserId: activeFeedShindig.ownerId,
+        shindigId: activeFeedShindig.id,
+        type: 'shindig_like',
+      });
+    }
+    await refreshActiveFeed(activeFeedShindig.id);
+  }
+
+  async function handleAddShindigComment() {
+    if (!activeFeedShindig || !shindigCommentDraft.trim()) {
+      return;
+    }
+
+    await addShindigComment({
+      body: shindigCommentDraft,
+      shindigId: activeFeedShindig.id,
+      userId,
+    });
+    await createNotification({
+      actorUserId: userId,
+      message: `${profile.name} commented on your ShinDig "${activeFeedShindig.title}".`,
+      recipientUserId: activeFeedShindig.ownerId,
+      shindigId: activeFeedShindig.id,
+      type: 'shindig_comment',
+    });
+    setShindigCommentDraft('');
+    await refreshActiveFeed(activeFeedShindig.id);
+  }
+
+  async function handleTogglePhotoLike(photoId: string) {
+    if (!activeFeedShindig) {
+      return;
+    }
+
+    const targetPhoto = activeFeedShindig.stops.flatMap((stop) => stop.photos).find((photo) => photo.id === photoId);
+    const wasLiked = targetPhoto?.likedByMe;
+    await togglePhotoLike({
+      photoId,
+      userId,
+    });
+    if (!wasLiked) {
+      await createNotification({
+        actorUserId: userId,
+        message: `${profile.name} liked a photo in your ShinDig "${activeFeedShindig.title}".`,
+        photoId,
+        recipientUserId: activeFeedShindig.ownerId,
+        shindigId: activeFeedShindig.id,
+        type: 'photo_like',
+      });
+    }
+    await refreshActiveFeed(activeFeedShindig.id);
+  }
+
+  async function handleAddPhotoComment(photoId: string) {
+    if (!activeFeedShindig) {
+      return;
+    }
+
+    const nextBody = photoCommentDrafts[photoId]?.trim();
+    if (!nextBody) {
+      return;
+    }
+
+    await addPhotoComment({
+      body: nextBody,
+      photoId,
+      userId,
+    });
+    await createNotification({
+      actorUserId: userId,
+      message: `${profile.name} commented on a photo in your ShinDig "${activeFeedShindig.title}".`,
+      photoId,
+      recipientUserId: activeFeedShindig.ownerId,
+      shindigId: activeFeedShindig.id,
+      type: 'photo_comment',
+    });
+    setPhotoCommentDrafts((current) => ({ ...current, [photoId]: '' }));
+    await refreshActiveFeed(activeFeedShindig.id);
+  }
+
+  async function handleDeleteShindigComment(commentId: string) {
+    if (!activeFeedShindig) {
+      return;
+    }
+
+    await deleteShindigComment({
+      commentId,
+      userId,
+    });
+    await refreshActiveFeed(activeFeedShindig.id);
+  }
+
+  async function handleDeletePhotoComment(commentId: string) {
+    if (!activeFeedShindig) {
+      return;
+    }
+
+    await deletePhotoComment({
+      commentId,
+      userId,
+    });
+    await refreshActiveFeed(activeFeedShindig.id);
+  }
+
+  async function handleRequestToAddPhoto() {
+    if (!activeFeedShindig || activeFeedShindig.ownerId === userId) {
+      return;
+    }
+
+    setShowPhotoRequestPrompt((current) => !current);
+  }
+
+  async function submitPhotoRequest(source: 'camera' | 'library') {
+    if (!activeFeedShindig || activeFeedShindig.ownerId === userId) {
+      return;
+    }
+
+    setError('');
+    let result: ImagePicker.ImagePickerResult;
+
+    if (source === 'camera') {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setError('Camera access is required to request a photo contribution.');
+        return;
+      }
+
+      result = await ImagePicker.launchCameraAsync({
+        base64: true,
+        mediaTypes: ['images'],
+        quality: 0.8,
+      });
+    } else {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError('Photo library access is required to request a photo contribution.');
+        return;
+      }
+
+      result = await ImagePicker.launchImageLibraryAsync({
+        base64: true,
+        mediaTypes: ['images'],
+        quality: 0.8,
+        selectionLimit: 1,
+      });
+    }
+
+    if (result.canceled || !result.assets[0]?.base64 || !result.assets[0]?.uri) {
+      return;
+    }
+
+    const asset = result.assets[0];
+    setIsSubmittingPhotoRequest(true);
+    try {
+      const request = await createPhotoAddRequest({
+        photo: {
+          base64: asset.base64!,
+          contentType: asset.mimeType,
+          fileExtension: fileExtensionFromUri(asset.uri),
+          localUri: asset.uri,
+        },
+        recipientUserId: activeFeedShindig.ownerId,
+        requesterUserId: userId,
+        shindigId: activeFeedShindig.id,
+      });
+
+      await createNotification({
+        actorUserId: userId,
+        message: `${profile.name} wants to add a photo to your ShinDig "${activeFeedShindig.title}".`,
+        requestId: request.id,
+        recipientUserId: activeFeedShindig.ownerId,
+        shindigId: activeFeedShindig.id,
+        type: 'photo_add_request',
+      });
+      setRequestedPhotoShindigIds((current) =>
+        current.includes(activeFeedShindig.id) ? current : [...current, activeFeedShindig.id]
+      );
+      setShowPhotoRequestPrompt(false);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Failed to send the photo request.'
+      );
+    } finally {
+      setIsSubmittingPhotoRequest(false);
+    }
+  }
+
   if (step === 'welcome') {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -509,13 +786,9 @@ export function HomeScreen({
             <View style={styles.topSpacer} />
           </View>
 
-          <View style={styles.welcomeCard}>
-            <Image source={HERO_LOGO} style={styles.heroLogo} />
-            <Text style={styles.welcomeTitle}>Make memories with the people who were there.</Text>
-            <Pressable onPress={goToCreate} style={styles.ctaButton}>
-              <Text style={styles.ctaButtonText}>Start a Shindig</Text>
-            </Pressable>
-          </View>
+          <Pressable onPress={goToCreate} style={styles.ctaButton}>
+            <Text style={styles.ctaButtonText}>Start a Shindig</Text>
+          </Pressable>
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>My Past Shindigs</Text>
@@ -559,37 +832,209 @@ export function HomeScreen({
 
     return (
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.topBar}>
-            <Pressable onPress={() => setStep('welcome')}>
-              <Text style={styles.backText}>Back</Text>
-            </Pressable>
-            <Text style={styles.screenTitle}>Shindig Feed</Text>
-            <View style={styles.topSpacer} />
-          </View>
-
-          <View style={styles.feedHeader}>
-            <View>
-              <Text style={styles.feedLocation}>{activeFeedShindig.stops[0]?.place.title}</Text>
-              <Text style={styles.feedParticipants}>
-                {feedPhotos.length} photo{feedPhotos.length === 1 ? '' : 's'}
-              </Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.flex}
+        >
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            ref={feedScrollRef}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.topBar}>
+              <Pressable onPress={() => setStep('welcome')} style={styles.backButton}>
+                <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={24} />
+              </Pressable>
+              <Text style={styles.screenTitle}>Shindig Feed</Text>
+              <View style={styles.topSpacer} />
             </View>
-            <View style={styles.topSpacer} />
-          </View>
 
-          <View style={styles.feedStack}>
-            {feedPhotos.map((photo) => (
-              <View key={photo.id} style={styles.feedCard}>
-                <View style={styles.feedCardHeader}>
-                  <Text style={styles.feedAuthor}>{profile.name}</Text>
-                  <Text style={styles.feedTime}>Just now</Text>
-                </View>
-                <Image source={{ uri: photo.photoUrl }} style={styles.feedPhoto} />
+            <View style={styles.feedHeader}>
+              <View>
+                <Text style={styles.feedLocation}>{activeFeedShindig.title}</Text>
+                <Text style={styles.feedParticipants}>
+                  {feedPhotos.length} photo{feedPhotos.length === 1 ? '' : 's'}
+                </Text>
               </View>
-            ))}
-          </View>
-        </ScrollView>
+              <View style={styles.topSpacer} />
+            </View>
+
+            <View style={styles.shindigSocialCard}>
+              <View style={styles.socialRow}>
+                <Pressable onPress={handleToggleShindigLike} style={styles.socialButton}>
+                  <Text style={styles.socialButtonText}>
+                    {activeFeedShindig.likedByMe ? 'Liked' : 'Like'} {activeFeedShindig.likeCount}
+                  </Text>
+                </Pressable>
+                <Text style={styles.socialMeta}>
+                  {activeFeedShindig.comments.length} comment
+                  {activeFeedShindig.comments.length === 1 ? '' : 's'}
+                </Text>
+                {isRefreshingFeed ? <Text style={styles.socialMeta}>Updating...</Text> : null}
+              </View>
+
+              {activeFeedShindig.ownerId !== userId ? (
+                <View style={styles.requestPhotoWrap}>
+                  <Pressable
+                    disabled={requestedPhotoShindigIds.includes(activeFeedShindig.id)}
+                    onPress={handleRequestToAddPhoto}
+                    style={[
+                      styles.requestPhotoButton,
+                      requestedPhotoShindigIds.includes(activeFeedShindig.id) &&
+                        styles.requestPhotoButtonDisabled,
+                    ]}
+                  >
+                    <Text style={styles.requestPhotoButtonText}>
+                      {requestedPhotoShindigIds.includes(activeFeedShindig.id)
+                        ? 'Photo request sent'
+                        : 'Request to add photo'}
+                    </Text>
+                  </Pressable>
+
+                  {showPhotoRequestPrompt &&
+                  !requestedPhotoShindigIds.includes(activeFeedShindig.id) ? (
+                    <View style={styles.requestPromptCard}>
+                      <Text style={styles.requestPromptTitle}>Add a photo request</Text>
+                      <Text style={styles.requestPromptText}>
+                        Choose a photo from your library or take a new one for this ShinDig.
+                      </Text>
+                      <View style={styles.requestPromptActions}>
+                        <Pressable
+                          disabled={isSubmittingPhotoRequest}
+                          onPress={() => submitPhotoRequest('camera')}
+                          style={styles.requestPromptButton}
+                        >
+                          <Text style={styles.requestPromptButtonText}>Take photo</Text>
+                        </Pressable>
+                        <Pressable
+                          disabled={isSubmittingPhotoRequest}
+                          onPress={() => submitPhotoRequest('library')}
+                          style={styles.requestPromptButton}
+                        >
+                          <Text style={styles.requestPromptButtonText}>Choose photo</Text>
+                        </Pressable>
+                      </View>
+                      {isSubmittingPhotoRequest ? (
+                        <Text style={styles.helperText}>Uploading request...</Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              <View style={styles.commentComposer}>
+                <TextInput
+                  onChangeText={setShindigCommentDraft}
+                  placeholder="Comment on this ShinDig"
+                  placeholderTextColor={theme.colors.textMuted}
+                  style={styles.commentInput}
+                  value={shindigCommentDraft}
+                />
+                <Pressable onPress={handleAddShindigComment} style={styles.commentButton}>
+                  <Text style={styles.commentButtonText}>Post</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.commentList}>
+                {activeFeedShindig.comments.map((comment) => (
+                  <View key={comment.id} style={styles.commentItem}>
+                    <View style={styles.commentHeader}>
+                      <View style={styles.commentHeaderCopy}>
+                        <Text style={styles.commentAuthor}>{comment.author.name}</Text>
+                        <Text style={styles.commentTimestamp}>
+                          {formatCommentTimestamp(comment.createdAt)}
+                        </Text>
+                      </View>
+                      {comment.author.id === userId ? (
+                        <Pressable onPress={() => handleDeleteShindigComment(comment.id)}>
+                          <Text style={styles.commentDelete}>Delete</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                    <Text style={styles.commentBody}>{comment.body}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.feedStack}>
+              {feedPhotos.map((photo) => (
+                <View
+                  key={photo.id}
+                  onLayout={(event) => {
+                    photoOffsetsRef.current[photo.id] = event.nativeEvent.layout.y;
+                  }}
+                  style={[
+                    styles.feedCard,
+                    highlightedPhotoId === photo.id && styles.feedCardHighlighted,
+                  ]}
+                >
+                  <View style={styles.feedCardHeader}>
+                    <View style={styles.feedAuthorRow}>
+                      <Text style={styles.feedAuthor}>{profile.name}</Text>
+                      {photo.contributor ? (
+                        <Text style={styles.photoCredit}>via {photo.contributor.handle}</Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.feedTime}>Just now</Text>
+                  </View>
+                  <Image source={{ uri: photo.photoUrl }} style={styles.feedPhoto} />
+                  <View style={styles.socialRow}>
+                    <Pressable
+                      onPress={() => handleTogglePhotoLike(photo.id)}
+                      style={styles.socialButton}
+                    >
+                      <Text style={styles.socialButtonText}>
+                        {photo.likedByMe ? 'Liked' : 'Like'} {photo.likeCount}
+                      </Text>
+                    </Pressable>
+                    <Text style={styles.socialMeta}>
+                      {photo.comments.length} comment{photo.comments.length === 1 ? '' : 's'}
+                    </Text>
+                  </View>
+                  <View style={styles.commentComposer}>
+                    <TextInput
+                      onChangeText={(value) =>
+                        setPhotoCommentDrafts((current) => ({ ...current, [photo.id]: value }))
+                      }
+                      placeholder="Comment on this photo"
+                      placeholderTextColor={theme.colors.textMuted}
+                      style={styles.commentInput}
+                      value={photoCommentDrafts[photo.id] || ''}
+                    />
+                    <Pressable
+                      onPress={() => handleAddPhotoComment(photo.id)}
+                      style={styles.commentButton}
+                    >
+                      <Text style={styles.commentButtonText}>Post</Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.commentList}>
+                    {photo.comments.map((comment) => (
+                      <View key={comment.id} style={styles.commentItem}>
+                        <View style={styles.commentHeader}>
+                          <View style={styles.commentHeaderCopy}>
+                            <Text style={styles.commentAuthor}>{comment.author.name}</Text>
+                            <Text style={styles.commentTimestamp}>
+                              {formatCommentTimestamp(comment.createdAt)}
+                            </Text>
+                          </View>
+                          {comment.author.id === userId ? (
+                            <Pressable onPress={() => handleDeletePhotoComment(comment.id)}>
+                              <Text style={styles.commentDelete}>Delete</Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
+                        <Text style={styles.commentBody}>{comment.body}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
@@ -606,8 +1051,8 @@ export function HomeScreen({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.topBar}>
-            <Pressable onPress={() => setStep('welcome')}>
-              <Text style={styles.backText}>Back</Text>
+            <Pressable onPress={() => setStep('welcome')} style={styles.backButton}>
+              <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={24} />
             </Pressable>
             <Text style={styles.screenTitle}>
               {step === 'create' ? 'Create Your Shindig' : 'Invite Friends'}
@@ -777,6 +1222,7 @@ const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.lg,
     paddingBottom: theme.spacing.xxxl,
+    paddingTop: 72,
   },
   topBar: {
     alignItems: 'center',
@@ -785,6 +1231,13 @@ const styles = StyleSheet.create({
   },
   topSpacer: {
     width: 40,
+  },
+  backButton: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    marginLeft: -10,
+    width: 44,
   },
   avatarButton: {
     borderColor: theme.colors.border,
@@ -797,33 +1250,11 @@ const styles = StyleSheet.create({
     height: 52,
     width: 52,
   },
-  welcomeCard: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.xl,
-    borderWidth: 1,
-    marginTop: theme.spacing.lg,
-    padding: theme.spacing.xl,
-  },
-  heroLogo: {
-    height: 240,
-    resizeMode: 'contain',
-    width: 240,
-  },
-  welcomeTitle: {
-    color: theme.colors.textPrimary,
-    fontSize: 18,
-    lineHeight: 28,
-    marginTop: theme.spacing.lg,
-    maxWidth: 260,
-    textAlign: 'center',
-  },
   ctaButton: {
     alignItems: 'center',
     backgroundColor: '#FF615A',
     borderRadius: theme.radius.round,
-    marginTop: theme.spacing.xl,
+    marginTop: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
     width: '100%',
   },
@@ -875,10 +1306,6 @@ const styles = StyleSheet.create({
   emptyText: {
     color: theme.colors.textMuted,
     lineHeight: 22,
-  },
-  backText: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
   },
   screenTitle: {
     color: theme.colors.textPrimary,
@@ -1078,6 +1505,14 @@ const styles = StyleSheet.create({
     gap: theme.spacing.lg,
     marginTop: theme.spacing.xl,
   },
+  shindigSocialCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    marginTop: theme.spacing.lg,
+    padding: theme.spacing.md,
+  },
   feedCard: {
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
@@ -1085,6 +1520,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
     padding: theme.spacing.md,
+  },
+  feedCardHighlighted: {
+    borderColor: '#FF615A',
+    borderWidth: 2,
   },
   feedCardHeader: {
     alignItems: 'center',
@@ -1097,6 +1536,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  feedAuthorRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
   feedTime: {
     color: theme.colors.textMuted,
     fontSize: 13,
@@ -1104,6 +1548,161 @@ const styles = StyleSheet.create({
   feedPhoto: {
     borderRadius: theme.radius.lg,
     height: 240,
+    marginTop: theme.spacing.sm,
     width: '100%',
   },
+  photoCredit: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+  },
+  socialRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  socialButton: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  socialButtonText: {
+    color: theme.colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  socialMeta: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+  },
+  requestPhotoButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    marginTop: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  requestPhotoButtonDisabled: {
+    opacity: 0.7,
+  },
+  requestPhotoButtonText: {
+    color: theme.colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  requestPhotoWrap: {
+    marginTop: theme.spacing.md,
+  },
+  requestPromptCard: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    marginTop: theme.spacing.sm,
+    padding: theme.spacing.md,
+  },
+  requestPromptTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  requestPromptText: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: theme.spacing.xs,
+  },
+  requestPromptActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  requestPromptButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    flex: 1,
+    paddingVertical: theme.spacing.sm,
+  },
+  requestPromptButtonText: {
+    color: theme.colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  commentComposer: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  commentInput: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    color: theme.colors.textPrimary,
+    flex: 1,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  commentButton: {
+    alignItems: 'center',
+    backgroundColor: '#FF615A',
+    borderRadius: theme.radius.lg,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.md,
+  },
+  commentButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  commentList: {
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  commentItem: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    padding: theme.spacing.sm,
+  },
+  commentHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  commentHeaderCopy: {
+    flex: 1,
+  },
+  commentAuthor: {
+    color: theme.colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  commentTimestamp: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  commentDelete: {
+    color: '#FF9F8A',
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: theme.spacing.sm,
+  },
+  commentBody: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 4,
+  },
 });
+

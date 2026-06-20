@@ -212,6 +212,26 @@ export async function searchProfilesByUsername(args: {
     .map(mapFriendProfile);
 }
 
+export async function isUsernameAvailable(username: string) {
+  const normalizedUsername = username.trim().toLowerCase();
+
+  if (normalizedUsername.length < 3) {
+    return false;
+  }
+
+  const { data, error } = await client()
+    .from('profiles')
+    .select('id')
+    .eq('username', normalizedUsername)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return !data;
+}
+
 function decodeBase64ToArrayBuffer(base64: string) {
   const decoder = globalThis.atob;
   if (!decoder) {

@@ -7,11 +7,13 @@ import { FeedShindig } from '../types/models';
 type HomeFeedScreenProps = {
   feedShindigs: FeedShindig[];
   onOpenFriend: (friendId: string) => void;
+  onOpenShindig: (shindig: FeedShindig) => void;
 };
 
 export function HomeFeedScreen({
   feedShindigs,
   onOpenFriend,
+  onOpenShindig,
 }: HomeFeedScreenProps) {
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -47,14 +49,16 @@ export function HomeFeedScreen({
                   </Text>
                 </View>
 
-                <AlbumCard shindig={shindig} />
+                <Pressable onPress={() => onOpenShindig(shindig)}>
+                  <AlbumCard shindig={shindig} />
 
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryText}>{shindig.photoCount} photos</Text>
-                  <Text style={styles.summaryText}>
-                    {shindig.stops[0]?.place.title || 'No location'}
-                  </Text>
-                </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryText}>{shindig.photoCount} photos</Text>
+                    <Text style={styles.summaryText}>
+                      {shindig.stops[0]?.place.title || 'No location'}
+                    </Text>
+                  </View>
+                </Pressable>
               </View>
             ))}
           </View>

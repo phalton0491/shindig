@@ -30,6 +30,10 @@ export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+export function normalizeLoginIdentifier(value: string) {
+  return value.trim().toLowerCase();
+}
+
 export function validateEmail(email: string) {
   const normalizedEmail = normalizeEmail(email);
 
@@ -74,6 +78,38 @@ export async function signUpWithUsername(payload: FormAuthPayload) {
 export async function signInWithEmail(email: string, password: string) {
   const { data, error } = await client().auth.signInWithPassword({
     email: validateEmail(email),
+    password,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function signInWithEmailOrUsername(
+  loginIdentifier: string,
+  password: string
+) {
+  const normalizedLogin = normalizeLoginIdentifier(loginIdentifier);
+  const { data: resolvedEmail, error: resolveError } = await client().rpc(
+    'resolve_login_email',
+    {
+      login_input: normalizedLogin,
+    }
+  );
+
+  if (resolveError) {
+    throw resolveError;
+  }
+
+  const { data, error } = await client().auth.signInWithPassword({
+    email: validateEmail(
+      typeof resolvedEmail === 'string' && resolvedEmail.trim()
+        ? resolvedEmail
+        : normalizedLogin
+    ),
     password,
   });
 

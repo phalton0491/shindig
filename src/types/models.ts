@@ -34,6 +34,20 @@ export type FriendProfile = {
   name: string;
 };
 
+export type FriendRequest = {
+  createdAt: string;
+  direction: 'incoming' | 'outgoing';
+  profile: FriendProfile;
+  status: 'pending';
+};
+
+export type FeedComment = {
+  author: FriendProfile;
+  body: string;
+  createdAt: string;
+  id: string;
+};
+
 export type SavedShindigStop = {
   id: string;
   order: number;
@@ -43,15 +57,22 @@ export type SavedShindigStop = {
 };
 
 export type SavedShindigPhoto = {
+  comments: FeedComment[];
+  contributor?: FriendProfile;
   id: string;
+  likeCount: number;
+  likedByMe: boolean;
   photoUrl: string;
   stopId: string;
 };
 
 export type SavedShindig = {
+  comments: FeedComment[];
   coverPhotoUrl: string | null;
   createdAt: string;
   id: string;
+  likeCount: number;
+  likedByMe: boolean;
   ownerId: string;
   photoCount: number;
   stops: SavedShindigStop[];
@@ -60,4 +81,25 @@ export type SavedShindig = {
 
 export type FeedShindig = SavedShindig & {
   owner: FriendProfile;
+};
+
+export type AppNotification = {
+  actor: FriendProfile;
+  createdAt: string;
+  id: string;
+  message: string;
+  photoId?: string;
+  requestId?: string;
+  requestPhotoUrl?: string;
+  requestStatus?: 'approved' | 'pending' | 'rejected';
+  readAt?: string;
+  shindigId?: string;
+  type:
+    | 'friend_accept'
+    | 'friend_request'
+    | 'photo_add_request'
+    | 'photo_comment'
+    | 'photo_like'
+    | 'shindig_comment'
+    | 'shindig_like';
 };

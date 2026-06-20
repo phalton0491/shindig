@@ -10,10 +10,15 @@ import {
   View,
 } from 'react-native';
 
-import { addFriend } from '../lib/friends';
+import {
+  acceptFriendRequest,
+  listFriendRequestsForUser,
+  sendFriendRequest,
+} from '../lib/friends';
+import { createNotification } from '../lib/notifications';
 import { searchProfilesByUsername } from '../lib/profiles';
 import { theme } from '../theme';
-import { FriendProfile, UserProfile } from '../types/models';
+import { FriendProfile, FriendRequest, UserProfile } from '../types/models';
 
 type FriendsScreenProps = {
   friends: FriendProfile[];
@@ -34,10 +39,36 @@ export function FriendsScreen({
 }: FriendsScreenProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FriendProfile[]>([]);
+  const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [error, setError] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [addingFriendId, setAddingFriendId] = useState('');
+  const [actingFriendId, setActingFriendId] = useState('');
   const deferredQuery = useDeferredValue(query);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRequests() {
+      try {
+        const nextRequests = await listFriendRequestsForUser(userId);
+        if (isMounted) {
+          setRequests(nextRequests);
+        }
+      } catch (nextError) {
+        if (isMounted) {
+          setError(
+            nextError instanceof Error ? nextError.message : 'Failed to load friend requests.'
+          );
+        }
+      }
+    }
+
+    loadRequests();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -51,9 +82,13 @@ export function FriendsScreen({
 
       setIsSearching(true);
       try {
+        const excludedIds = [
+          ...friends.map((friend) => friend.id),
+          ...requests.map((request) => request.profile.id),
+        ];
         const nextResults = await searchProfilesByUsername({
           currentUserId: userId,
-          excludedUserIds: friends.map((friend) => friend.id),
+          excludedUserIds: excludedIds,
           query: normalizedQuery,
         });
 
@@ -76,21 +111,56 @@ export function FriendsScreen({
     return () => {
       isMounted = false;
     };
-  }, [deferredQuery, friends, userId]);
+  }, [deferredQuery, friends, requests, userId]);
 
-  async function handleAddFriend(friend: FriendProfile) {
-    setAddingFriendId(friend.id);
+  async function refreshRequests() {
+    const nextRequests = await listFriendRequestsForUser(userId);
+    setRequests(nextRequests);
+  }
+
+  async function handleSendRequest(friend: FriendProfile) {
+    setActingFriendId(friend.id);
     setError('');
 
     try {
-      await addFriend({ friendId: friend.id, userId });
-      await onFriendsChanged();
+      await sendFriendRequest({ friendId: friend.id, userId });
+      await createNotification({
+        actorUserId: userId,
+        message: `${profile.name} sent you a friend request.`,
+        recipientUserId: friend.id,
+        type: 'friend_request',
+      });
+      await refreshRequests();
       setResults((current) => current.filter((result) => result.id !== friend.id));
       setQuery('');
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Failed to add friend.');
+      setError(nextError instanceof Error ? nextError.message : 'Failed to send request.');
     } finally {
-      setAddingFriendId('');
+      setActingFriendId('');
+    }
+  }
+
+  async function handleAcceptRequest(friendId: string) {
+    setActingFriendId(friendId);
+    setError('');
+
+    try {
+      await acceptFriendRequest({ friendId, userId });
+      const acceptedFriend = requests.find((request) => request.profile.id === friendId)?.profile;
+      if (acceptedFriend) {
+        await createNotification({
+          actorUserId: userId,
+          message: `${profile.name} accepted your friend request.`,
+          recipientUserId: acceptedFriend.id,
+          type: 'friend_accept',
+        });
+      }
+      await refreshRequests();
+      await onFriendsChanged();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Failed to accept request.');
+    } finally {
+      setActingFriendId('');
     }
   }
 
@@ -108,7 +178,7 @@ export function FriendsScreen({
         </View>
 
         <View style={styles.searchCard}>
-          <Text style={styles.cardTitle}>Add friends by username</Text>
+          <Text style={styles.cardTitle}>Find friends by username</Text>
           <TextInput
             autoCapitalize="none"
             onChangeText={(value) => {
@@ -136,12 +206,12 @@ export function FriendsScreen({
                   </View>
                 </View>
                 <Pressable
-                  disabled={addingFriendId === result.id}
-                  onPress={() => handleAddFriend(result)}
+                  disabled={actingFriendId === result.id}
+                  onPress={() => handleSendRequest(result)}
                   style={styles.addButton}
                 >
                   <Text style={styles.addButtonText}>
-                    {addingFriendId === result.id ? 'Adding...' : 'Add'}
+                    {actingFriendId === result.id ? 'Sending...' : 'Request'}
                   </Text>
                 </Pressable>
               </View>
@@ -151,6 +221,48 @@ export function FriendsScreen({
             ) : null}
           </View>
         </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Requests</Text>
+          <Text style={styles.sectionCount}>{requests.length}</Text>
+        </View>
+
+        {requests.length > 0 ? (
+          <View style={styles.friendList}>
+            {requests.map((request) => (
+              <View
+                key={`${request.profile.id}-${request.direction}`}
+                style={styles.friendCard}
+              >
+                <Image source={{ uri: request.profile.avatar }} style={styles.friendAvatar} />
+                <View style={styles.friendText}>
+                  <Text style={styles.friendName}>{request.profile.name}</Text>
+                  <Text style={styles.friendMeta}>
+                    {request.profile.handle} ·{' '}
+                    {request.direction === 'incoming' ? 'Requested you' : 'Request sent'}
+                  </Text>
+                </View>
+                {request.direction === 'incoming' ? (
+                  <Pressable
+                    disabled={actingFriendId === request.profile.id}
+                    onPress={() => handleAcceptRequest(request.profile.id)}
+                    style={styles.addButton}
+                  >
+                    <Text style={styles.addButtonText}>
+                      {actingFriendId === request.profile.id ? 'Saving...' : 'Accept'}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <View style={styles.pendingPill}>
+                    <Text style={styles.pendingPillText}>Pending</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.emptyText}>No pending friend requests.</Text>
+        )}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Your friends</Text>
@@ -177,7 +289,7 @@ export function FriendsScreen({
           </View>
         ) : (
           <Text style={styles.emptyText}>
-            Add friends to see their ShinDigs show up on the home feed.
+            Confirm friends to see their ShinDigs show up on the home feed.
           </Text>
         )}
       </ScrollView>
@@ -342,6 +454,7 @@ const styles = StyleSheet.create({
     width: 52,
   },
   friendText: {
+    flex: 1,
     marginLeft: theme.spacing.md,
   },
   friendName: {
@@ -353,6 +466,20 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     fontSize: 13,
     marginTop: 2,
+  },
+  pendingPill: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    marginLeft: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  pendingPillText: {
+    color: theme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   emptyText: {
     color: theme.colors.textMuted,

@@ -23,7 +23,7 @@ export function FriendProfileScreen({
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <Pressable onPress={onBack} style={styles.topButton}>
-            <Text style={styles.topButtonText}>Back</Text>
+            <Text style={styles.topButtonText}>{'‹'}</Text>
           </Pressable>
         </View>
 

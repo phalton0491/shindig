@@ -14,12 +14,14 @@ import {
 
 import {
   normalizeEmail,
+  normalizeLoginIdentifier,
   normalizeUsername,
-  signInWithEmail,
+  signInWithEmailOrUsername,
   signUpWithUsername,
   validateEmail,
   validateUsername,
 } from '../lib/auth';
+import { isUsernameAvailable } from '../lib/profiles';
 import { theme } from '../theme';
 
 const AUTH_LOGO = require('../../assets/auth-logo.png');
@@ -34,6 +36,7 @@ type AuthMode = 'signup' | 'login';
 type SignUpForm = {
   email: string;
   firstName: string;
+  loginIdentifier: string;
   lastName: string;
   password: string;
   username: string;
@@ -42,6 +45,7 @@ type SignUpForm = {
 const emptyForm: SignUpForm = {
   email: '',
   firstName: '',
+  loginIdentifier: '',
   lastName: '',
   password: '',
   username: '',
@@ -56,18 +60,110 @@ export function AuthScreen({
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<{
+    isChecking: boolean;
+    isValid: boolean;
+    message: string;
+  }>({
+    isChecking: false,
+    isValid: false,
+    message: '',
+  });
 
   useEffect(() => {
     setMode(initialMode);
   }, [initialMode]);
 
-  const isFormComplete = useMemo(() => {
-    if (mode === 'login') {
-      return form.email.trim().length > 0 && form.password.trim().length > 0;
+  useEffect(() => {
+    if (mode !== 'signup') {
+      setUsernameStatus({
+        isChecking: false,
+        isValid: false,
+        message: '',
+      });
+      return;
     }
 
-    return Object.values(form).every((value) => value.trim().length > 0);
+    const nextUsername = normalizeUsername(form.username);
+    if (!nextUsername) {
+      setUsernameStatus({
+        isChecking: false,
+        isValid: false,
+        message: '',
+      });
+      return;
+    }
+
+    try {
+      validateUsername(nextUsername);
+    } catch (validationError) {
+      setUsernameStatus({
+        isChecking: false,
+        isValid: false,
+        message:
+          validationError instanceof Error
+            ? validationError.message
+            : 'Enter a valid username.',
+      });
+      return;
+    }
+
+    setUsernameStatus({
+      isChecking: true,
+      isValid: false,
+      message: 'Checking username...',
+    });
+
+    let isActive = true;
+    const timeoutId = setTimeout(async () => {
+      try {
+        const available = await isUsernameAvailable(nextUsername);
+        if (!isActive) {
+          return;
+        }
+
+        setUsernameStatus({
+          isChecking: false,
+          isValid: available,
+          message: available ? 'Username available.' : 'Username already taken.',
+        });
+      } catch {
+        if (!isActive) {
+          return;
+        }
+
+        setUsernameStatus({
+          isChecking: false,
+          isValid: false,
+          message: 'Could not verify username right now.',
+        });
+      }
+    }, 250);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timeoutId);
+    };
+  }, [form.username, mode]);
+
+  const isFormComplete = useMemo(() => {
+    if (mode === 'login') {
+      return form.loginIdentifier.trim().length > 0 && form.password.trim().length > 0;
+    }
+
+    return (
+      form.email.trim().length > 0 &&
+      form.firstName.trim().length > 0 &&
+      form.lastName.trim().length > 0 &&
+      form.password.trim().length > 0 &&
+      form.username.trim().length > 0
+    );
   }, [form, mode]);
+
+  const isSubmitDisabled =
+    isSubmitting ||
+    !isFormComplete ||
+    (mode === 'signup' && (!usernameStatus.isValid || usernameStatus.isChecking));
 
   function updateField(field: keyof SignUpForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -85,10 +181,20 @@ export function AuthScreen({
 
     try {
       if (mode === 'login') {
-        await signInWithEmail(form.email, form.password);
+        await signInWithEmailOrUsername(form.loginIdentifier, form.password);
       } else {
         const username = validateUsername(form.username);
         const email = validateEmail(form.email);
+        const usernameAvailable = await isUsernameAvailable(username);
+
+        if (!usernameAvailable) {
+          setUsernameStatus({
+            isChecking: false,
+            isValid: false,
+            message: 'Username already taken.',
+          });
+          throw new Error('Choose a different username.');
+        }
 
         const result = await signUpWithUsername({
           email,
@@ -183,14 +289,13 @@ export function AuthScreen({
               ) : (
                 <TextInput
                   autoCapitalize="none"
-                  keyboardType="email-address"
                   onChangeText={(value) =>
-                    updateField('email', normalizeEmail(value))
+                    updateField('loginIdentifier', normalizeLoginIdentifier(value))
                   }
-                  placeholder="Email"
+                  placeholder="Email or username"
                   placeholderTextColor={theme.colors.textMuted}
                   style={styles.input}
-                  value={form.email}
+                  value={form.loginIdentifier}
                 />
               )}
               {mode === 'signup' ? (
@@ -216,17 +321,31 @@ export function AuthScreen({
               />
             </View>
 
+            {mode === 'signup' && usernameStatus.message ? (
+              <Text
+                style={
+                  usernameStatus.isValid
+                    ? styles.infoText
+                    : usernameStatus.isChecking
+                      ? styles.pendingText
+                      : styles.errorText
+                }
+              >
+                {usernameStatus.message}
+              </Text>
+            ) : null}
+
             {bootError ? <Text style={styles.errorText}>{bootError}</Text> : null}
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
             {info ? <Text style={styles.infoText}>{info}</Text> : null}
 
             <Pressable
-              disabled={isSubmitting}
+              disabled={isSubmitDisabled}
               onPress={handleFormSubmit}
               style={({ pressed }) => [
                 styles.primaryButton,
                 pressed && styles.buttonPressed,
-                isSubmitting && styles.buttonDisabled,
+                isSubmitDisabled && styles.buttonDisabled,
               ]}
             >
               <Text style={styles.primaryButtonText}>
@@ -321,6 +440,10 @@ const styles = StyleSheet.create({
   },
   infoText: {
     color: theme.colors.accentSoft,
+    marginTop: theme.spacing.sm,
+  },
+  pendingText: {
+    color: theme.colors.textSecondary,
     marginTop: theme.spacing.sm,
   },
   primaryButton: {
