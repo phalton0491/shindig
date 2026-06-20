@@ -1,4 +1,5 @@
 import { AppNotification } from '../types/models';
+import { sendPushNotification } from './push';
 import { getFriendProfilesByIds } from './profiles';
 import { supabase } from './supabase';
 
@@ -6,6 +7,7 @@ type NotificationRow = {
   actor_user_id: string;
   created_at: string;
   id: string;
+  invite_id: string | null;
   message: string;
   photo_id: string | null;
   read_at: string | null;
@@ -19,6 +21,11 @@ type PhotoRequestRow = {
   id: string;
   photo_url: string;
   status: 'approved' | 'pending' | 'rejected';
+};
+
+type InviteRow = {
+  id: string;
+  status: 'accepted' | 'pending' | 'rejected';
 };
 
 function client() {
@@ -43,6 +50,7 @@ function isMissingNotificationSchema(error: unknown) {
 
 export async function createNotification(args: {
   actorUserId: string;
+  inviteId?: string;
   message: string;
   photoId?: string;
   requestId?: string;
@@ -54,8 +62,28 @@ export async function createNotification(args: {
     return;
   }
 
+  if (args.inviteId) {
+    const { data: existingInviteNotification, error: existingInviteNotificationError } =
+      await client()
+        .from('notifications')
+        .select('id')
+        .eq('invite_id', args.inviteId)
+        .eq('recipient_user_id', args.recipientUserId)
+        .eq('type', args.type)
+        .maybeSingle();
+
+    if (existingInviteNotificationError && !isMissingNotificationSchema(existingInviteNotificationError)) {
+      throw existingInviteNotificationError;
+    }
+
+    if (existingInviteNotification?.id) {
+      return;
+    }
+  }
+
   const { error } = await client().from('notifications').insert({
     actor_user_id: args.actorUserId,
+    invite_id: args.inviteId || null,
     message: args.message,
     photo_id: args.photoId || null,
     recipient_user_id: args.recipientUserId,
@@ -73,13 +101,25 @@ export async function createNotification(args: {
   if (error) {
     throw error;
   }
+
+  await sendPushNotification({
+    body: args.message,
+    data: {
+      inviteId: args.inviteId || null,
+      photoId: args.photoId || null,
+      requestId: args.requestId || null,
+      shindigId: args.shindigId || null,
+      type: args.type,
+    },
+    recipientUserId: args.recipientUserId,
+  });
 }
 
 export async function listNotificationsForUser(userId: string) {
   const { data, error } = await client()
     .from('notifications')
     .select(
-      'id, recipient_user_id, actor_user_id, shindig_id, photo_id, request_id, type, message, created_at, read_at'
+      'id, recipient_user_id, actor_user_id, shindig_id, photo_id, request_id, invite_id, type, message, created_at, read_at'
     )
     .eq('recipient_user_id', userId)
     .order('created_at', { ascending: false })
@@ -98,9 +138,13 @@ export async function listNotificationsForUser(userId: string) {
   const requestIds = rows
     .map((row) => row.request_id)
     .filter((requestId): requestId is string => Boolean(requestId));
+  const inviteIds = rows
+    .map((row) => row.invite_id)
+    .filter((inviteId): inviteId is string => Boolean(inviteId));
   const actorProfiles = await getFriendProfilesByIds(actorIds);
   const actorsById = new Map(actorProfiles.map((profile) => [profile.id, profile]));
   let requestRowsById = new Map<string, PhotoRequestRow>();
+  let inviteRowsById = new Map<string, InviteRow>();
 
   if (requestIds.length > 0) {
     const { data: requestRows, error: requestRowsError } = await client()
@@ -112,6 +156,17 @@ export async function listNotificationsForUser(userId: string) {
       requestRowsById = new Map(
         ((requestRows || []) as PhotoRequestRow[]).map((row) => [row.id, row])
       );
+    }
+  }
+
+  if (inviteIds.length > 0) {
+    const { data: inviteRows, error: inviteRowsError } = await client()
+      .from('shindig_invites')
+      .select('id, status')
+      .in('id', inviteIds);
+
+    if (!inviteRowsError) {
+      inviteRowsById = new Map(((inviteRows || []) as InviteRow[]).map((row) => [row.id, row]));
     }
   }
 
@@ -132,6 +187,13 @@ export async function listNotificationsForUser(userId: string) {
 
       if (row.photo_id) {
         notification.photoId = row.photo_id;
+      }
+      if (row.invite_id) {
+        notification.inviteId = row.invite_id;
+        const inviteRow = inviteRowsById.get(row.invite_id);
+        if (inviteRow) {
+          notification.inviteStatus = inviteRow.status;
+        }
       }
       if (row.request_id) {
         notification.requestId = row.request_id;

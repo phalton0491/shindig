@@ -4,6 +4,7 @@ import {
   SavedShindig,
   SavedShindigPhoto,
   SavedShindigStop,
+  ShindigState,
   TimelinePlace,
 } from '../types/models';
 import { getFriendProfilesByIds } from './profiles';
@@ -25,6 +26,7 @@ type CreateShindigStopInput = {
 type ShindigRow = {
   created_at: string;
   id: string;
+  state: ShindigState;
   title: string;
   user_id: string;
 };
@@ -88,7 +90,22 @@ type ShindigPhotoRequestRow = {
   stop_id: string;
 };
 
+type ShindigInviteRow = {
+  created_at: string;
+  id: string;
+  invite_token: string | null;
+  invitee_user_id: string | null;
+  inviter_user_id: string;
+  phone_number: string | null;
+  shindig_id: string;
+  status: 'accepted' | 'pending' | 'rejected';
+};
+
 const SHINDIG_PHOTOS_BUCKET = 'shindig-photos';
+
+function createInviteToken() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
 
 function isMissingShindigSchema(error: unknown) {
   if (!error || typeof error !== 'object') {
@@ -181,6 +198,26 @@ async function getFirstStopIdForShindig(shindigId: string) {
   }
 
   return data.id as string;
+}
+
+async function ensureShindigActive(shindigId: string) {
+  const { data, error } = await client()
+    .from('shindigs')
+    .select('state')
+    .eq('id', shindigId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error('That ShinDig could not be found.');
+  }
+
+  if ((data.state as ShindigState) !== 'active') {
+    throw new Error('This ShinDig is completed. Reactivate it before adding more photos.');
+  }
 }
 
 function buildShindigTitle(args: { providedTitle?: string; stops: CreateShindigStopInput[] }) {
@@ -292,6 +329,7 @@ function mapShindigs(args: {
       likedByMe: shindigLikes.some((like) => like.user_id === args.currentUserId),
       ownerId: shindig.user_id,
       photoCount: photos.length,
+      state: shindig.state,
       stops,
       title: shindig.title,
     } satisfies SavedShindig;
@@ -441,7 +479,7 @@ async function hydrateShindigs(args: {
 export async function listShindigsForUser(userId: string) {
   const { data: shindigs, error: shindigsError } = await client()
     .from('shindigs')
-    .select('id, title, created_at, user_id')
+    .select('id, title, created_at, user_id, state')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -464,11 +502,20 @@ export async function listFeedShindigs(args: {
   userId: string;
 }) {
   const ownerIds = Array.from(new Set([args.userId, ...args.friendIds]));
-  const { data: shindigs, error: shindigsError } = await client()
-    .from('shindigs')
-    .select('id, title, created_at, user_id')
-    .in('user_id', ownerIds)
-    .order('created_at', { ascending: false });
+  const [ownedAndFriendRows, acceptedInviteRows] = await Promise.all([
+    client()
+      .from('shindigs')
+      .select('id, title, created_at, user_id, state')
+      .in('user_id', ownerIds)
+      .order('created_at', { ascending: false }),
+    client()
+      .from('shindig_invites')
+      .select('shindig_id')
+      .eq('invitee_user_id', args.userId)
+      .eq('status', 'accepted'),
+  ]);
+
+  const { data: shindigs, error: shindigsError } = ownedAndFriendRows;
 
   if (shindigsError && isMissingShindigSchema(shindigsError)) {
     return [];
@@ -476,13 +523,41 @@ export async function listFeedShindigs(args: {
   if (shindigsError) {
     throw shindigsError;
   }
+  if (acceptedInviteRows.error && !isMissingShindigSchema(acceptedInviteRows.error)) {
+    throw acceptedInviteRows.error;
+  }
 
-  const shindigRows = (shindigs || []) as ShindigRow[];
+  const acceptedInviteIds = ((acceptedInviteRows.data || []) as { shindig_id: string }[]).map(
+    (row) => row.shindig_id
+  );
+  let invitedShindigRows: ShindigRow[] = [];
+
+  if (acceptedInviteIds.length > 0) {
+    const { data: invitedRows, error: invitedRowsError } = await client()
+      .from('shindigs')
+      .select('id, title, created_at, user_id, state')
+      .in('id', acceptedInviteIds)
+      .order('created_at', { ascending: false });
+
+    if (invitedRowsError && !isMissingShindigSchema(invitedRowsError)) {
+      throw invitedRowsError;
+    }
+
+    invitedShindigRows = (invitedRows || []) as ShindigRow[];
+  }
+
+  const shindigRows = Array.from(
+    new Map(
+      [...((shindigs || []) as ShindigRow[]), ...invitedShindigRows].map((row) => [row.id, row])
+    ).values()
+  );
   const savedShindigs = await hydrateShindigs({
     currentUserId: args.userId,
     shindigRows,
   });
-  const ownerProfiles = await getFriendProfilesByIds(ownerIds);
+  const ownerProfiles = await getFriendProfilesByIds(
+    Array.from(new Set(shindigRows.map((row) => row.user_id)))
+  );
   const ownersById = new Map(ownerProfiles.map((owner) => [owner.id, owner]));
 
   return savedShindigs
@@ -512,10 +587,11 @@ export async function createShindig(args: {
   const { data: shindigData, error: shindigError } = await client()
     .from('shindigs')
     .insert({
+      state: 'active',
       title: buildShindigTitle({ providedTitle: args.title, stops: args.stops }),
       user_id: args.userId,
     })
-    .select('id, title, created_at, user_id')
+    .select('id, title, created_at, user_id, state')
     .single();
 
   if (shindigError && isMissingShindigSchema(shindigError)) {
@@ -746,7 +822,7 @@ export async function getShindigById(args: {
 }) {
   const { data, error } = await client()
     .from('shindigs')
-    .select('id, title, created_at, user_id')
+    .select('id, title, created_at, user_id, state')
     .eq('id', args.shindigId)
     .maybeSingle();
 
@@ -766,12 +842,183 @@ export async function getShindigById(args: {
   return rows[0] || null;
 }
 
+export async function createAppFriendShindigInvites(args: {
+  friendIds: string[];
+  inviterUserId: string;
+  shindigId: string;
+}) {
+  const uniqueFriendIds = Array.from(
+    new Set(args.friendIds.filter((friendId) => friendId && friendId !== args.inviterUserId))
+  );
+
+  if (uniqueFriendIds.length === 0) {
+    return [] as ShindigInviteRow[];
+  }
+
+  const { data: existingRows, error: existingRowsError } = await client()
+    .from('shindig_invites')
+    .select(
+      'id, shindig_id, inviter_user_id, invitee_user_id, phone_number, invite_token, status, created_at'
+    )
+    .eq('shindig_id', args.shindigId)
+    .in('invitee_user_id', uniqueFriendIds);
+
+  if (existingRowsError && isMissingShindigSchema(existingRowsError)) {
+    throw new Error(
+      'Your Supabase database is missing the ShinDig invite tables. Run the latest supabase/schema.sql first.'
+    );
+  }
+
+  if (existingRowsError) {
+    throw existingRowsError;
+  }
+
+  const existingByInviteeId = new Map(
+    ((existingRows || []) as ShindigInviteRow[])
+      .filter((row) => row.invitee_user_id)
+      .map((row) => [row.invitee_user_id!, row])
+  );
+  const invites: ShindigInviteRow[] = [];
+
+  for (const friendId of uniqueFriendIds) {
+    const existingInvite = existingByInviteeId.get(friendId);
+    if (existingInvite) {
+      if (existingInvite.status === 'rejected') {
+        const { data: updatedRow, error: updateError } = await client()
+          .from('shindig_invites')
+          .update({ status: 'pending' })
+          .eq('id', existingInvite.id)
+          .select(
+            'id, shindig_id, inviter_user_id, invitee_user_id, phone_number, invite_token, status, created_at'
+          )
+          .single();
+
+        if (updateError || !updatedRow) {
+          throw updateError || new Error('Failed to refresh that ShinDig invite.');
+        }
+
+        invites.push(updatedRow as ShindigInviteRow);
+      } else {
+        invites.push(existingInvite);
+      }
+      continue;
+    }
+
+    const { data: createdRow, error: createError } = await client()
+      .from('shindig_invites')
+      .insert({
+        invitee_user_id: friendId,
+        inviter_user_id: args.inviterUserId,
+        shindig_id: args.shindigId,
+        status: 'pending',
+      })
+      .select(
+        'id, shindig_id, inviter_user_id, invitee_user_id, phone_number, invite_token, status, created_at'
+      )
+      .single();
+
+    if (createError || !createdRow) {
+      throw createError || new Error('Failed to create that ShinDig invite.');
+    }
+
+    invites.push(createdRow as ShindigInviteRow);
+  }
+
+  return invites;
+}
+
+export async function createPhoneShindigInvite(args: {
+  inviterUserId: string;
+  shindigId: string;
+}) {
+  const inviteToken = createInviteToken();
+  const { data, error } = await client()
+    .from('shindig_invites')
+    .insert({
+      invite_token: inviteToken,
+      inviter_user_id: args.inviterUserId,
+      shindig_id: args.shindigId,
+      status: 'pending',
+    })
+    .select(
+      'id, shindig_id, inviter_user_id, invitee_user_id, phone_number, invite_token, status, created_at'
+    )
+    .single();
+
+  if (error && isMissingShindigSchema(error)) {
+    throw new Error(
+      'Your Supabase database is missing the ShinDig invite tables. Run the latest supabase/schema.sql first.'
+    );
+  }
+
+  if (error || !data) {
+    throw error || new Error('Failed to create the text-message invite.');
+  }
+
+  return data as ShindigInviteRow;
+}
+
+export async function claimShindigInvite(args: { inviteToken: string }) {
+  const { data, error } = await client().rpc('claim_shindig_invite', {
+    invite_token_input: args.inviteToken,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data as ShindigInviteRow;
+}
+
+export async function acceptShindigInvite(args: {
+  inviteId: string;
+  userId: string;
+}) {
+  const { data, error } = await client()
+    .from('shindig_invites')
+    .update({ status: 'accepted' })
+    .eq('id', args.inviteId)
+    .eq('invitee_user_id', args.userId)
+    .select(
+      'id, shindig_id, inviter_user_id, invitee_user_id, phone_number, invite_token, status, created_at'
+    )
+    .single();
+
+  if (error || !data) {
+    throw error || new Error('That ShinDig invite could not be accepted.');
+  }
+
+  return data as ShindigInviteRow;
+}
+
+export async function rejectShindigInvite(args: {
+  inviteId: string;
+  userId: string;
+}) {
+  const { data, error } = await client()
+    .from('shindig_invites')
+    .update({ status: 'rejected' })
+    .eq('id', args.inviteId)
+    .eq('invitee_user_id', args.userId)
+    .select(
+      'id, shindig_id, inviter_user_id, invitee_user_id, phone_number, invite_token, status, created_at'
+    )
+    .single();
+
+  if (error || !data) {
+    throw error || new Error('That ShinDig invite could not be rejected.');
+  }
+
+  return data as ShindigInviteRow;
+}
+
 export async function createPhotoAddRequest(args: {
   photo: DraftStopPhoto;
   recipientUserId: string;
   requesterUserId: string;
   shindigId: string;
 }) {
+  await ensureShindigActive(args.shindigId);
   const stopId = await getFirstStopIdForShindig(args.shindigId);
   const photoUrl = await uploadStopPhoto({
     photo: args.photo,
@@ -813,6 +1060,7 @@ export async function addPhotoToShindig(args: {
   shindigId: string;
   userId: string;
 }) {
+  await ensureShindigActive(args.shindigId);
   const stopId = await getFirstStopIdForShindig(args.shindigId);
   const photoUrl = await uploadStopPhoto({
     photo: args.photo,
@@ -870,6 +1118,8 @@ export async function approvePhotoAddRequest(args: {
     return requestRow as ShindigPhotoRequestRow;
   }
 
+  await ensureShindigActive(requestRow.shindig_id);
+
   const { error: photoError } = await client().from('shindig_photos').insert({
     contributor_user_id: requestRow.requester_user_id,
     photo_url: requestRow.photo_url,
@@ -916,4 +1166,37 @@ export async function rejectPhotoAddRequest(args: {
   }
 
   return data as ShindigPhotoRequestRow;
+}
+
+export async function updateShindigState(args: {
+  shindigId: string;
+  state: ShindigState;
+  userId: string;
+}) {
+  const { error } = await client()
+    .from('shindigs')
+    .update({ state: args.state })
+    .eq('id', args.shindigId)
+    .eq('user_id', args.userId);
+
+  if (error && isMissingShindigSchema(error)) {
+    throw new Error(
+      'Your Supabase database is missing the ShinDig state column. Run the latest supabase/schema.sql first.'
+    );
+  }
+
+  if (error) {
+    throw error;
+  }
+
+  const updated = await getShindigById({
+    shindigId: args.shindigId,
+    userId: args.userId,
+  });
+
+  if (!updated) {
+    throw new Error('That ShinDig could not be reloaded after updating its state.');
+  }
+
+  return updated;
 }

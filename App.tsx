@@ -1,7 +1,9 @@
 import { Session } from '@supabase/supabase-js';
 import { StatusBar } from 'expo-status-bar';
+import * as Notifications from 'expo-notifications';
 import { useEffect, useState } from 'react';
 import {
+  AppState,
   Image,
   Linking,
   SafeAreaView,
@@ -20,12 +22,18 @@ import {
 import { supabase } from './src/lib/supabase';
 import { acceptFriendRequest, listFriendsForUser, rejectFriendRequest } from './src/lib/friends';
 import {
+  acceptShindigInvite,
   approvePhotoAddRequest,
+  claimShindigInvite,
   createShindig,
+  getShindigById,
   listFeedShindigs,
   listShindigsForUser,
+  rejectShindigInvite,
   rejectPhotoAddRequest,
+  updateShindigState,
 } from './src/lib/shindigs';
+import { registerForPushNotifications } from './src/lib/push';
 import { ensureProfileForUser, getProfileForUser, updateProfile } from './src/lib/profiles';
 import { BottomNav, AppTab } from './src/components/BottomNav';
 import { AuthScreen } from './src/screens/AuthScreen';
@@ -56,7 +64,20 @@ function authModeFromUrl(url: string | null): AuthMode {
     return 'login';
   }
 
-  return url.toLowerCase().includes('signup') ? 'signup' : 'login';
+  return url.toLowerCase().includes('signup') || inviteTokenFromUrl(url) ? 'signup' : 'login';
+}
+
+function inviteTokenFromUrl(url: string | null) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    return parsedUrl.searchParams.get('invite');
+  } catch {
+    return null;
+  }
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
@@ -99,6 +120,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [bootError, setBootError] = useState('');
+  const [pendingInviteToken, setPendingInviteToken] = useState<string | null>(null);
 
   async function loadAuthedData(nextSession: Session) {
     const [nextFriends, nextNotifications, nextProfile, nextShindigs] = await Promise.all([
@@ -157,6 +179,7 @@ export default function App() {
         const initialUrl = await Linking.getInitialURL();
         if (isMounted) {
           setAuthMode(authModeFromUrl(initialUrl));
+          setPendingInviteToken(inviteTokenFromUrl(initialUrl));
         }
       } catch {
         if (isMounted) {
@@ -170,6 +193,7 @@ export default function App() {
     const linkSubscription = Linking.addEventListener('url', ({ url }) => {
       if (isMounted) {
         setAuthMode(authModeFromUrl(url));
+        setPendingInviteToken(inviteTokenFromUrl(url));
       }
     });
 
@@ -178,6 +202,135 @@ export default function App() {
       linkSubscription.remove();
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function claimPendingInvite() {
+      if (!session?.user || !pendingInviteToken) {
+        return;
+      }
+
+      try {
+        const claimedInvite = await claimShindigInvite({
+          inviteToken: pendingInviteToken,
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        const nextNotifications = await listNotificationsForUser(session.user.id);
+        if (!isMounted) {
+          return;
+        }
+
+        setNotifications(nextNotifications);
+        setShowMore(false);
+        setShowSettings(false);
+        setFriendProfileDetail(null);
+        setShowNotifications(true);
+      } catch (error) {
+        if (isMounted) {
+          setBootError(
+            error instanceof Error ? error.message : 'That ShinDig invite could not be opened.'
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setPendingInviteToken(null);
+        }
+      }
+    }
+
+    claimPendingInvite();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [pendingInviteToken, session?.user?.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function registerPush() {
+      if (!session?.user) {
+        return;
+      }
+
+      try {
+        await registerForPushNotifications(session.user.id);
+      } catch (error) {
+        if (isMounted) {
+          setBootError(
+            error instanceof Error
+              ? error.message
+              : 'Push notifications could not be enabled on this device.'
+          );
+        }
+      }
+    }
+
+    registerPush();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!session?.user) {
+      return;
+    }
+
+    const sessionUserId = session.user.id;
+
+    async function openPushTarget(data: Record<string, unknown> | null | undefined) {
+      const shindigId =
+        typeof data?.shindigId === 'string' && data.shindigId ? data.shindigId : null;
+      const photoId = typeof data?.photoId === 'string' && data.photoId ? data.photoId : null;
+
+      if (!shindigId) {
+        await handleOpenNotifications();
+        return;
+      }
+
+      const targetShindig =
+        shindigs.find((item) => item.id === shindigId) ||
+        feedShindigs.find((item) => item.id === shindigId) ||
+        (await getShindigById({
+          shindigId,
+          userId: sessionUserId,
+        }));
+
+      if (!targetShindig) {
+        await handleOpenNotifications();
+        return;
+      }
+
+      setShowNotifications(false);
+      setShowMore(false);
+      setShowSettings(false);
+      setFriendProfileDetail(null);
+      setFeedShindig(targetShindig);
+      setHighlightedPhotoId(photoId);
+      setActiveTab('shindigs');
+    }
+
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response?.notification.request.content.data) {
+        void openPushTarget(response.notification.request.content.data as Record<string, unknown>);
+      }
+    });
+
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      void openPushTarget(response.notification.request.content.data as Record<string, unknown>);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [session?.user?.id, shindigs, feedShindigs]);
 
   useEffect(() => {
     if (!supabase) {
@@ -328,6 +481,35 @@ export default function App() {
     return savedShindig;
   }
 
+  async function handleShindigStateChanged(args: {
+    shindigId: string;
+    state: 'active' | 'completed';
+  }) {
+    if (!session?.user) {
+      throw new Error('No active session.');
+    }
+
+    const updatedShindig = await updateShindigState({
+      shindigId: args.shindigId,
+      state: args.state,
+      userId: session.user.id,
+    });
+
+    setShindigs((current) =>
+      current.map((shindig) => (shindig.id === updatedShindig.id ? updatedShindig : shindig))
+    );
+    setFeedShindigs((current) =>
+      current.map((shindig) =>
+        shindig.id === updatedShindig.id ? { ...shindig, ...updatedShindig } : shindig
+      )
+    );
+    setFeedShindig((current) =>
+      current?.id === updatedShindig.id ? updatedShindig : current
+    );
+
+    return updatedShindig;
+  }
+
   async function refreshFriends() {
     if (!session?.user) {
       return;
@@ -351,6 +533,18 @@ export default function App() {
     setFeedShindigs(nextFeed);
   }
 
+  async function refreshFeed(nextFriends = friends) {
+    if (!session?.user) {
+      return;
+    }
+
+    const nextFeed = await listFeedShindigs({
+      friendIds: nextFriends.map((friend) => friend.id),
+      userId: session.user.id,
+    });
+    setFeedShindigs(nextFeed);
+  }
+
   async function refreshNotifications() {
     if (!session?.user) {
       return;
@@ -359,6 +553,187 @@ export default function App() {
     const nextNotifications = await listNotificationsForUser(session.user.id);
     setNotifications(nextNotifications);
   }
+
+  async function refreshShindigsAndFeed(nextFriends = friends) {
+    if (!session?.user) {
+      return;
+    }
+
+    const [nextShindigs, nextFeed] = await Promise.all([
+      listShindigsForUser(session.user.id),
+      listFeedShindigs({
+        friendIds: nextFriends.map((friend) => friend.id),
+        userId: session.user.id,
+      }),
+    ]);
+
+    setShindigs(nextShindigs);
+    setFeedShindigs(nextFeed);
+    if (profile) {
+      setProfile({
+        ...profile,
+        stats: {
+          ...profile.stats,
+          friends: nextFriends.length,
+          outings: nextShindigs.length,
+        },
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (!supabase || !session?.user) {
+      return;
+    }
+
+    const userId = session.user.id;
+    const client = supabase;
+    const channel = client
+      .channel(`notifications-live:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          filter: `recipient_user_id=eq.${userId}`,
+          schema: 'public',
+          table: 'notifications',
+        },
+        () => {
+          void refreshNotifications();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          filter: `invitee_user_id=eq.${userId}`,
+          schema: 'public',
+          table: 'shindig_invites',
+        },
+        () => {
+          void refreshNotifications();
+          void refreshFeed();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shindigs',
+        },
+        () => {
+          void refreshShindigsAndFeed();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shindig_likes',
+        },
+        () => {
+          void refreshShindigsAndFeed();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shindig_comments',
+        },
+        () => {
+          void refreshShindigsAndFeed();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shindig_photo_likes',
+        },
+        () => {
+          void refreshShindigsAndFeed();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shindig_photo_comments',
+        },
+        () => {
+          void refreshShindigsAndFeed();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shindig_photos',
+        },
+        () => {
+          void refreshShindigsAndFeed();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          filter: `recipient_user_id=eq.${userId}`,
+          schema: 'public',
+          table: 'shindig_photo_requests',
+        },
+        () => {
+          void refreshNotifications();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          filter: `requester_user_id=eq.${userId}`,
+          schema: 'public',
+          table: 'shindig_photo_requests',
+        },
+        () => {
+          void refreshNotifications();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, [session?.user?.id, friends]);
+
+  useEffect(() => {
+    if (!session?.user) {
+      return;
+    }
+
+    const refreshAll = () => {
+      void refreshNotifications();
+      void refreshShindigsAndFeed();
+    };
+
+    const intervalId = setInterval(refreshAll, 4000);
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        refreshAll();
+      }
+    });
+
+    return () => {
+      clearInterval(intervalId);
+      appStateSubscription.remove();
+    };
+  }, [session?.user?.id, friends]);
 
   async function handleOpenNotifications() {
     if (!session?.user) {
@@ -392,6 +767,10 @@ export default function App() {
   }
 
   function handleOpenNotification(notification: AppNotification) {
+    if (notification.type === 'shindig_invite' && notification.inviteStatus === 'pending') {
+      return;
+    }
+
     if (!notification.shindigId) {
       handleOpenFriendProfile(notification.actor.id);
       return;
@@ -489,6 +868,30 @@ export default function App() {
     await refreshNotifications();
   }
 
+  async function handleAcceptShindigInvite(inviteId: string) {
+    if (!session?.user) {
+      return;
+    }
+
+    await acceptShindigInvite({
+      inviteId,
+      userId: session.user.id,
+    });
+    await Promise.all([refreshFeed(), refreshNotifications()]);
+  }
+
+  async function handleRejectShindigInvite(inviteId: string) {
+    if (!session?.user) {
+      return;
+    }
+
+    await rejectShindigInvite({
+      inviteId,
+      userId: session.user.id,
+    });
+    await refreshNotifications();
+  }
+
   if (!supabase) {
     return (
       <>
@@ -523,12 +926,14 @@ export default function App() {
         <View style={styles.screenShell}>
           {showNotifications ? (
             <NotificationsScreen
+              onAcceptShindigInvite={handleAcceptShindigInvite}
               notifications={notifications}
               onAcceptFriendRequest={handleAcceptFriendRequest}
               onOpenNotification={handleOpenNotification}
               onApprovePhotoRequest={handleApprovePhotoRequest}
               onBack={() => setShowNotifications(false)}
               onOpenFriend={handleOpenFriendProfile}
+              onRejectShindigInvite={handleRejectShindigInvite}
               onRejectPhotoRequest={handleRejectPhotoRequest}
               onRejectFriendRequest={handleRejectFriendRequest}
             />
@@ -591,6 +996,7 @@ export default function App() {
           ) : null}
           {!showNotifications && !showSettings && !friendProfileDetail && activeTab === 'shindigs' ? (
             <HomeScreen
+              friends={friends}
               initialFeedShindig={feedShindig}
               initialHighlightedPhotoId={highlightedPhotoId}
               initialStep={pendingShindigStep}
@@ -598,6 +1004,7 @@ export default function App() {
               onConsumeInitialHighlightedPhotoId={() => setHighlightedPhotoId(null)}
               onConsumeInitialStep={() => setPendingShindigStep(null)}
               onShindigSaved={handleShindigSaved}
+              onShindigStateChanged={handleShindigStateChanged}
               profile={profile}
               shindigs={shindigs}
               userId={session.user.id}

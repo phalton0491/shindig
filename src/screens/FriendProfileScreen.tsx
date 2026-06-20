@@ -32,7 +32,7 @@ export function FriendProfileScreen({
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{profile.name.split(' ')[0]}&apos;s ShinDigs</Text>
+            <Text style={styles.sectionTitle}>{`${profile.name.split(' ')[0]}'s ShinDigs`}</Text>
             <Text style={styles.archiveCount}>{shindigs.length} saved</Text>
           </View>
 

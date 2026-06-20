@@ -8,10 +8,12 @@ import { AppNotification } from '../types/models';
 type NotificationsScreenProps = {
   notifications: AppNotification[];
   onAcceptFriendRequest: (friendId: string) => Promise<void>;
+  onAcceptShindigInvite: (inviteId: string) => Promise<void>;
   onOpenNotification: (notification: AppNotification) => void;
   onApprovePhotoRequest: (requestId: string) => Promise<void>;
   onBack: () => void;
   onOpenFriend: (friendId: string) => void;
+  onRejectShindigInvite: (inviteId: string) => Promise<void>;
   onRejectPhotoRequest: (requestId: string) => Promise<void>;
   onRejectFriendRequest: (friendId: string) => Promise<void>;
 };
@@ -19,10 +21,12 @@ type NotificationsScreenProps = {
 export function NotificationsScreen({
   notifications,
   onAcceptFriendRequest,
+  onAcceptShindigInvite,
   onOpenNotification,
   onApprovePhotoRequest,
   onBack,
   onOpenFriend,
+  onRejectShindigInvite,
   onRejectPhotoRequest,
   onRejectFriendRequest,
 }: NotificationsScreenProps) {
@@ -56,6 +60,24 @@ export function NotificationsScreen({
     }
   }
 
+  async function handleAcceptInvite(inviteId: string) {
+    setActingRequestId(inviteId);
+    try {
+      await onAcceptShindigInvite(inviteId);
+    } finally {
+      setActingRequestId('');
+    }
+  }
+
+  async function handleRejectInvite(inviteId: string) {
+    setActingRequestId(inviteId);
+    try {
+      await onRejectShindigInvite(inviteId);
+    } finally {
+      setActingRequestId('');
+    }
+  }
+
   async function handleRejectPhotoRequest(requestId: string) {
     setActingRequestId(requestId);
     try {
@@ -72,6 +94,16 @@ export function NotificationsScreen({
 
     if (notification.type === 'friend_reject') {
       return `Rejected friend request from ${notification.actor.name}.`;
+    }
+
+    if (notification.type === 'shindig_invite') {
+      if (notification.inviteStatus === 'accepted') {
+        return `Accepted ShinDig invite from ${notification.actor.name}.`;
+      }
+
+      if (notification.inviteStatus === 'rejected') {
+        return `Rejected ShinDig invite from ${notification.actor.name}.`;
+      }
     }
 
     return notification.message;
@@ -142,6 +174,42 @@ export function NotificationsScreen({
                       <Text style={styles.rejectButtonText}>Reject</Text>
                     </Pressable>
                   </View>
+                ) : null}
+                {notification.type === 'shindig_invite' && notification.inviteId ? (
+                  notification.inviteStatus === 'accepted' ? (
+                    <View style={styles.actionRow}>
+                      <View style={styles.resolvedPillApproved}>
+                        <Ionicons color="#FFFFFF" name="checkmark" size={16} />
+                        <Text style={styles.resolvedPillApprovedText}>Joined ShinDig</Text>
+                      </View>
+                    </View>
+                  ) : notification.inviteStatus === 'rejected' ? (
+                    <View style={styles.actionRow}>
+                      <View style={styles.resolvedPillRejected}>
+                        <Ionicons color={theme.colors.textSecondary} name="close" size={16} />
+                        <Text style={styles.resolvedPillRejectedText}>Invite declined</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        disabled={actingRequestId === notification.inviteId}
+                        onPress={() => handleAcceptInvite(notification.inviteId!)}
+                        style={styles.acceptButton}
+                      >
+                        <Text style={styles.acceptButtonText}>
+                          {actingRequestId === notification.inviteId ? '...' : 'Accept'}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        disabled={actingRequestId === notification.inviteId}
+                        onPress={() => handleRejectInvite(notification.inviteId!)}
+                        style={styles.rejectButton}
+                      >
+                        <Text style={styles.rejectButtonText}>Reject</Text>
+                      </Pressable>
+                    </View>
+                  )
                 ) : null}
                 {notification.type === 'photo_add_request' && notification.requestId ? (
                   <View style={styles.requestPhotoSection}>

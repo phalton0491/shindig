@@ -48,6 +48,8 @@ export type FeedComment = {
   id: string;
 };
 
+export type ShindigState = 'active' | 'completed';
+
 export type SavedShindigStop = {
   id: string;
   order: number;
@@ -75,6 +77,7 @@ export type SavedShindig = {
   likedByMe: boolean;
   ownerId: string;
   photoCount: number;
+  state: ShindigState;
   stops: SavedShindigStop[];
   title: string;
 };
@@ -87,6 +90,8 @@ export type AppNotification = {
   actor: FriendProfile;
   createdAt: string;
   id: string;
+  inviteId?: string;
+  inviteStatus?: 'accepted' | 'pending' | 'rejected';
   message: string;
   photoId?: string;
   requestId?: string;
@@ -101,6 +106,7 @@ export type AppNotification = {
     | 'photo_add_request'
     | 'photo_comment'
     | 'photo_like'
+    | 'shindig_invite'
     | 'shindig_comment'
     | 'shindig_like';
 };

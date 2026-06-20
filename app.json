@@ -22,6 +22,13 @@
         {
           "contactsPermission": "Allow ShinDig to access your contacts so you can invite friends to your ShinDig."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#FF615A",
+          "defaultChannel": "default"
+        }
       ]
     ],
     "orientation": "portrait",
@@ -33,9 +40,11 @@
     },
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.phalton.shindig"
     },
     "android": {
+      "package": "com.phalton.shindig",
       "adaptiveIcon": {
         "backgroundColor": "#0A0E1A",
         "foregroundImage": "./assets/android-icon-foreground.png",

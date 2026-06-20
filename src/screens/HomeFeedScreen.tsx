@@ -17,6 +17,10 @@ export function HomeFeedScreen({
   onOpenShindig,
   onStartShindig,
 }: HomeFeedScreenProps) {
+  function badgeLabel(state: FeedShindig['state']) {
+    return state === 'active' ? 'Active' : 'Completed';
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -46,12 +50,31 @@ export function HomeFeedScreen({
                       <Text style={styles.ownerHandle}>{shindig.owner.handle}</Text>
                     </View>
                   </Pressable>
-                  <Text style={styles.dateText}>
-                    {new Date(shindig.createdAt).toLocaleDateString('en-US', {
-                      day: 'numeric',
-                      month: 'short',
-                    })}
-                  </Text>
+                  <View style={styles.headerMeta}>
+                    <View
+                      style={[
+                        styles.stateBadge,
+                        shindig.state === 'active' ? styles.stateBadgeActive : styles.stateBadgeCompleted,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.stateBadgeText,
+                          shindig.state === 'active'
+                            ? styles.stateBadgeTextActive
+                            : styles.stateBadgeTextCompleted,
+                        ]}
+                      >
+                        {badgeLabel(shindig.state)}
+                      </Text>
+                    </View>
+                    <Text style={styles.dateText}>
+                      {new Date(shindig.createdAt).toLocaleDateString('en-US', {
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </Text>
+                  </View>
                 </View>
 
                 <Pressable onPress={() => onOpenShindig(shindig)}>
@@ -128,10 +151,14 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
   },
   feedCardHeader: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: theme.spacing.md,
+  },
+  headerMeta: {
+    alignItems: 'flex-end',
+    marginLeft: theme.spacing.sm,
   },
   ownerRow: {
     alignItems: 'center',
@@ -159,7 +186,29 @@ const styles = StyleSheet.create({
   dateText: {
     color: theme.colors.textMuted,
     fontSize: 12,
-    marginLeft: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+  },
+  stateBadge: {
+    borderRadius: theme.radius.round,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
+  },
+  stateBadgeActive: {
+    backgroundColor: 'rgba(46, 139, 87, 0.18)',
+  },
+  stateBadgeCompleted: {
+    backgroundColor: 'rgba(132, 144, 176, 0.18)',
+  },
+  stateBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  stateBadgeTextActive: {
+    color: '#63D89A',
+  },
+  stateBadgeTextCompleted: {
+    color: theme.colors.textMuted,
   },
   summaryRow: {
     flexDirection: 'row',

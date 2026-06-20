@@ -25,17 +25,27 @@ import {
   addPhotoToShindig,
   addPhotoComment,
   addShindigComment,
+  createAppFriendShindigInvites,
   createPhotoAddRequest,
+  createPhoneShindigInvite,
   deletePhotoComment,
   deleteShindigComment,
   getShindigById,
   togglePhotoLike,
   toggleShindigLike,
 } from '../lib/shindigs';
+import { supabase } from '../lib/supabase';
 import { theme } from '../theme';
-import { SavedShindig, TimelinePlace, UserProfile } from '../types/models';
+import {
+  FriendProfile,
+  SavedShindig,
+  ShindigState,
+  TimelinePlace,
+  UserProfile,
+} from '../types/models';
 
 type HomeScreenProps = {
+  friends: FriendProfile[];
   initialFeedShindig?: SavedShindig | null;
   initialHighlightedPhotoId?: string | null;
   initialStep?: 'create' | null;
@@ -50,6 +60,10 @@ type HomeScreenProps = {
     }[];
     title: string;
     userId: string;
+  }) => Promise<SavedShindig>;
+  onShindigStateChanged: (args: {
+    shindigId: string;
+    state: ShindigState;
   }) => Promise<SavedShindig>;
   profile: UserProfile;
   shindigs: SavedShindig[];
@@ -71,7 +85,7 @@ type InviteContact = {
   phoneNumber: string;
 };
 
-const INVITE_SIGNUP_URL = 'shindig://signup';
+const INVITE_LINK_BASE = 'shindig://signup';
 
 function buildManualPlace(query: string): TimelinePlace {
   const normalizedQuery = query.trim();
@@ -111,6 +125,96 @@ function fileExtensionFromUri(uri: string) {
   return uri.match(/\.(\w+)(?:\?|$)/)?.[1]?.toLowerCase() || 'jpg';
 }
 
+function normalizeSearchValue(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function editDistanceWithinOne(left: string, right: string) {
+  if (left === right) {
+    return true;
+  }
+
+  if (Math.abs(left.length - right.length) > 1) {
+    return false;
+  }
+
+  let indexLeft = 0;
+  let indexRight = 0;
+  let mismatchCount = 0;
+
+  while (indexLeft < left.length && indexRight < right.length) {
+    if (left[indexLeft] === right[indexRight]) {
+      indexLeft += 1;
+      indexRight += 1;
+      continue;
+    }
+
+    mismatchCount += 1;
+    if (mismatchCount > 1) {
+      return false;
+    }
+
+    if (left.length > right.length) {
+      indexLeft += 1;
+    } else if (right.length > left.length) {
+      indexRight += 1;
+    } else {
+      indexLeft += 1;
+      indexRight += 1;
+    }
+  }
+
+  if (indexLeft < left.length || indexRight < right.length) {
+    mismatchCount += 1;
+  }
+
+  return mismatchCount <= 1;
+}
+
+function fuzzyMatchesQuery(candidate: string, query: string) {
+  const normalizedCandidate = normalizeSearchValue(candidate);
+  const normalizedQuery = normalizeSearchValue(query);
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  if (normalizedCandidate.includes(normalizedQuery)) {
+    return true;
+  }
+
+  const candidateParts = candidate
+    .toLowerCase()
+    .split(/[\s,.-]+/)
+    .map(normalizeSearchValue)
+    .filter(Boolean);
+
+  return candidateParts.some(
+    (part) =>
+      part.startsWith(normalizedQuery) ||
+      normalizedQuery.startsWith(part) ||
+      editDistanceWithinOne(part, normalizedQuery)
+  );
+}
+
+function contactDisplayName(contact: Contacts.Contact) {
+  const fullName = contact.name?.trim();
+  if (fullName) {
+    return fullName;
+  }
+
+  const joinedName = [contact.firstName?.trim(), contact.lastName?.trim()]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  if (joinedName) {
+    return joinedName;
+  }
+
+  return contact.phoneNumbers?.[0]?.number?.trim() || '';
+}
+
 function getPhotoNotificationRecipient(
   shindig: SavedShindig,
   photoId: string
@@ -119,7 +223,12 @@ function getPhotoNotificationRecipient(
   return targetPhoto?.contributor?.id || shindig.ownerId;
 }
 
+function shindigStateLabel(state: ShindigState) {
+  return state === 'active' ? 'Active' : 'Completed';
+}
+
 export function HomeScreen({
+  friends,
   initialFeedShindig,
   initialHighlightedPhotoId,
   initialStep,
@@ -127,6 +236,7 @@ export function HomeScreen({
   onConsumeInitialHighlightedPhotoId,
   onConsumeInitialStep,
   onShindigSaved,
+  onShindigStateChanged,
   profile,
   shindigs,
   userId,
@@ -138,8 +248,9 @@ export function HomeScreen({
   const [locationResults, setLocationResults] = useState<TimelinePlace[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<TimelinePlace | null>(null);
   const [contacts, setContacts] = useState<InviteContact[]>([]);
+  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
-  const [contactSearch, setContactSearch] = useState('');
+  const [inviteSearch, setInviteSearch] = useState('');
   const [activeFeedShindig, setActiveFeedShindig] = useState<SavedShindig | null>(null);
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObjectCoords | null>(
     null
@@ -160,26 +271,44 @@ export function HomeScreen({
   const [showOwnerPhotoPrompt, setShowOwnerPhotoPrompt] = useState(false);
   const [highlightedPhotoId, setHighlightedPhotoId] = useState('');
   const deferredLocationQuery = useDeferredValue(locationQuery);
-  const deferredContactSearch = useDeferredValue(contactSearch);
+  const deferredInviteSearch = useDeferredValue(inviteSearch);
   const feedScrollRef = useRef<ScrollView | null>(null);
   const photoOffsetsRef = useRef<Record<string, number>>({});
 
+  const filteredFriends = useMemo(() => {
+    const query = deferredInviteSearch.trim();
+    if (!query) {
+      return friends;
+    }
+
+    return friends.filter(
+      (friend) =>
+        fuzzyMatchesQuery(friend.name, query) ||
+        fuzzyMatchesQuery(friend.handle, query) ||
+        fuzzyMatchesQuery(friend.city, query)
+    );
+  }, [deferredInviteSearch, friends]);
+
   const filteredContacts = useMemo(() => {
-    const query = deferredContactSearch.trim().toLowerCase();
+    const query = deferredInviteSearch.trim();
     if (!query) {
       return contacts;
     }
 
     return contacts.filter(
       (contact) =>
-        contact.name.toLowerCase().includes(query) ||
-        contact.phoneNumber.toLowerCase().includes(query)
+        fuzzyMatchesQuery(contact.name, query) ||
+        fuzzyMatchesQuery(contact.phoneNumber, query)
     );
-  }, [contacts, deferredContactSearch]);
+  }, [contacts, deferredInviteSearch]);
 
   const selectedContacts = useMemo(
     () => contacts.filter((contact) => selectedContactIds.includes(contact.id)),
     [contacts, selectedContactIds]
+  );
+  const selectedFriends = useMemo(
+    () => friends.filter((friend) => selectedFriendIds.includes(friend.id)),
+    [friends, selectedFriendIds]
   );
 
   useEffect(() => {
@@ -347,7 +476,7 @@ export function HomeScreen({
 
         const result = await Contacts.getContactsAsync({
           fields: [Contacts.Fields.PhoneNumbers],
-          pageSize: 200,
+          pageSize: 1000,
           sort: Contacts.SortTypes.FirstName,
         });
 
@@ -358,13 +487,14 @@ export function HomeScreen({
         const nextContacts = (result.data || [])
           .map((contact) => {
             const firstPhone = contact.phoneNumbers?.[0]?.number?.trim();
-            if (!contact.id || !contact.name || !firstPhone) {
+            const displayName = contactDisplayName(contact);
+            if (!contact.id || !displayName || !firstPhone) {
               return null;
             }
 
             return {
               id: contact.id,
-              name: contact.name,
+              name: displayName,
               phoneNumber: firstPhone,
             } satisfies InviteContact;
           })
@@ -565,8 +695,9 @@ export function HomeScreen({
     setLocationResults([]);
     setPhotos([]);
     setShindigName('');
+    setSelectedFriendIds([]);
     setSelectedContactIds([]);
-    setContactSearch('');
+    setInviteSearch('');
     setActiveFeedShindig(null);
     setStep('create');
   }
@@ -592,6 +723,84 @@ export function HomeScreen({
       setIsRefreshingFeed(false);
     }
   }
+
+  useEffect(() => {
+    if (!supabase || step !== 'feed' || !activeFeedShindig) {
+      return;
+    }
+
+    const shindigId = activeFeedShindig.id;
+    const client = supabase;
+    const channel = client
+      .channel(`shindig-feed-live:${shindigId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          filter: `id=eq.${shindigId}`,
+          schema: 'public',
+          table: 'shindigs',
+        },
+        () => {
+          void refreshActiveFeed(shindigId);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          filter: `shindig_id=eq.${shindigId}`,
+          schema: 'public',
+          table: 'shindig_likes',
+        },
+        () => {
+          void refreshActiveFeed(shindigId);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          filter: `shindig_id=eq.${shindigId}`,
+          schema: 'public',
+          table: 'shindig_comments',
+        },
+        () => {
+          void refreshActiveFeed(shindigId);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          filter: `shindig_id=eq.${shindigId}`,
+          schema: 'public',
+          table: 'shindig_photos',
+        },
+        () => {
+          void refreshActiveFeed(shindigId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, [activeFeedShindig?.id, step]);
+
+  useEffect(() => {
+    if (step !== 'feed' || !activeFeedShindig) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      void refreshActiveFeed(activeFeedShindig.id);
+    }, 4000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [activeFeedShindig?.id, step]);
 
   async function continueToInvite() {
     if (!shindigName.trim()) {
@@ -645,6 +854,14 @@ export function HomeScreen({
     setStep('invite');
   }
 
+  function toggleFriend(friendId: string) {
+    setSelectedFriendIds((current) =>
+      current.includes(friendId)
+        ? current.filter((id) => id !== friendId)
+        : [...current, friendId]
+    );
+  }
+
   function toggleContact(contactId: string) {
     setSelectedContactIds((current) =>
       current.includes(contactId)
@@ -665,14 +882,6 @@ export function HomeScreen({
     setError('');
 
     try {
-      if (selectedContacts.length > 0 && (await SMS.isAvailableAsync())) {
-        const inviteName = shindigName.trim() || 'ShinDig';
-        await SMS.sendSMSAsync(
-          selectedContacts.map((contact) => contact.phoneNumber),
-          `${profile.name} invited you to ${inviteName} at ${startingPlace.title}. Sign up to join the ShinDig: ${INVITE_SIGNUP_URL}`
-        );
-      }
-
       const savedShindig = await onShindigSaved({
         stops: [
           {
@@ -684,8 +893,75 @@ export function HomeScreen({
         userId,
       });
 
+      const inviteIssues: string[] = [];
+
+      if (selectedFriends.length > 0) {
+        try {
+          const invites = await createAppFriendShindigInvites({
+            friendIds: selectedFriends.map((friend) => friend.id),
+            inviterUserId: userId,
+            shindigId: savedShindig.id,
+          });
+
+          await Promise.all(
+            invites
+              .filter((invite) => invite.status === 'pending' && invite.invitee_user_id)
+              .map((invite) =>
+                createNotification({
+                  actorUserId: userId,
+                  inviteId: invite.id,
+                  message: `${profile.name} added you to the ShinDig "${savedShindig.title}".`,
+                  recipientUserId: invite.invitee_user_id!,
+                  shindigId: savedShindig.id,
+                  type: 'shindig_invite',
+                })
+              )
+          );
+        } catch (nextError) {
+          inviteIssues.push(
+            nextError instanceof Error
+              ? nextError.message
+              : 'Some in-app friend invites could not be sent.'
+          );
+        }
+      }
+
+      if (selectedContacts.length > 0) {
+        try {
+          const smsAvailable = await SMS.isAvailableAsync();
+          if (!smsAvailable) {
+            throw new Error('Text-message invites are only available on your phone.');
+          }
+
+          const invite = await createPhoneShindigInvite({
+            inviterUserId: userId,
+            shindigId: savedShindig.id,
+          });
+          if (!invite.invite_token) {
+            throw new Error('The text-message invite link could not be created.');
+          }
+          const inviteUrl = `${INVITE_LINK_BASE}?invite=${encodeURIComponent(
+            invite.invite_token
+          )}`;
+
+          await SMS.sendSMSAsync(
+            selectedContacts.map((contact) => contact.phoneNumber),
+            `${profile.name} invited you to join the ShinDig "${savedShindig.title}". If you are new, sign up first. If you already have ShinDig, open this link to review the invite: ${inviteUrl}`
+          );
+        } catch (nextError) {
+          inviteIssues.push(
+            nextError instanceof Error
+              ? nextError.message
+              : 'The text-message invites could not be sent.'
+          );
+        }
+      }
+
       setActiveFeedShindig(savedShindig);
       setStep('feed');
+      if (inviteIssues.length > 0) {
+        setError(inviteIssues.join(' '));
+      }
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : 'Failed to start this ShinDig.'
@@ -821,7 +1097,11 @@ export function HomeScreen({
   }
 
   async function handleRequestToAddPhoto() {
-    if (!activeFeedShindig || activeFeedShindig.ownerId === userId) {
+    if (
+      !activeFeedShindig ||
+      activeFeedShindig.ownerId === userId ||
+      activeFeedShindig.state !== 'active'
+    ) {
       return;
     }
 
@@ -830,7 +1110,11 @@ export function HomeScreen({
   }
 
   function handleAddPhotoToOwnedShindig() {
-    if (!activeFeedShindig || activeFeedShindig.ownerId !== userId) {
+    if (
+      !activeFeedShindig ||
+      activeFeedShindig.ownerId !== userId ||
+      activeFeedShindig.state !== 'active'
+    ) {
       return;
     }
 
@@ -839,7 +1123,11 @@ export function HomeScreen({
   }
 
   async function addPhotoToOwnedShindig(source: 'camera' | 'library') {
-    if (!activeFeedShindig || activeFeedShindig.ownerId !== userId) {
+    if (
+      !activeFeedShindig ||
+      activeFeedShindig.ownerId !== userId ||
+      activeFeedShindig.state !== 'active'
+    ) {
       return;
     }
 
@@ -872,7 +1160,11 @@ export function HomeScreen({
   }
 
   async function submitPhotoRequest(source: 'camera' | 'library') {
-    if (!activeFeedShindig || activeFeedShindig.ownerId === userId) {
+    if (
+      !activeFeedShindig ||
+      activeFeedShindig.ownerId === userId ||
+      activeFeedShindig.state !== 'active'
+    ) {
       return;
     }
 
@@ -915,6 +1207,32 @@ export function HomeScreen({
       );
     } finally {
       setIsSubmittingPhotoRequest(false);
+    }
+  }
+
+  async function handleUpdateShindigState(nextState: ShindigState) {
+    if (!activeFeedShindig || activeFeedShindig.ownerId !== userId) {
+      return;
+    }
+
+    setError('');
+
+    try {
+      const updatedShindig = await onShindigStateChanged({
+        shindigId: activeFeedShindig.id,
+        state: nextState,
+      });
+      setActiveFeedShindig(updatedShindig);
+      if (nextState === 'completed') {
+        setShowOwnerPhotoPrompt(false);
+        setShowPhotoRequestPrompt(false);
+      }
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Failed to update this ShinDig.'
+      );
     }
   }
 
@@ -993,21 +1311,67 @@ export function HomeScreen({
 
             <View style={styles.feedHeader}>
               <View>
-                <Text style={styles.feedLocation}>{activeFeedShindig.title}</Text>
+                <View style={styles.feedTitleRow}>
+                  <Text style={styles.feedLocation}>{activeFeedShindig.title}</Text>
+                  <View
+                    style={[
+                      styles.stateBadge,
+                      activeFeedShindig.state === 'active'
+                        ? styles.stateBadgeActive
+                        : styles.stateBadgeCompleted,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.stateBadgeText,
+                        activeFeedShindig.state === 'active'
+                          ? styles.stateBadgeTextActive
+                          : styles.stateBadgeTextCompleted,
+                      ]}
+                    >
+                      {shindigStateLabel(activeFeedShindig.state)}
+                    </Text>
+                  </View>
+                </View>
                 <Text style={styles.feedParticipants}>
                   {feedPhotos.length} photo{feedPhotos.length === 1 ? '' : 's'}
                 </Text>
               </View>
               {activeFeedShindig.ownerId === userId ? (
                 <View style={styles.feedHeaderActions}>
+                  {activeFeedShindig.state === 'active' ? (
+                    <Pressable
+                      onPress={handleAddPhotoToOwnedShindig}
+                      style={styles.addPhotoHeaderButton}
+                    >
+                      <Text style={styles.addPhotoHeaderButtonText}>Add Photo</Text>
+                    </Pressable>
+                  ) : null}
+
                   <Pressable
-                    onPress={handleAddPhotoToOwnedShindig}
-                    style={styles.addPhotoHeaderButton}
+                    onPress={() =>
+                      handleUpdateShindigState(
+                        activeFeedShindig.state === 'active' ? 'completed' : 'active'
+                      )
+                    }
+                    style={[
+                      styles.stateActionButton,
+                      activeFeedShindig.state === 'active'
+                        ? styles.completeButton
+                        : styles.reactivateButton,
+                    ]}
                   >
-                    <Text style={styles.addPhotoHeaderButtonText}>Add Photo</Text>
+                    <Text
+                      style={[
+                        styles.stateActionButtonText,
+                        activeFeedShindig.state === 'completed' && styles.reactivateButtonText,
+                      ]}
+                    >
+                      {activeFeedShindig.state === 'active' ? 'Mark Completed' : 'Reactivate'}
+                    </Text>
                   </Pressable>
 
-                  {showOwnerPhotoPrompt ? (
+                  {activeFeedShindig.state === 'active' && showOwnerPhotoPrompt ? (
                     <View style={styles.headerPromptCard}>
                       <Text style={styles.requestPromptTitle}>Add another photo</Text>
                       <Text style={styles.requestPromptText}>
@@ -1040,50 +1404,58 @@ export function HomeScreen({
 
             {activeFeedShindig.ownerId !== userId ? (
               <View style={styles.requestPhotoWrap}>
-                <Pressable
-                  disabled={requestedPhotoShindigIds.includes(activeFeedShindig.id)}
-                  onPress={handleRequestToAddPhoto}
-                  style={[
-                    styles.requestPhotoButton,
-                    requestedPhotoShindigIds.includes(activeFeedShindig.id) &&
-                      styles.requestPhotoButtonDisabled,
-                  ]}
-                >
-                  <Text style={styles.requestPhotoButtonText}>
-                    {requestedPhotoShindigIds.includes(activeFeedShindig.id)
-                      ? 'Photo request sent'
-                      : 'Request to add photo'}
-                  </Text>
-                </Pressable>
+                {activeFeedShindig.state === 'active' ? (
+                  <>
+                    <Pressable
+                      disabled={requestedPhotoShindigIds.includes(activeFeedShindig.id)}
+                      onPress={handleRequestToAddPhoto}
+                      style={[
+                        styles.requestPhotoButton,
+                        requestedPhotoShindigIds.includes(activeFeedShindig.id) &&
+                          styles.requestPhotoButtonDisabled,
+                      ]}
+                    >
+                      <Text style={styles.requestPhotoButtonText}>
+                        {requestedPhotoShindigIds.includes(activeFeedShindig.id)
+                          ? 'Photo request sent'
+                          : 'Request to add photo'}
+                      </Text>
+                    </Pressable>
 
-                {showPhotoRequestPrompt &&
-                !requestedPhotoShindigIds.includes(activeFeedShindig.id) ? (
-                  <View style={styles.requestPromptCard}>
-                    <Text style={styles.requestPromptTitle}>Add a photo request</Text>
-                    <Text style={styles.requestPromptText}>
-                      Choose a photo from your library or take a new one for this ShinDig.
-                    </Text>
-                    <View style={styles.requestPromptActions}>
-                      <Pressable
-                        disabled={isSubmittingPhotoRequest}
-                        onPress={() => submitPhotoRequest('camera')}
-                        style={styles.requestPromptButton}
-                      >
-                        <Text style={styles.requestPromptButtonText}>Take photo</Text>
-                      </Pressable>
-                      <Pressable
-                        disabled={isSubmittingPhotoRequest}
-                        onPress={() => submitPhotoRequest('library')}
-                        style={styles.requestPromptButton}
-                      >
-                        <Text style={styles.requestPromptButtonText}>Choose photo</Text>
-                      </Pressable>
-                    </View>
-                    {isSubmittingPhotoRequest ? (
-                      <Text style={styles.helperText}>Uploading request...</Text>
+                    {showPhotoRequestPrompt &&
+                    !requestedPhotoShindigIds.includes(activeFeedShindig.id) ? (
+                      <View style={styles.requestPromptCard}>
+                        <Text style={styles.requestPromptTitle}>Add a photo request</Text>
+                        <Text style={styles.requestPromptText}>
+                          Choose a photo from your library or take a new one for this ShinDig.
+                        </Text>
+                        <View style={styles.requestPromptActions}>
+                          <Pressable
+                            disabled={isSubmittingPhotoRequest}
+                            onPress={() => submitPhotoRequest('camera')}
+                            style={styles.requestPromptButton}
+                          >
+                            <Text style={styles.requestPromptButtonText}>Take photo</Text>
+                          </Pressable>
+                          <Pressable
+                            disabled={isSubmittingPhotoRequest}
+                            onPress={() => submitPhotoRequest('library')}
+                            style={styles.requestPromptButton}
+                          >
+                            <Text style={styles.requestPromptButtonText}>Choose photo</Text>
+                          </Pressable>
+                        </View>
+                        {isSubmittingPhotoRequest ? (
+                          <Text style={styles.helperText}>Uploading request...</Text>
+                        ) : null}
+                      </View>
                     ) : null}
-                  </View>
-                ) : null}
+                  </>
+                ) : (
+                  <Text style={styles.helperText}>
+                    This ShinDig is completed. Reactivate it before adding more photos.
+                  </Text>
+                )}
               </View>
             ) : null}
 
@@ -1322,19 +1694,57 @@ export function HomeScreen({
           {step === 'invite' ? (
             <View style={styles.panel}>
               <Text style={styles.inviteSubtitle}>
-                Invite friends if you want. You can also skip this step and start the feed now.
+                Invite confirmed friends in ShinDig or send a text-message invite from your contacts. You can also skip this step and start the feed now.
               </Text>
               <TextInput
-                onChangeText={setContactSearch}
-                placeholder="Search contacts..."
+                onChangeText={setInviteSearch}
+                placeholder="Search friends or contacts..."
                 placeholderTextColor={theme.colors.textMuted}
                 style={styles.input}
-                value={contactSearch}
+                value={inviteSearch}
               />
+              {friends.length > 0 ? (
+                <>
+                  <Text style={styles.inviteSectionLabel}>Your Friends</Text>
+                  <View style={styles.contactList}>
+                    {filteredFriends.map((friend) => {
+                      const isSelected = selectedFriendIds.includes(friend.id);
+                      return (
+                        <Pressable
+                          key={friend.id}
+                          onPress={() => toggleFriend(friend.id)}
+                          style={styles.contactItem}
+                        >
+                          <View
+                            style={[
+                              styles.contactCheckbox,
+                              isSelected && styles.contactCheckboxActive,
+                            ]}
+                          >
+                            <Text style={styles.contactCheckboxText}>{isSelected ? 'x' : ''}</Text>
+                          </View>
+                          <View style={styles.contactCopy}>
+                            <Text style={styles.contactName}>{friend.name}</Text>
+                            <Text style={styles.contactPhone}>
+                              {friend.handle} {friend.city ? ` | ${friend.city}` : ''}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : (
+                <Text style={styles.helperText}>
+                  You do not have any in-app friends yet. Use the Friends tab to add them.
+                </Text>
+              )}
+
+              <Text style={styles.inviteSectionLabel}>Invite By Text</Text>
               {isLoadingContacts ? <Text style={styles.helperText}>Loading contacts...</Text> : null}
               {!isLoadingContacts && contacts.length === 0 ? (
                 <Text style={styles.helperText}>
-                  No contacts selected. You can continue without inviting anyone.
+                  No contacts available right now. You can continue without inviting anyone.
                 </Text>
               ) : null}
 
@@ -1367,8 +1777,8 @@ export function HomeScreen({
                 <Text style={styles.ctaButtonText}>
                   {isSavingShindig
                     ? 'Starting...'
-                    : selectedContacts.length > 0
-                      ? `Invite ${selectedContacts.length} Friends`
+                    : selectedContacts.length + selectedFriends.length > 0
+                      ? `Invite ${selectedContacts.length + selectedFriends.length} People`
                       : 'Start Feed'}
                 </Text>
               </Pressable>
@@ -1584,6 +1994,12 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
     textAlign: 'center',
   },
+  inviteSectionLabel: {
+    color: theme.colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: theme.spacing.lg,
+  },
   contactList: {
     gap: theme.spacing.sm,
     marginTop: theme.spacing.md,
@@ -1642,6 +2058,12 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     marginLeft: theme.spacing.md,
   },
+  feedTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
   feedLocation: {
     color: theme.colors.textPrimary,
     fontSize: 24,
@@ -1665,6 +2087,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  stateActionButton: {
+    alignItems: 'center',
+    borderRadius: theme.radius.round,
+    marginTop: theme.spacing.sm,
+    minWidth: 132,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+  },
+  completeButton: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+  },
+  reactivateButton: {
+    backgroundColor: '#2E8B57',
+  },
+  stateActionButtonText: {
+    color: theme.colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  reactivateButtonText: {
+    color: '#FFFFFF',
+  },
   headerPromptCard: {
     backgroundColor: theme.colors.surfaceRaised,
     borderColor: theme.colors.border,
@@ -1673,6 +2119,28 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.sm,
     maxWidth: 280,
     padding: theme.spacing.md,
+  },
+  stateBadge: {
+    borderRadius: theme.radius.round,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
+  },
+  stateBadgeActive: {
+    backgroundColor: 'rgba(46, 139, 87, 0.18)',
+  },
+  stateBadgeCompleted: {
+    backgroundColor: 'rgba(132, 144, 176, 0.18)',
+  },
+  stateBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  stateBadgeTextActive: {
+    color: '#63D89A',
+  },
+  stateBadgeTextCompleted: {
+    color: theme.colors.textMuted,
   },
   feedStack: {
     gap: theme.spacing.lg,
