@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   acceptButton: {
-    backgroundColor: '#FF615A',
+    backgroundColor: theme.colors.accentPink,
     borderRadius: theme.radius.round,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,

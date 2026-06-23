@@ -1272,12 +1272,6 @@ export default function App() {
                 await refreshShindigsAndFeed();
               }}
               scrollToTopSignal={homeScrollToTopSignal}
-              onStartShindig={() => {
-                setFeedShindig(null);
-                setHighlightedPhotoId(null);
-                setPendingShindigStep('create');
-                setActiveTab('shindigs');
-              }}
             />
           ) : null}
           {!showNotifications &&

@@ -22,7 +22,6 @@ type HomeFeedScreenProps = {
   onOpenShindig: (shindig: FeedShindig) => void;
   onRefresh: () => Promise<void>;
   scrollToTopSignal?: number;
-  onStartShindig: () => void;
 };
 
 export function HomeFeedScreen({
@@ -32,7 +31,6 @@ export function HomeFeedScreen({
   onOpenShindig,
   onRefresh,
   scrollToTopSignal = 0,
-  onStartShindig,
 }: HomeFeedScreenProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
@@ -72,10 +70,6 @@ export function HomeFeedScreen({
         showsVerticalScrollIndicator={false}
       >
         <PageHeader right={headerActions} title="Feed" />
-
-        <Pressable onPress={onStartShindig} style={styles.ctaButton}>
-          <Text style={styles.ctaButtonText}>+ Start a ShinDig</Text>
-        </Pressable>
         {isRefreshing ? <Text style={styles.refreshText}>Updating feed...</Text> : null}
 
         {feedShindigs.length > 0 ? (
@@ -124,8 +118,8 @@ export function HomeFeedScreen({
                   <AlbumCard shindig={shindig} />
 
                   <View style={styles.summaryRow}>
-                    <Text style={styles.summaryText}>{shindig.photoCount} photos</Text>
-                    <Text style={styles.summaryText}>
+                    <Text style={styles.summaryCountText}>{shindig.photoCount} photos</Text>
+                    <Text numberOfLines={1} style={styles.summaryLocationText}>
                       {shindig.stops[0]?.place.title || 'No location'}
                     </Text>
                   </View>
@@ -160,32 +154,10 @@ const styles = StyleSheet.create({
     gap: theme.spacing.lg,
     marginTop: theme.spacing.xl,
   },
-  ctaButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderColor: 'rgba(255, 196, 184, 0.38)',
-    borderRadius: theme.radius.round,
-    borderWidth: 1,
-    marginTop: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    shadowColor: theme.colors.accentPink,
-    shadowOffset: {
-      height: 8,
-      width: 0,
-    },
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    width: '100%',
-  },
-  ctaButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
   refreshText: {
     color: theme.colors.textMuted,
     fontSize: 13,
-    marginTop: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
     textAlign: 'center',
   },
   feedCard: {
@@ -263,13 +235,26 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
   },
   summaryRow: {
+    alignItems: 'center',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: theme.spacing.md,
     marginTop: theme.spacing.md,
   },
   summaryText: {
     color: theme.colors.textSecondary,
     fontSize: 13,
+  },
+  summaryCountText: {
+    color: theme.colors.textSecondary,
+    flexShrink: 0,
+    fontSize: 13,
+  },
+  summaryLocationText: {
+    color: theme.colors.textSecondary,
+    flex: 1,
+    fontSize: 13,
+    minWidth: 0,
+    textAlign: 'right',
   },
   emptyCard: {
     backgroundColor: theme.colors.surface,

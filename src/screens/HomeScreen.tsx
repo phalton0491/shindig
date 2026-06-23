@@ -141,6 +141,39 @@ function formatCommentTimestamp(value: string) {
   });
 }
 
+function formatRelativeTimestamp(value: string) {
+  const createdAt = new Date(value).getTime();
+  const now = Date.now();
+  const diffMs = Math.max(0, now - createdAt);
+  const minuteMs = 60 * 1000;
+  const hourMs = 60 * minuteMs;
+  const dayMs = 24 * hourMs;
+
+  if (diffMs < minuteMs) {
+    return 'Just now';
+  }
+
+  if (diffMs < hourMs) {
+    const minutes = Math.floor(diffMs / minuteMs);
+    return `${minutes}m ago`;
+  }
+
+  if (diffMs < dayMs) {
+    const hours = Math.floor(diffMs / hourMs);
+    return `${hours}h ago`;
+  }
+
+  if (diffMs < 7 * dayMs) {
+    const days = Math.floor(diffMs / dayMs);
+    return `${days}d ago`;
+  }
+
+  return new Date(value).toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
 function fileExtensionFromUri(uri: string) {
   return uri.match(/\.(\w+)(?:\?|$)/)?.[1]?.toLowerCase() || 'jpg';
 }
@@ -2078,21 +2111,25 @@ export function HomeScreen({
                     ]}
                   >
                     <View style={styles.feedCardHeader}>
-                      <View style={styles.feedAuthorRow}>
-                        <Text style={styles.feedAuthor}>
-                          {photo.contributor?.name || activeFeedOwner?.name || 'ShinDig Owner'}
-                        </Text>
+                      <View style={styles.feedCardHeaderMain}>
+                        <View style={styles.feedAuthorTopRow}>
+                          <Text style={styles.feedAuthor}>
+                            {photo.contributor?.name || activeFeedOwner?.name || 'ShinDig Owner'}
+                          </Text>
+                          {activeFeedShindig.coverPhotoPhotoId === photo.id ? (
+                            <View style={styles.coverPhotoBadge}>
+                              <Text style={styles.coverPhotoBadgeText}>Cover</Text>
+                            </View>
+                          ) : null}
+                        </View>
                         {photo.contributor ? (
-                          <Text style={styles.photoCredit}>via {photo.contributor.handle}</Text>
-                        ) : null}
-                        {activeFeedShindig.coverPhotoPhotoId === photo.id ? (
-                          <View style={styles.coverPhotoBadge}>
-                            <Text style={styles.coverPhotoBadgeText}>Cover</Text>
+                          <View style={styles.photoCreditBadge}>
+                            <Text style={styles.photoCredit}>via {photo.contributor.handle}</Text>
                           </View>
                         ) : null}
                       </View>
                       <View style={styles.feedCardHeaderActions}>
-                        <Text style={styles.feedTime}>Just now</Text>
+                        <Text style={styles.feedTime}>{formatRelativeTimestamp(photo.createdAt)}</Text>
                         <Pressable
                           onPress={() => openPhotoOwnerMenu(photo)}
                           style={styles.photoMenuButton}
@@ -2574,8 +2611,8 @@ const styles = StyleSheet.create({
   },
   ctaButton: {
     alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderColor: 'rgba(255, 196, 184, 0.32)',
+    backgroundColor: theme.colors.accentPink,
+    borderColor: 'rgba(255, 196, 184, 0.5)',
     borderRadius: theme.radius.round,
     borderWidth: 1,
     marginTop: theme.spacing.lg,
@@ -2976,7 +3013,7 @@ const styles = StyleSheet.create({
   },
   addPhotoHeaderButton: {
     alignItems: 'center',
-    backgroundColor: '#FF615A',
+    backgroundColor: theme.colors.accentPink,
     borderRadius: theme.radius.round,
     height: 48,
     justifyContent: 'center',
@@ -3063,11 +3100,11 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
   },
   feedCardHighlighted: {
-    borderColor: '#FF615A',
+    borderColor: theme.colors.accentPink,
     borderWidth: 2,
   },
   feedCardHeader: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: theme.spacing.sm,
@@ -3076,16 +3113,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: theme.spacing.xs,
+    marginTop: 2,
+  },
+  feedCardHeaderMain: {
+    flex: 1,
+    minWidth: 0,
   },
   feedAuthor: {
     color: theme.colors.textPrimary,
     fontSize: 16,
     fontWeight: '700',
   },
-  feedAuthorRow: {
-    alignItems: 'center',
+  feedAuthorTopRow: {
+    alignItems: 'flex-start',
     flexDirection: 'row',
     gap: theme.spacing.sm,
+    minWidth: 0,
   },
   feedTime: {
     color: theme.colors.textMuted,
@@ -3103,9 +3146,20 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.sm,
     overflow: 'hidden',
   },
+  photoCreditBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 79, 160, 0.16)',
+    borderColor: 'rgba(255, 79, 160, 0.34)',
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    marginTop: 6,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+  },
   photoCredit: {
-    color: theme.colors.textMuted,
+    color: theme.colors.accentSoft,
     fontSize: 12,
+    fontWeight: '700',
   },
   coverPhotoBadge: {
     backgroundColor: 'rgba(255, 138, 91, 0.2)',
@@ -3304,7 +3358,7 @@ const styles = StyleSheet.create({
   },
   commentButton: {
     alignItems: 'center',
-    backgroundColor: '#FF615A',
+    backgroundColor: theme.colors.accentPink,
     borderRadius: theme.radius.lg,
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.md,
