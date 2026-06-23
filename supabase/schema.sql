@@ -83,7 +83,11 @@ create policy "Users can read own friendships"
 on public.friendships
 for select
 to authenticated
-using (auth.uid() = user_id or auth.uid() = friend_id);
+using (
+  status = 'confirmed'
+  or auth.uid() = user_id
+  or auth.uid() = friend_id
+);
 
 drop policy if exists "Users can insert own friendships" on public.friendships;
 create policy "Users can insert own friendships"
@@ -145,6 +149,9 @@ create table if not exists public.shindigs (
 
 alter table public.shindigs
 add column if not exists state text not null default 'active';
+
+alter table public.shindigs
+add column if not exists cover_photo_url text;
 
 create table if not exists public.shindig_stops (
   id uuid primary key default gen_random_uuid(),
@@ -389,6 +396,13 @@ to authenticated
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
+drop policy if exists "Users can delete own shindigs" on public.shindigs;
+create policy "Users can delete own shindigs"
+on public.shindigs
+for delete
+to authenticated
+using (auth.uid() = user_id);
+
 drop policy if exists "Users can read own shindig stops" on public.shindig_stops;
 create policy "Users can read own shindig stops"
 on public.shindig_stops
@@ -491,9 +505,45 @@ for insert
 to authenticated
 with check (
   exists (
-    select 1 from public.shindigs
+    select 1
+    from public.shindigs
     where public.shindigs.id = shindig_photos.shindig_id
-      and public.shindigs.user_id = auth.uid()
+      and (
+        public.shindigs.user_id = auth.uid()
+        or exists (
+          select 1 from public.friendships
+          where (
+            friendships.user_id = auth.uid()
+            and friendships.friend_id = public.shindigs.user_id
+          ) or (
+            friendships.friend_id = auth.uid()
+            and friendships.user_id = public.shindigs.user_id
+          )
+        )
+        or exists (
+          select 1 from public.shindig_invites
+          where public.shindig_invites.shindig_id = public.shindigs.id
+            and public.shindig_invites.invitee_user_id = auth.uid()
+            and public.shindig_invites.status = 'accepted'
+        )
+      )
+  )
+);
+
+drop policy if exists "Users can delete created shindig photos" on public.shindig_photos;
+create policy "Users can delete created shindig photos"
+on public.shindig_photos
+for delete
+to authenticated
+using (
+  contributor_user_id = auth.uid()
+  or (
+    contributor_user_id is null
+    and exists (
+      select 1 from public.shindigs
+      where public.shindigs.id = shindig_photos.shindig_id
+        and public.shindigs.user_id = auth.uid()
+    )
   )
 );
 

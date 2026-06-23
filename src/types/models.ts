@@ -21,8 +21,7 @@ export type UserProfile = {
   name: string;
   stats: {
     friends: number;
-    outings: number;
-    saves: number;
+    shindigs: number;
   };
 };
 
@@ -61,6 +60,7 @@ export type SavedShindigStop = {
 export type SavedShindigPhoto = {
   comments: FeedComment[];
   contributor?: FriendProfile;
+  createdAt: string;
   id: string;
   likeCount: number;
   likedByMe: boolean;
@@ -71,8 +71,10 @@ export type SavedShindigPhoto = {
 export type SavedShindig = {
   comments: FeedComment[];
   coverPhotoUrl: string | null;
+  coverPhotoPhotoId?: string | null;
   createdAt: string;
   id: string;
+  invitedBy?: FriendProfile;
   likeCount: number;
   likedByMe: boolean;
   ownerId: string;

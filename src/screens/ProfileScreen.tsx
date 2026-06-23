@@ -2,19 +2,24 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AlbumCard } from '../components/AlbumCard';
+import { PageHeader } from '../components/PageHeader';
 import { ProfileHeader } from '../components/ProfileHeader';
 import { theme } from '../theme';
 import { SavedShindig, UserProfile } from '../types/models';
 
 type ProfileScreenProps = {
+  headerActions?: React.ReactNode;
   onBackHome: () => void;
+  onOpenFriends: () => void;
   onOpenShindig: (shindig: SavedShindig) => void;
   profile: UserProfile;
   shindigs: SavedShindig[];
 };
 
 export function ProfileScreen({
+  headerActions,
   onBackHome,
+  onOpenFriends,
   onOpenShindig,
   profile,
   shindigs,
@@ -22,18 +27,14 @@ export function ProfileScreen({
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.topBar}>
-          <Pressable onPress={onBackHome} style={styles.topButton}>
-            <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
-          </Pressable>
-        </View>
+        <PageHeader onBack={onBackHome} right={headerActions} />
 
-        <ProfileHeader profile={profile} />
+        <ProfileHeader onOpenFriends={onOpenFriends} profile={profile} />
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Your ShinDigs</Text>
-            <Text style={styles.archiveCount}>{shindigs.length} saved</Text>
+            <Text style={styles.archiveCount}>{shindigs.length} shindigs</Text>
           </View>
 
           {shindigs.length > 0 ? (
@@ -50,7 +51,7 @@ export function ProfileScreen({
             </View>
           ) : (
             <Text style={styles.emptyText}>
-              Your saved ShinDigs will appear here after you plan and save one.
+              Your ShinDigs will appear here after you create one.
             </Text>
           )}
         </View>
@@ -66,18 +67,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: theme.spacing.xxxl,
-  },
-  topBar: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-  },
-  topButton: {
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    height: 52,
-    justifyContent: 'center',
-    marginLeft: -14,
-    width: 52,
+    paddingTop: 28,
   },
   section: {
     marginTop: theme.spacing.xl,
@@ -91,14 +81,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: theme.colors.textPrimary,
-    fontSize: 22,
-    fontWeight: '700',
-    letterSpacing: -0.4,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.6,
   },
   archiveCount: {
-    color: theme.colors.textMuted,
+    color: theme.colors.accentSoft,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'uppercase',
   },
   grid: {

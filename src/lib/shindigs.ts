@@ -24,6 +24,7 @@ type CreateShindigStopInput = {
 };
 
 type ShindigRow = {
+  cover_photo_url?: string | null;
   created_at: string;
   id: string;
   state: ShindigState;
@@ -47,6 +48,7 @@ type ShindigStopRow = {
 
 type ShindigPhotoRow = {
   contributor_user_id: string | null;
+  created_at: string;
   id: string;
   photo_url: string;
   shindig_id: string;
@@ -115,9 +117,43 @@ function isMissingShindigSchema(error: unknown) {
   const candidate = error as { code?: string; message?: string };
   return (
     candidate.code === '42P01' ||
+    candidate.code === '42703' ||
     candidate.message?.toLowerCase().includes('relation') === true ||
+    candidate.message?.toLowerCase().includes('column') === true ||
     candidate.message?.toLowerCase().includes('does not exist') === true
   );
+}
+
+const SHINDIG_SELECT_COLUMNS =
+  'id, title, created_at, user_id, state, cover_photo_url';
+const SHINDIG_SELECT_COLUMNS_FALLBACK = 'id, title, created_at, user_id, state';
+
+async function runShindigSelect<T>(buildQuery: (columns: string) => any) {
+  const withCover = await buildQuery(SHINDIG_SELECT_COLUMNS);
+  if (!withCover.error) {
+    return withCover as { data: T[] | T | null; error: null };
+  }
+
+  if (!isMissingShindigSchema(withCover.error)) {
+    return withCover;
+  }
+
+  const fallback = await buildQuery(SHINDIG_SELECT_COLUMNS_FALLBACK);
+  if (!fallback.error && fallback.data) {
+    if (Array.isArray(fallback.data)) {
+      return {
+        data: fallback.data.map((row: any) => ({ ...row, cover_photo_url: null })) as T[],
+        error: null,
+      };
+    }
+
+    return {
+      data: { ...(fallback.data as object), cover_photo_url: null } as T,
+      error: null,
+    };
+  }
+
+  return fallback;
 }
 
 function client() {
@@ -237,6 +273,12 @@ function buildShindigTitle(args: { providedTitle?: string; stops: CreateShindigS
   return `${stops[0].place.title} + ${stops.length - 1} more`;
 }
 
+function sortPhotosNewestFirst<T extends { createdAt: string }>(photos: T[]) {
+  return [...photos].sort(
+    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+  );
+}
+
 function mapComments<T extends { body: string; created_at: string; id: string; user_id: string }>(
   rows: T[],
   profilesById: Map<string, Awaited<ReturnType<typeof getFriendProfilesByIds>>[number]>
@@ -260,6 +302,7 @@ function mapComments<T extends { body: string; created_at: string; id: string; u
 
 function mapShindigs(args: {
   currentUserId: string;
+  invitedByUserIdByShindigId?: Map<string, string>;
   photoComments: ShindigPhotoCommentRow[];
   photoLikes: ShindigPhotoLikeRow[];
   photos: ShindigPhotoRow[];
@@ -289,6 +332,7 @@ function mapShindigs(args: {
             contributor: photo.contributor_user_id
               ? args.profilesById.get(photo.contributor_user_id)
               : undefined,
+            createdAt: photo.created_at,
             id: photo.id,
             likeCount: args.photoLikes.filter((like) => like.photo_id === photo.id).length,
             likedByMe: args.photoLikes.some(
@@ -318,13 +362,20 @@ function mapShindigs(args: {
         } satisfies SavedShindigStop;
       });
 
-    const photos = stops.flatMap((stop) => stop.photos);
+    const photos = sortPhotosNewestFirst(stops.flatMap((stop) => stop.photos));
+    const selectedCoverPhoto = shindig.cover_photo_url
+      ? photos.find((photo) => photo.photoUrl === shindig.cover_photo_url) || null
+      : null;
 
     return {
       comments: shindigComments,
-      coverPhotoUrl: photos[0]?.photoUrl || null,
+      coverPhotoPhotoId: selectedCoverPhoto?.id || null,
+      coverPhotoUrl: selectedCoverPhoto?.photoUrl || photos[0]?.photoUrl || null,
       createdAt: shindig.created_at,
       id: shindig.id,
+      invitedBy: args.invitedByUserIdByShindigId?.get(shindig.id)
+        ? args.profilesById.get(args.invitedByUserIdByShindigId.get(shindig.id)!)
+        : undefined,
       likeCount: shindigLikes.length,
       likedByMe: shindigLikes.some((like) => like.user_id === args.currentUserId),
       ownerId: shindig.user_id,
@@ -355,8 +406,9 @@ async function loadStopsAndPhotos(shindigIds: string[]) {
         .order('stop_order', { ascending: true }),
       client()
         .from('shindig_photos')
-        .select('id, shindig_id, stop_id, photo_url, contributor_user_id')
-        .in('shindig_id', shindigIds),
+        .select('id, shindig_id, stop_id, photo_url, contributor_user_id, created_at')
+        .in('shindig_id', shindigIds)
+        .order('created_at', { ascending: false }),
     ]);
 
   if (stopsError && isMissingShindigSchema(stopsError)) {
@@ -442,6 +494,7 @@ async function loadSocialRows(shindigIds: string[], photoIds: string[]) {
 
 async function hydrateShindigs(args: {
   currentUserId: string;
+  invitedByUserIdByShindigId?: Map<string, string>;
   shindigRows: ShindigRow[];
 }) {
   const childRows = await loadStopsAndPhotos(args.shindigRows.map((row) => row.id));
@@ -465,6 +518,7 @@ async function hydrateShindigs(args: {
 
   return mapShindigs({
     currentUserId: args.currentUserId,
+    invitedByUserIdByShindigId: args.invitedByUserIdByShindigId,
     photoComments: socialRows.photoComments,
     photoLikes: socialRows.photoLikes,
     photos: childRows.photos,
@@ -476,12 +530,18 @@ async function hydrateShindigs(args: {
   });
 }
 
-export async function listShindigsForUser(userId: string) {
-  const { data: shindigs, error: shindigsError } = await client()
-    .from('shindigs')
-    .select('id, title, created_at, user_id, state')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+export async function listShindigsForUser(
+  userId: string,
+  options?: { includeAcceptedInvites?: boolean }
+) {
+  const { data: ownedShindigs, error: shindigsError } = await runShindigSelect<ShindigRow[]>(
+    (columns) =>
+      client()
+        .from('shindigs')
+        .select(columns)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+  );
 
   if (shindigsError && isMissingShindigSchema(shindigsError)) {
     return [];
@@ -490,10 +550,63 @@ export async function listShindigsForUser(userId: string) {
     throw shindigsError;
   }
 
-  const shindigRows = (shindigs || []) as ShindigRow[];
+  const shindigRows = (ownedShindigs || []) as ShindigRow[];
+  let acceptedInviteRows: ShindigInviteRow[] = [];
+
+  if (options?.includeAcceptedInvites) {
+    const { data: inviteRows, error: inviteRowsError } = await client()
+      .from('shindig_invites')
+      .select(
+        'id, shindig_id, inviter_user_id, invitee_user_id, phone_number, invite_token, status, created_at'
+      )
+      .eq('invitee_user_id', userId)
+      .eq('status', 'accepted');
+
+    if (inviteRowsError && !isMissingShindigSchema(inviteRowsError)) {
+      throw inviteRowsError;
+    }
+
+    acceptedInviteRows = (inviteRows || []) as ShindigInviteRow[];
+
+    if (acceptedInviteRows.length > 0) {
+      const { data: invitedRows, error: invitedRowsError } = await client()
+        .from('shindigs')
+        .select(SHINDIG_SELECT_COLUMNS)
+        .in('id', acceptedInviteRows.map((row) => row.shindig_id))
+        .order('created_at', { ascending: false });
+
+      if (invitedRowsError && isMissingShindigSchema(invitedRowsError)) {
+        const fallback = await client()
+          .from('shindigs')
+          .select(SHINDIG_SELECT_COLUMNS_FALLBACK)
+          .in('id', acceptedInviteRows.map((row) => row.shindig_id))
+          .order('created_at', { ascending: false });
+        if (fallback.error && !isMissingShindigSchema(fallback.error)) {
+          throw fallback.error;
+        }
+        shindigRows.push(
+          ...(((fallback.data || []) as ShindigRow[]).map((row) => ({
+            ...row,
+            cover_photo_url: null,
+          })))
+        );
+      } else {
+        if (invitedRowsError && !isMissingShindigSchema(invitedRowsError)) {
+          throw invitedRowsError;
+        }
+
+        shindigRows.push(...((invitedRows || []) as ShindigRow[]));
+      }
+    }
+  }
+
+  const uniqueShindigRows = Array.from(new Map(shindigRows.map((row) => [row.id, row])).values());
   return hydrateShindigs({
     currentUserId: userId,
-    shindigRows,
+    invitedByUserIdByShindigId: new Map(
+      acceptedInviteRows.map((row) => [row.shindig_id, row.inviter_user_id])
+    ),
+    shindigRows: uniqueShindigRows,
   });
 }
 
@@ -503,11 +616,13 @@ export async function listFeedShindigs(args: {
 }) {
   const ownerIds = Array.from(new Set([args.userId, ...args.friendIds]));
   const [ownedAndFriendRows, acceptedInviteRows] = await Promise.all([
-    client()
-      .from('shindigs')
-      .select('id, title, created_at, user_id, state')
-      .in('user_id', ownerIds)
-      .order('created_at', { ascending: false }),
+    runShindigSelect<ShindigRow[]>((columns) =>
+      client()
+        .from('shindigs')
+        .select(columns)
+        .in('user_id', ownerIds)
+        .order('created_at', { ascending: false })
+    ),
     client()
       .from('shindig_invites')
       .select('shindig_id')
@@ -533,11 +648,14 @@ export async function listFeedShindigs(args: {
   let invitedShindigRows: ShindigRow[] = [];
 
   if (acceptedInviteIds.length > 0) {
-    const { data: invitedRows, error: invitedRowsError } = await client()
-      .from('shindigs')
-      .select('id, title, created_at, user_id, state')
-      .in('id', acceptedInviteIds)
-      .order('created_at', { ascending: false });
+    const { data: invitedRows, error: invitedRowsError } = await runShindigSelect<ShindigRow[]>(
+      (columns) =>
+        client()
+          .from('shindigs')
+          .select(columns)
+          .in('id', acceptedInviteIds)
+          .order('created_at', { ascending: false })
+    );
 
     if (invitedRowsError && !isMissingShindigSchema(invitedRowsError)) {
       throw invitedRowsError;
@@ -591,7 +709,7 @@ export async function createShindig(args: {
       title: buildShindigTitle({ providedTitle: args.title, stops: args.stops }),
       user_id: args.userId,
     })
-    .select('id, title, created_at, user_id, state')
+    .select(SHINDIG_SELECT_COLUMNS_FALLBACK)
     .single();
 
   if (shindigError && isMissingShindigSchema(shindigError)) {
@@ -663,7 +781,7 @@ export async function createShindig(args: {
           shindig_id: shindigData.id,
           stop_id: matchingStop.id,
         })
-        .select('id, shindig_id, stop_id, photo_url, contributor_user_id')
+        .select('id, shindig_id, stop_id, photo_url, contributor_user_id, created_at')
         .single();
 
       if (photoError || !savedPhoto) {
@@ -801,6 +919,27 @@ export async function addPhotoComment(args: {
   }
 }
 
+export async function listPhotoLikeProfiles(photoId: string) {
+  const { data, error } = await client()
+    .from('shindig_photo_likes')
+    .select('user_id')
+    .eq('photo_id', photoId);
+
+  if (error) {
+    throw error;
+  }
+
+  const likerIds = Array.from(
+    new Set(((data || []) as { user_id: string }[]).map((row) => row.user_id).filter(Boolean))
+  );
+
+  if (likerIds.length === 0) {
+    return [];
+  }
+
+  return getFriendProfilesByIds(likerIds);
+}
+
 export async function deletePhotoComment(args: {
   commentId: string;
   userId: string;
@@ -822,9 +961,32 @@ export async function getShindigById(args: {
 }) {
   const { data, error } = await client()
     .from('shindigs')
-    .select('id, title, created_at, user_id, state')
+    .select(SHINDIG_SELECT_COLUMNS)
     .eq('id', args.shindigId)
     .maybeSingle();
+
+  if (error && isMissingShindigSchema(error)) {
+    const fallback = await client()
+      .from('shindigs')
+      .select(SHINDIG_SELECT_COLUMNS_FALLBACK)
+      .eq('id', args.shindigId)
+      .maybeSingle();
+
+    if (fallback.error) {
+      throw fallback.error;
+    }
+
+    if (!fallback.data) {
+      return null;
+    }
+
+    const rows = await hydrateShindigs({
+      currentUserId: args.userId,
+      shindigRows: [{ ...(fallback.data as ShindigRow), cover_photo_url: null }],
+    });
+
+    return rows[0] || null;
+  }
 
   if (error) {
     throw error;
@@ -1072,12 +1234,12 @@ export async function addPhotoToShindig(args: {
   const { data, error } = await client()
     .from('shindig_photos')
     .insert({
-      contributor_user_id: null,
+      contributor_user_id: args.userId,
       photo_url: photoUrl,
       shindig_id: args.shindigId,
       stop_id: stopId,
     })
-    .select('id, shindig_id, stop_id, photo_url, contributor_user_id')
+    .select('id, shindig_id, stop_id, photo_url, contributor_user_id, created_at')
     .single();
 
   if (error && isMissingShindigSchema(error)) {
@@ -1197,6 +1359,135 @@ export async function updateShindigState(args: {
   if (!updated) {
     throw new Error('That ShinDig could not be reloaded after updating its state.');
   }
+
+  return updated;
+}
+
+export async function updateShindigCoverPhoto(args: {
+  photoId: string;
+  shindigId: string;
+  userId: string;
+}) {
+  const { data: photoRow, error: photoError } = await client()
+    .from('shindig_photos')
+    .select('id, photo_url, shindig_id')
+    .eq('id', args.photoId)
+    .eq('shindig_id', args.shindigId)
+    .maybeSingle();
+
+  if (photoError) {
+    throw photoError;
+  }
+
+  if (!photoRow) {
+    throw new Error('That photo could not be found for this ShinDig.');
+  }
+
+  const { error } = await client()
+    .from('shindigs')
+    .update({ cover_photo_url: photoRow.photo_url })
+    .eq('id', args.shindigId)
+    .eq('user_id', args.userId);
+
+  if (error && isMissingShindigSchema(error)) {
+    throw new Error(
+      'Your Supabase database is missing the ShinDig cover photo column. Run the latest supabase/schema.sql first.'
+    );
+  }
+
+  if (error) {
+    throw error;
+  }
+
+  const updated = await getShindigById({
+    shindigId: args.shindigId,
+    userId: args.userId,
+  });
+
+  if (!updated) {
+    throw new Error('That ShinDig could not be reloaded after updating the cover photo.');
+  }
+
+  return updated;
+}
+
+export async function deleteShindig(args: {
+  shindigId: string;
+  userId: string;
+}) {
+  const { data: stopRows, error: stopsError } = await client()
+    .from('shindig_stops')
+    .select('id')
+    .eq('shindig_id', args.shindigId);
+
+  if (stopsError && !isMissingShindigSchema(stopsError)) {
+    throw stopsError;
+  }
+
+  for (const stop of ((stopRows || []) as { id: string }[])) {
+    const folderPrefix = `${args.userId}/${args.shindigId}/${stop.id}`;
+    const { data: files, error: listError } = await client().storage
+      .from(SHINDIG_PHOTOS_BUCKET)
+      .list(folderPrefix);
+
+    if (listError) {
+      continue;
+    }
+
+    const paths = (files || [])
+      .filter((file) => file.name)
+      .map((file) => `${folderPrefix}/${file.name}`);
+
+    if (paths.length > 0) {
+      await client().storage.from(SHINDIG_PHOTOS_BUCKET).remove(paths);
+    }
+  }
+
+  const { error } = await client()
+    .from('shindigs')
+    .delete()
+    .eq('id', args.shindigId)
+    .eq('user_id', args.userId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function deletePhotoFromShindig(args: {
+  photoId: string;
+  shindigId: string;
+  userId: string;
+}) {
+  const { data: photoRow, error: photoError } = await client()
+    .from('shindig_photos')
+    .select('id, photo_url, shindig_id, contributor_user_id')
+    .eq('id', args.photoId)
+    .eq('shindig_id', args.shindigId)
+    .maybeSingle();
+
+  if (photoError) {
+    throw photoError;
+  }
+
+  if (!photoRow) {
+    throw new Error('That photo could not be found.');
+  }
+
+  const { error } = await client()
+    .from('shindig_photos')
+    .delete()
+    .eq('id', args.photoId)
+    .eq('shindig_id', args.shindigId);
+
+  if (error) {
+    throw error;
+  }
+
+  const updated = await getShindigById({
+    shindigId: args.shindigId,
+    userId: args.userId,
+  });
 
   return updated;
 }

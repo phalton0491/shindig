@@ -1,17 +1,23 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import * as Contacts from 'expo-contacts';
+import * as FileSystem from 'expo-file-system/legacy';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
 import * as SMS from 'expo-sms';
 import {
   ActionSheetIOS,
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
+  Share,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,6 +25,8 @@ import {
   View,
 } from 'react-native';
 
+import { PageHeader } from '../components/PageHeader';
+import { ProgressiveImage } from '../components/ProgressiveImage';
 import { searchPlaces } from '../lib/places';
 import { createNotification } from '../lib/notifications';
 import {
@@ -26,11 +34,11 @@ import {
   addPhotoComment,
   addShindigComment,
   createAppFriendShindigInvites,
-  createPhotoAddRequest,
   createPhoneShindigInvite,
   deletePhotoComment,
   deleteShindigComment,
   getShindigById,
+  listPhotoLikeProfiles,
   togglePhotoLike,
   toggleShindigLike,
 } from '../lib/shindigs';
@@ -39,6 +47,7 @@ import { theme } from '../theme';
 import {
   FriendProfile,
   SavedShindig,
+  SavedShindigPhoto,
   ShindigState,
   TimelinePlace,
   UserProfile,
@@ -46,9 +55,12 @@ import {
 
 type HomeScreenProps = {
   friends: FriendProfile[];
+  headerActions?: React.ReactNode;
+  onBackFromFeed?: () => void;
   initialFeedShindig?: SavedShindig | null;
   initialHighlightedPhotoId?: string | null;
-  initialStep?: 'create' | null;
+  initialStep?: 'create' | 'welcome' | null;
+  onFlowStepChange?: (step: FlowStep) => void;
   onConsumeInitialFeedShindig?: () => void;
   onConsumeInitialHighlightedPhotoId?: () => void;
   onConsumeInitialStep?: () => void;
@@ -61,6 +73,15 @@ type HomeScreenProps = {
     title: string;
     userId: string;
   }) => Promise<SavedShindig>;
+  onShindigDeleted: (shindigId: string) => Promise<void>;
+  onShindigCoverPhotoChanged: (args: {
+    photoId: string;
+    shindigId: string;
+  }) => Promise<SavedShindig>;
+  onShindigPhotoDeleted: (args: {
+    photoId: string;
+    shindigId: string;
+  }) => Promise<SavedShindig | null>;
   onShindigStateChanged: (args: {
     shindigId: string;
     state: ShindigState;
@@ -86,7 +107,6 @@ type InviteContact = {
 };
 
 const INVITE_LINK_BASE = 'shindig://signup';
-
 function buildManualPlace(query: string): TimelinePlace {
   const normalizedQuery = query.trim();
 
@@ -123,6 +143,59 @@ function formatCommentTimestamp(value: string) {
 
 function fileExtensionFromUri(uri: string) {
   return uri.match(/\.(\w+)(?:\?|$)/)?.[1]?.toLowerCase() || 'jpg';
+}
+
+function mimeTypeFromExtension(extension: string) {
+  switch (extension) {
+    case 'png':
+      return 'image/png';
+    case 'heic':
+      return 'image/heic';
+    case 'webp':
+      return 'image/webp';
+    default:
+      return 'image/jpeg';
+  }
+}
+
+function contactDisplayName(contact: Contacts.Contact) {
+  const fullName = contact.name?.trim();
+  if (fullName) {
+    return fullName;
+  }
+
+  const joinedName = [contact.firstName?.trim(), contact.lastName?.trim()]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  if (joinedName) {
+    return joinedName;
+  }
+
+  return getContactPhoneValue(contact);
+}
+
+function getContactPhoneValue(contact: Contacts.Contact) {
+  const firstPhone = contact.phoneNumbers?.find(
+    (phone) => phone.number?.trim() || phone.digits?.trim()
+  );
+
+  if (!firstPhone) {
+    return '';
+  }
+
+  const formattedNumber = firstPhone.number?.trim();
+  if (formattedNumber) {
+    return formattedNumber;
+  }
+
+  const digits = firstPhone.digits?.trim();
+  if (!digits) {
+    return '';
+  }
+
+  return firstPhone.countryCode ? `+${firstPhone.countryCode}${digits}` : digits;
 }
 
 function normalizeSearchValue(value: string) {
@@ -197,24 +270,6 @@ function fuzzyMatchesQuery(candidate: string, query: string) {
   );
 }
 
-function contactDisplayName(contact: Contacts.Contact) {
-  const fullName = contact.name?.trim();
-  if (fullName) {
-    return fullName;
-  }
-
-  const joinedName = [contact.firstName?.trim(), contact.lastName?.trim()]
-    .filter(Boolean)
-    .join(' ')
-    .trim();
-
-  if (joinedName) {
-    return joinedName;
-  }
-
-  return contact.phoneNumbers?.[0]?.number?.trim() || '';
-}
-
 function getPhotoNotificationRecipient(
   shindig: SavedShindig,
   photoId: string
@@ -227,15 +282,27 @@ function shindigStateLabel(state: ShindigState) {
   return state === 'active' ? 'Active' : 'Completed';
 }
 
+function sortPhotosNewestFirst<T extends { createdAt: string }>(photos: T[]) {
+  return [...photos].sort(
+    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+  );
+}
+
 export function HomeScreen({
   friends,
+  headerActions,
+  onBackFromFeed,
   initialFeedShindig,
   initialHighlightedPhotoId,
   initialStep,
+  onFlowStepChange,
   onConsumeInitialFeedShindig,
   onConsumeInitialHighlightedPhotoId,
   onConsumeInitialStep,
   onShindigSaved,
+  onShindigDeleted,
+  onShindigCoverPhotoChanged,
+  onShindigPhotoDeleted,
   onShindigStateChanged,
   profile,
   shindigs,
@@ -249,8 +316,11 @@ export function HomeScreen({
   const [selectedLocation, setSelectedLocation] = useState<TimelinePlace | null>(null);
   const [contacts, setContacts] = useState<InviteContact[]>([]);
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
-  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+  const [selectedContactsById, setSelectedContactsById] = useState<Record<string, InviteContact>>(
+    {}
+  );
   const [inviteSearch, setInviteSearch] = useState('');
+  const [isInvitePickerOpen, setIsInvitePickerOpen] = useState(false);
   const [activeFeedShindig, setActiveFeedShindig] = useState<SavedShindig | null>(null);
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObjectCoords | null>(
     null
@@ -262,21 +332,27 @@ export function HomeScreen({
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [isSavingShindig, setIsSavingShindig] = useState(false);
   const [isRefreshingFeed, setIsRefreshingFeed] = useState(false);
-  const [isSubmittingPhotoRequest, setIsSubmittingPhotoRequest] = useState(false);
   const [isAddingPhotoToShindig, setIsAddingPhotoToShindig] = useState(false);
   const [shindigCommentDraft, setShindigCommentDraft] = useState('');
   const [photoCommentDrafts, setPhotoCommentDrafts] = useState<Record<string, string>>({});
-  const [requestedPhotoShindigIds, setRequestedPhotoShindigIds] = useState<string[]>([]);
   const [showPhotoRequestPrompt, setShowPhotoRequestPrompt] = useState(false);
   const [showOwnerPhotoPrompt, setShowOwnerPhotoPrompt] = useState(false);
+  const [showCoverPhotoSavedNotice, setShowCoverPhotoSavedNotice] = useState(false);
   const [highlightedPhotoId, setHighlightedPhotoId] = useState('');
+  const [feedBackMode, setFeedBackMode] = useState<'external' | 'welcome'>('welcome');
+  const [isLikeSheetVisible, setIsLikeSheetVisible] = useState(false);
+  const [isLoadingLikeSheet, setIsLoadingLikeSheet] = useState(false);
+  const [likeSheetProfiles, setLikeSheetProfiles] = useState<FriendProfile[]>([]);
+  const [likeSheetTitle, setLikeSheetTitle] = useState('Liked by');
   const deferredLocationQuery = useDeferredValue(locationQuery);
-  const deferredInviteSearch = useDeferredValue(inviteSearch);
   const feedScrollRef = useRef<ScrollView | null>(null);
   const photoOffsetsRef = useRef<Record<string, number>>({});
+  const activeFeedRefreshIdRef = useRef(0);
+  const contactsRequestIdRef = useRef(0);
+  const coverPhotoSavedNoticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const filteredFriends = useMemo(() => {
-    const query = deferredInviteSearch.trim();
+    const query = inviteSearch.trim();
     if (!query) {
       return friends;
     }
@@ -287,10 +363,10 @@ export function HomeScreen({
         fuzzyMatchesQuery(friend.handle, query) ||
         fuzzyMatchesQuery(friend.city, query)
     );
-  }, [deferredInviteSearch, friends]);
+  }, [friends, inviteSearch]);
 
   const filteredContacts = useMemo(() => {
-    const query = deferredInviteSearch.trim();
+    const query = inviteSearch.trim();
     if (!query) {
       return contacts;
     }
@@ -300,16 +376,61 @@ export function HomeScreen({
         fuzzyMatchesQuery(contact.name, query) ||
         fuzzyMatchesQuery(contact.phoneNumber, query)
     );
-  }, [contacts, deferredInviteSearch]);
+  }, [contacts, inviteSearch]);
 
   const selectedContacts = useMemo(
-    () => contacts.filter((contact) => selectedContactIds.includes(contact.id)),
-    [contacts, selectedContactIds]
+    () => Object.values(selectedContactsById),
+    [selectedContactsById]
   );
   const selectedFriends = useMemo(
     () => friends.filter((friend) => selectedFriendIds.includes(friend.id)),
     [friends, selectedFriendIds]
   );
+  const activeShindigs = useMemo(
+    () => shindigs.filter((shindig) => shindig.state === 'active'),
+    [shindigs]
+  );
+  const completedShindigs = useMemo(
+    () => shindigs.filter((shindig) => shindig.state === 'completed'),
+    [shindigs]
+  );
+  const activeFeedOwner = useMemo(() => {
+    if (!activeFeedShindig) {
+      return null;
+    }
+
+    if (activeFeedShindig.ownerId === userId) {
+      return {
+        handle: profile.handle,
+        name: profile.name,
+      };
+    }
+
+    const owner = friends.find((friend) => friend.id === activeFeedShindig.ownerId);
+    if (owner) {
+      return {
+        handle: owner.handle,
+        name: owner.name,
+      };
+    }
+
+    return null;
+  }, [activeFeedShindig, friends, profile.handle, profile.name, userId]);
+  const activeFeedCreatorLabel = useMemo(() => {
+    if (!activeFeedShindig) {
+      return '';
+    }
+
+    if (activeFeedShindig.ownerId === userId) {
+      return 'created by you';
+    }
+
+    return `created by ${activeFeedOwner?.handle || '@user'}`;
+  }, [activeFeedOwner, activeFeedShindig, userId]);
+
+  useEffect(() => {
+    onFlowStepChange?.(step);
+  }, [onFlowStepChange, step]);
 
   useEffect(() => {
     if (!initialFeedShindig) {
@@ -318,16 +439,26 @@ export function HomeScreen({
 
     setError('');
     setActiveFeedShindig(initialFeedShindig);
+    setFeedBackMode('external');
     setStep('feed');
     onConsumeInitialFeedShindig?.();
   }, [initialFeedShindig, onConsumeInitialFeedShindig]);
 
   useEffect(() => {
-    if (initialStep !== 'create') {
+    if (!initialStep) {
       return;
     }
 
-    goToCreate();
+    if (initialStep === 'create') {
+      goToCreate();
+    } else {
+      setError('');
+      setActiveFeedShindig(null);
+      setShowPhotoRequestPrompt(false);
+      setShowOwnerPhotoPrompt(false);
+      setHighlightedPhotoId('');
+      setStep('welcome');
+    }
     onConsumeInitialStep?.();
   }, [initialStep, onConsumeInitialStep]);
 
@@ -457,69 +588,6 @@ export function HomeScreen({
       isMounted = false;
     };
   }, [currentLocation, deferredLocationQuery, locationHint]);
-
-  useEffect(() => {
-    if (step !== 'invite' || contacts.length > 0) {
-      return;
-    }
-
-    let isMounted = true;
-
-    async function loadContacts() {
-      setIsLoadingContacts(true);
-      try {
-        const permission = await Contacts.requestPermissionsAsync();
-        if (!isMounted || permission.status !== 'granted') {
-          setContacts([]);
-          return;
-        }
-
-        const result = await Contacts.getContactsAsync({
-          fields: [Contacts.Fields.PhoneNumbers],
-          pageSize: 1000,
-          sort: Contacts.SortTypes.FirstName,
-        });
-
-        if (!isMounted) {
-          return;
-        }
-
-        const nextContacts = (result.data || [])
-          .map((contact) => {
-            const firstPhone = contact.phoneNumbers?.[0]?.number?.trim();
-            const displayName = contactDisplayName(contact);
-            if (!contact.id || !displayName || !firstPhone) {
-              return null;
-            }
-
-            return {
-              id: contact.id,
-              name: displayName,
-              phoneNumber: firstPhone,
-            } satisfies InviteContact;
-          })
-          .filter((contact): contact is InviteContact => Boolean(contact));
-
-        setContacts(nextContacts);
-      } catch (nextError) {
-        if (isMounted) {
-          setError(
-            nextError instanceof Error ? nextError.message : 'Could not load contacts.'
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingContacts(false);
-        }
-      }
-    }
-
-    loadContacts();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [contacts.length, step]);
 
   async function handlePickFromLibrary() {
     setError('');
@@ -689,6 +757,7 @@ export function HomeScreen({
   }
 
   function goToCreate() {
+    contactsRequestIdRef.current += 1;
     setError('');
     setSelectedLocation(null);
     setLocationQuery('');
@@ -696,31 +765,51 @@ export function HomeScreen({
     setPhotos([]);
     setShindigName('');
     setSelectedFriendIds([]);
-    setSelectedContactIds([]);
+    setSelectedContactsById({});
     setInviteSearch('');
+    setIsInvitePickerOpen(false);
+    setContacts([]);
     setActiveFeedShindig(null);
+    setFeedBackMode('welcome');
     setStep('create');
   }
 
   function openPastShindig(shindig: SavedShindig) {
     setError('');
     setActiveFeedShindig(shindig);
+    setFeedBackMode('welcome');
     setStep('feed');
   }
 
   async function refreshActiveFeed(shindigId: string) {
+    const refreshId = activeFeedRefreshIdRef.current + 1;
+    activeFeedRefreshIdRef.current = refreshId;
     setIsRefreshingFeed(true);
+
     try {
       const refreshed = await getShindigById({
         shindigId,
         userId,
       });
 
+      if (refreshId !== activeFeedRefreshIdRef.current) {
+        return;
+      }
+
       if (refreshed) {
         setActiveFeedShindig(refreshed);
+      } else {
+        setActiveFeedShindig(null);
+        setShowOwnerPhotoPrompt(false);
+        setShowPhotoRequestPrompt(false);
+        setShowCoverPhotoSavedNotice(false);
+        setHighlightedPhotoId('');
+        setStep('welcome');
       }
     } finally {
-      setIsRefreshingFeed(false);
+      if (refreshId === activeFeedRefreshIdRef.current) {
+        setIsRefreshingFeed(false);
+      }
     }
   }
 
@@ -851,7 +940,94 @@ export function HomeScreen({
       }
     }
 
+    setInviteSearch('');
+    setIsInvitePickerOpen(false);
+    setContacts([]);
     setStep('invite');
+  }
+
+  async function openInvitePicker() {
+    setError('');
+    setInviteSearch('');
+    setIsInvitePickerOpen(true);
+    await loadDeviceContacts({ reset: true });
+  }
+
+  function closeInvitePicker() {
+    contactsRequestIdRef.current += 1;
+    setIsLoadingContacts(false);
+    setInviteSearch('');
+    setIsInvitePickerOpen(false);
+  }
+
+  function skipInvites() {
+    contactsRequestIdRef.current += 1;
+    setIsInvitePickerOpen(false);
+    void saveShindigAndOpenFeed();
+  }
+
+  function mapInviteContact(contact: Contacts.ExistingContact) {
+    const firstPhone = getContactPhoneValue(contact);
+    const displayName = contactDisplayName(contact);
+    if (!contact.id || !displayName || !firstPhone) {
+      return null;
+    }
+
+    return {
+      id: contact.id,
+      name: displayName,
+      phoneNumber: firstPhone,
+    } satisfies InviteContact;
+  }
+
+  async function loadDeviceContacts(args?: { reset?: boolean }) {
+    const requestId = contactsRequestIdRef.current + 1;
+    contactsRequestIdRef.current = requestId;
+
+    if (args?.reset) {
+      setContacts([]);
+    }
+
+    setIsLoadingContacts(true);
+    try {
+      let permission = await Contacts.getPermissionsAsync();
+      if (permission.status !== 'granted') {
+        permission = await Contacts.requestPermissionsAsync();
+      }
+
+      if (requestId !== contactsRequestIdRef.current) {
+        return;
+      }
+
+      if (permission.status !== 'granted') {
+        setContacts([]);
+        setError('Contacts access is required to invite people by text.');
+        return;
+      }
+
+      const result = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.PhoneNumbers],
+        sort: Contacts.SortTypes.FirstName,
+      });
+
+      if (requestId !== contactsRequestIdRef.current) {
+        return;
+      }
+
+      const nextContacts = (result.data || [])
+        .map(mapInviteContact)
+        .filter((contact): contact is InviteContact => Boolean(contact));
+
+      setContacts(Array.from(new Map(nextContacts.map((contact) => [contact.id, contact])).values()));
+    } catch (nextError) {
+      if (requestId === contactsRequestIdRef.current) {
+        setError(nextError instanceof Error ? nextError.message : 'Could not load contacts.');
+      }
+    } finally {
+      if (requestId === contactsRequestIdRef.current) {
+        setIsLoadingContacts(false);
+      }
+    }
   }
 
   function toggleFriend(friendId: string) {
@@ -862,12 +1038,37 @@ export function HomeScreen({
     );
   }
 
-  function toggleContact(contactId: string) {
-    setSelectedContactIds((current) =>
-      current.includes(contactId)
-        ? current.filter((id) => id !== contactId)
-        : [...current, contactId]
+  function toggleAllVisibleFriends() {
+    const visibleFriendIds = filteredFriends.map((friend) => friend.id);
+    const allVisibleSelected =
+      visibleFriendIds.length > 0 &&
+      visibleFriendIds.every((friendId) => selectedFriendIds.includes(friendId));
+
+    if (allVisibleSelected) {
+      setSelectedFriendIds((current) =>
+        current.filter((friendId) => !visibleFriendIds.includes(friendId))
+      );
+      return;
+    }
+
+    setSelectedFriendIds((current) =>
+      Array.from(new Set([...current, ...visibleFriendIds]))
     );
+  }
+
+  function toggleContact(contact: InviteContact) {
+    setSelectedContactsById((current) => {
+      if (current[contact.id]) {
+        const next = { ...current };
+        delete next[contact.id];
+        return next;
+      }
+
+      return {
+        ...current,
+        [contact.id]: contact,
+      };
+    });
   }
 
   async function saveShindigAndOpenFeed() {
@@ -1041,6 +1242,25 @@ export function HomeScreen({
     await refreshActiveFeed(activeFeedShindig.id);
   }
 
+  async function handleOpenPhotoLikeSheet(photo: SavedShindigPhoto) {
+    setLikeSheetTitle('Liked by');
+    setLikeSheetProfiles([]);
+    setIsLikeSheetVisible(true);
+    setIsLoadingLikeSheet(true);
+
+    try {
+      const nextProfiles = await listPhotoLikeProfiles(photo.id);
+      setLikeSheetProfiles(nextProfiles);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to load the likes for this photo.'
+      );
+      setIsLikeSheetVisible(false);
+    } finally {
+      setIsLoadingLikeSheet(false);
+    }
+  }
+
   async function handleAddPhotoComment(photoId: string) {
     if (!activeFeedShindig) {
       return;
@@ -1096,7 +1316,288 @@ export function HomeScreen({
     await refreshActiveFeed(activeFeedShindig.id);
   }
 
-  async function handleRequestToAddPhoto() {
+  async function handleSelectCoverPhoto(photoId: string) {
+    if (!activeFeedShindig) {
+      return;
+    }
+
+    const updated = await onShindigCoverPhotoChanged({
+      photoId,
+      shindigId: activeFeedShindig.id,
+    });
+    setActiveFeedShindig(updated);
+    setShowCoverPhotoSavedNotice(true);
+    if (coverPhotoSavedNoticeTimeoutRef.current) {
+      clearTimeout(coverPhotoSavedNoticeTimeoutRef.current);
+    }
+    coverPhotoSavedNoticeTimeoutRef.current = setTimeout(() => {
+      setShowCoverPhotoSavedNotice(false);
+      coverPhotoSavedNoticeTimeoutRef.current = null;
+    }, 3000);
+  }
+
+  async function handleDeleteActiveShindig() {
+    if (!activeFeedShindig) {
+      return;
+    }
+
+    try {
+      const shindigId = activeFeedShindig.id;
+      await onShindigDeleted(shindigId);
+      setActiveFeedShindig(null);
+      setShowOwnerPhotoPrompt(false);
+      setHighlightedPhotoId('');
+      setStep('welcome');
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to delete this ShinDig.'
+      );
+    }
+  }
+
+  function openDeleteShindigPrompt() {
+    const confirmDelete = () => {
+      void handleDeleteActiveShindig();
+    };
+
+    Alert.alert('Delete ShinDig', 'This will permanently delete this ShinDig and its photos.', [
+      {
+        style: 'cancel',
+        text: 'Cancel',
+      },
+      {
+        onPress: confirmDelete,
+        style: 'destructive',
+        text: 'Delete',
+      },
+    ]);
+  }
+
+  function openShindigOwnerMenu() {
+    if (!activeFeedShindig) {
+      return;
+    }
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          cancelButtonIndex: 1,
+          destructiveButtonIndex: 0,
+          options: ['Delete ShinDig', 'Cancel'],
+          title: activeFeedShindig.title,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) {
+            openDeleteShindigPrompt();
+          }
+        }
+      );
+      return;
+    }
+
+    openDeleteShindigPrompt();
+  }
+
+  function openPhotoOwnerMenu(photo: SavedShindigPhoto) {
+    const isCurrentCover = activeFeedShindig?.coverPhotoPhotoId === photo.id;
+    const canSelectCover = activeFeedShindig?.ownerId === userId;
+    const canDeletePhoto =
+      photo.contributor?.id === userId ||
+      (!photo.contributor && activeFeedShindig?.ownerId === userId);
+    const sharePhoto = () => {
+      void handleSharePhoto(photo);
+    };
+    const savePhoto = () => {
+      void handleSavePhotoToDevice(photo);
+    };
+    const selectCover = () => {
+      if (canSelectCover && !isCurrentCover) {
+        void handleSelectCoverPhoto(photo.id);
+      }
+    };
+    const deletePhoto = () => {
+      void handleDeletePhotoFromFeed(photo);
+    };
+
+    if (Platform.OS === 'ios') {
+      const options = [
+        'Share to Apps',
+        'Download to Device',
+        ...(canSelectCover
+          ? [isCurrentCover ? 'Current Cover Photo' : 'Select as Cover Photo']
+          : []),
+        ...(canDeletePhoto ? ['Delete Photo'] : []),
+        'Cancel',
+      ];
+      const cancelButtonIndex = options.length - 1;
+      const destructiveButtonIndex = canDeletePhoto ? options.indexOf('Delete Photo') : undefined;
+
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          cancelButtonIndex,
+          destructiveButtonIndex,
+          options,
+          title: 'Photo Options',
+        },
+        (buttonIndex) => {
+          if (buttonIndex === options.indexOf('Share to Apps')) {
+            sharePhoto();
+          }
+          if (buttonIndex === options.indexOf('Download to Device')) {
+            savePhoto();
+          }
+          if (
+            canSelectCover &&
+            buttonIndex === options.indexOf(isCurrentCover ? 'Current Cover Photo' : 'Select as Cover Photo') &&
+            !isCurrentCover
+          ) {
+            selectCover();
+          }
+          if (canDeletePhoto && buttonIndex === options.indexOf('Delete Photo')) {
+            deletePhoto();
+          }
+        }
+      );
+      return;
+    }
+
+    if (canSelectCover && isCurrentCover && !canDeletePhoto) {
+      Alert.alert('Cover Photo', 'This photo is already the cover photo.');
+      return;
+    }
+
+    const options = [];
+
+    options.push({
+      onPress: sharePhoto,
+      text: 'Share to Apps',
+    });
+
+    options.push({
+      onPress: savePhoto,
+      text: 'Download to Device',
+    });
+
+    if (canSelectCover) {
+      options.push({
+        onPress: selectCover,
+        text: isCurrentCover ? 'Current Cover Photo' : 'Select as Cover Photo',
+      });
+    }
+
+    if (canDeletePhoto) {
+      options.push({
+        onPress: deletePhoto,
+        style: 'destructive' as const,
+        text: 'Delete Photo',
+      });
+    }
+
+    options.push({
+      style: 'cancel' as const,
+      text: 'Cancel',
+    });
+
+    Alert.alert(
+      'Photo Options',
+      'Share this photo to installed apps like Instagram, Snapchat, or TikTok, or download it to your device.',
+      options
+    );
+  }
+
+  async function downloadPhotoToLocalUri(photo: SavedShindigPhoto) {
+    const extension = fileExtensionFromUri(photo.photoUrl);
+    const baseDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+
+    if (!baseDirectory) {
+      throw new Error('Temporary storage is not available on this device.');
+    }
+
+    const targetUri = `${baseDirectory}shindig-share-${photo.id}.${extension}`;
+    const result = await FileSystem.downloadAsync(photo.photoUrl, targetUri);
+    return {
+      mimeType: mimeTypeFromExtension(extension),
+      uri: result.uri,
+    };
+  }
+
+  async function handleSavePhotoToDevice(photo: SavedShindigPhoto) {
+    try {
+      const permission = await MediaLibrary.requestPermissionsAsync(true);
+      if (!permission.granted) {
+        setError('Photo library access is required to save photos to your device.');
+        return;
+      }
+
+      const { uri } = await downloadPhotoToLocalUri(photo);
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Alert.alert('Saved', 'Photo saved to your device.');
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to save this photo.'
+      );
+    }
+  }
+
+  async function handleSharePhoto(photo: SavedShindigPhoto) {
+    try {
+      if (Platform.OS === 'web') {
+        await Share.share({
+          message: photo.photoUrl,
+          url: photo.photoUrl,
+        });
+        return;
+      }
+
+      const { mimeType, uri } = await downloadPhotoToLocalUri(photo);
+      const canShareFile = await Sharing.isAvailableAsync();
+
+      if (canShareFile) {
+        await Sharing.shareAsync(uri, {
+          dialogTitle: 'Share photo',
+          mimeType,
+          UTI: 'public.image',
+        });
+        return;
+      }
+
+      await Linking.openURL(photo.photoUrl);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to share this photo.'
+      );
+    }
+  }
+
+  async function handleDeletePhotoFromFeed(photo: SavedShindigPhoto) {
+    if (!activeFeedShindig) {
+      return;
+    }
+
+    try {
+      const updated = await onShindigPhotoDeleted({
+        photoId: photo.id,
+        shindigId: activeFeedShindig.id,
+      });
+
+      if (!updated) {
+        setActiveFeedShindig(null);
+        setShowOwnerPhotoPrompt(false);
+        setShowPhotoRequestPrompt(false);
+        setHighlightedPhotoId('');
+        setStep('welcome');
+        return;
+      }
+
+      setActiveFeedShindig(updated);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to delete this photo.'
+      );
+    }
+  }
+
+  async function handleAddPhotoToSharedShindig() {
     if (
       !activeFeedShindig ||
       activeFeedShindig.ownerId === userId ||
@@ -1159,7 +1660,7 @@ export function HomeScreen({
     }
   }
 
-  async function submitPhotoRequest(source: 'camera' | 'library') {
+  async function addPhotoToSharedShindig(source: 'camera' | 'library') {
     if (
       !activeFeedShindig ||
       activeFeedShindig.ownerId === userId ||
@@ -1170,43 +1671,37 @@ export function HomeScreen({
 
     setError('');
     const photo = await pickSinglePhoto(source, {
-      cameraPermission: 'Camera access is required to request a photo contribution.',
-      libraryPermission: 'Photo library access is required to request a photo contribution.',
+      cameraPermission: 'Camera access is required to add a photo to this ShinDig.',
+      libraryPermission: 'Photo library access is required to add a photo to this ShinDig.',
     });
 
     if (!photo) {
       return;
     }
 
-    setIsSubmittingPhotoRequest(true);
+    setIsAddingPhotoToShindig(true);
     try {
-      const request = await createPhotoAddRequest({
+      const savedPhoto = await addPhotoToShindig({
         photo,
-        recipientUserId: activeFeedShindig.ownerId,
-        requesterUserId: userId,
         shindigId: activeFeedShindig.id,
+        userId,
       });
-
       await createNotification({
         actorUserId: userId,
-        message: `${profile.name} wants to add a photo to your ShinDig "${activeFeedShindig.title}".`,
-        requestId: request.id,
+        message: `${profile.name} added a photo to your ShinDig "${activeFeedShindig.title}".`,
+        photoId: savedPhoto.id,
         recipientUserId: activeFeedShindig.ownerId,
         shindigId: activeFeedShindig.id,
         type: 'photo_add_request',
       });
-      setRequestedPhotoShindigIds((current) =>
-        current.includes(activeFeedShindig.id) ? current : [...current, activeFeedShindig.id]
-      );
       setShowPhotoRequestPrompt(false);
+      await refreshActiveFeed(activeFeedShindig.id);
     } catch (nextError) {
       setError(
-        nextError instanceof Error
-          ? nextError.message
-          : 'Failed to send the photo request.'
+        nextError instanceof Error ? nextError.message : 'Failed to add the photo.'
       );
     } finally {
-      setIsSubmittingPhotoRequest(false);
+      setIsAddingPhotoToShindig(false);
     }
   }
 
@@ -1236,50 +1731,99 @@ export function HomeScreen({
     }
   }
 
+  function handleBackFromFeedScreen() {
+    if (feedBackMode === 'external' && onBackFromFeed) {
+      onBackFromFeed();
+      return;
+    }
+
+    setStep('welcome');
+  }
+
   if (step === 'welcome') {
     return (
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.topBar}>
-            <View />
-            <View style={styles.topSpacer} />
-          </View>
+          <PageHeader right={headerActions} title="ShinDigs" />
 
           <Pressable onPress={goToCreate} style={styles.ctaButton}>
             <Text style={styles.ctaButtonText}>Start a Shindig</Text>
           </Pressable>
 
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>My Past Shindigs</Text>
-          </View>
-
-          {shindigs.length > 0 ? (
-            <View style={styles.pastList}>
-              {shindigs.map((shindig) => (
-                <Pressable
-                  key={shindig.id}
-                  onPress={() => openPastShindig(shindig)}
-                  style={styles.pastCard}
-                >
-                  <Image
-                    source={{
-                      uri:
-                        shindig.coverPhotoUrl ||
-                        'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
-                    }}
-                    style={styles.pastCardImage}
-                  />
-                  <View style={styles.pastCardCopy}>
-                    <Text style={styles.pastCardTitle}>{shindig.title}</Text>
-                    <Text style={styles.pastCardMeta}>{formatDateLabel(shindig.createdAt)}</Text>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          ) : (
+          {activeShindigs.length === 0 && completedShindigs.length === 0 ? (
             <Text style={styles.emptyText}>
               Start your first ShinDig to build a shared photo feed and archive it here.
             </Text>
+          ) : (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Active Shindigs</Text>
+              </View>
+
+              {activeShindigs.length > 0 ? (
+                <View style={styles.pastList}>
+                  {activeShindigs.map((shindig) => (
+                    <Pressable
+                      key={shindig.id}
+                      onPress={() => openPastShindig(shindig)}
+                      style={styles.pastCard}
+                    >
+                      <Image
+                        source={{
+                          uri:
+                            shindig.coverPhotoUrl ||
+                            'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
+                        }}
+                        style={styles.pastCardImage}
+                      />
+                      <View style={styles.pastCardCopy}>
+                        <Text style={styles.pastCardTitle}>{shindig.title}</Text>
+                        <Text style={styles.pastCardMeta}>{formatDateLabel(shindig.createdAt)}</Text>
+                        {shindig.invitedBy ? (
+                          <Text style={styles.invitedByTag}>via {shindig.invitedBy.handle}</Text>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.emptyText}>No active ShinDigs right now.</Text>
+              )}
+
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Completed Shindigs</Text>
+              </View>
+
+              {completedShindigs.length > 0 ? (
+                <View style={styles.pastList}>
+                  {completedShindigs.map((shindig) => (
+                    <Pressable
+                      key={shindig.id}
+                      onPress={() => openPastShindig(shindig)}
+                      style={styles.pastCard}
+                    >
+                      <Image
+                        source={{
+                          uri:
+                            shindig.coverPhotoUrl ||
+                            'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
+                        }}
+                        style={styles.pastCardImage}
+                      />
+                      <View style={styles.pastCardCopy}>
+                        <Text style={styles.pastCardTitle}>{shindig.title}</Text>
+                        <Text style={styles.pastCardMeta}>{formatDateLabel(shindig.createdAt)}</Text>
+                        {shindig.invitedBy ? (
+                          <Text style={styles.invitedByTag}>via {shindig.invitedBy.handle}</Text>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.emptyText}>No completed ShinDigs yet.</Text>
+              )}
+            </>
           )}
         </ScrollView>
       </SafeAreaView>
@@ -1287,7 +1831,9 @@ export function HomeScreen({
   }
 
   if (step === 'feed' && activeFeedShindig) {
-    const feedPhotos = activeFeedShindig.stops.flatMap((stop) => stop.photos);
+    const feedPhotos = sortPhotosNewestFirst(
+      activeFeedShindig.stops.flatMap((stop) => stop.photos)
+    );
 
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -1295,22 +1841,63 @@ export function HomeScreen({
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.flex}
         >
+          <Modal
+            animationType="fade"
+            onRequestClose={() => setIsLikeSheetVisible(false)}
+            transparent
+            visible={isLikeSheetVisible}
+          >
+            <View style={styles.likeSheetBackdrop}>
+              <Pressable
+                onPress={() => setIsLikeSheetVisible(false)}
+                style={styles.likeSheetDismissArea}
+              />
+              <View style={styles.likeSheetCard}>
+                <View style={styles.likeSheetHeader}>
+                  <Text style={styles.likeSheetTitle}>{likeSheetTitle}</Text>
+                  <Pressable
+                    onPress={() => setIsLikeSheetVisible(false)}
+                    style={styles.likeSheetCloseButton}
+                  >
+                    <Ionicons color={theme.colors.textPrimary} name="close" size={20} />
+                  </Pressable>
+                </View>
+                {isLoadingLikeSheet ? (
+                  <Text style={styles.likeSheetEmpty}>Loading likes...</Text>
+                ) : likeSheetProfiles.length > 0 ? (
+                  <ScrollView
+                    contentContainerStyle={styles.likeSheetList}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {likeSheetProfiles.map((likedBy) => (
+                      <View key={likedBy.id} style={styles.likeSheetRow}>
+                        <Image source={{ uri: likedBy.avatar }} style={styles.likeSheetAvatar} />
+                        <View style={styles.likeSheetCopy}>
+                          <Text style={styles.likeSheetName}>{likedBy.name}</Text>
+                          <Text style={styles.likeSheetHandle}>
+                            {likedBy.handle}
+                            {likedBy.city ? ` • ${likedBy.city}` : ''}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <Text style={styles.likeSheetEmpty}>No likes yet.</Text>
+                )}
+              </View>
+            </View>
+          </Modal>
           <ScrollView
             contentContainerStyle={styles.content}
             keyboardShouldPersistTaps="handled"
             ref={feedScrollRef}
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.topBar}>
-              <Pressable onPress={() => setStep('welcome')} style={styles.backButton}>
-                <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
-              </Pressable>
-              <Text style={styles.screenTitle}>Shindig Feed</Text>
-              <View style={styles.topSpacer} />
-            </View>
+            <PageHeader onBack={handleBackFromFeedScreen} right={headerActions} title="Feed" />
 
             <View style={styles.feedHeader}>
-              <View>
+              <View style={styles.feedHeaderCopy}>
                 <View style={styles.feedTitleRow}>
                   <Text style={styles.feedLocation}>{activeFeedShindig.title}</Text>
                   <View
@@ -1334,119 +1921,137 @@ export function HomeScreen({
                   </View>
                 </View>
                 <Text style={styles.feedParticipants}>
-                  {feedPhotos.length} photo{feedPhotos.length === 1 ? '' : 's'}
+                  {activeFeedCreatorLabel} • {feedPhotos.length} photo{feedPhotos.length === 1 ? '' : 's'}
                 </Text>
               </View>
               {activeFeedShindig.ownerId === userId ? (
-                <View style={styles.feedHeaderActions}>
-                  {activeFeedShindig.state === 'active' ? (
-                    <Pressable
-                      onPress={handleAddPhotoToOwnedShindig}
-                      style={styles.addPhotoHeaderButton}
-                    >
-                      <Text style={styles.addPhotoHeaderButtonText}>Add Photo</Text>
-                    </Pressable>
-                  ) : null}
+                <View style={styles.feedOwnerControls}>
+                  <View style={styles.feedHeaderActions}>
+                    {activeFeedShindig.state === 'active' ? (
+                      <Pressable
+                        onPress={handleAddPhotoToOwnedShindig}
+                        style={styles.addPhotoHeaderButton}
+                      >
+                        <Ionicons color="#FFFFFF" name="add" size={22} />
+                      </Pressable>
+                    ) : null}
 
-                  <Pressable
-                    onPress={() =>
-                      handleUpdateShindigState(
-                        activeFeedShindig.state === 'active' ? 'completed' : 'active'
-                      )
-                    }
-                    style={[
-                      styles.stateActionButton,
-                      activeFeedShindig.state === 'active'
-                        ? styles.completeButton
-                        : styles.reactivateButton,
-                    ]}
-                  >
-                    <Text
+                    <Pressable
+                      onPress={() =>
+                        handleUpdateShindigState(
+                          activeFeedShindig.state === 'active' ? 'completed' : 'active'
+                        )
+                      }
                       style={[
-                        styles.stateActionButtonText,
-                        activeFeedShindig.state === 'completed' && styles.reactivateButtonText,
+                        styles.stateActionButton,
+                        activeFeedShindig.state === 'active'
+                          ? styles.completeButton
+                          : styles.reactivateButton,
                       ]}
                     >
-                      {activeFeedShindig.state === 'active' ? 'Mark Completed' : 'Reactivate'}
-                    </Text>
-                  </Pressable>
-
-                  {activeFeedShindig.state === 'active' && showOwnerPhotoPrompt ? (
-                    <View style={styles.headerPromptCard}>
-                      <Text style={styles.requestPromptTitle}>Add another photo</Text>
-                      <Text style={styles.requestPromptText}>
-                        Take a new photo or choose one from your library for this ShinDig.
-                      </Text>
-                      <View style={styles.requestPromptActions}>
-                        <Pressable
-                          disabled={isAddingPhotoToShindig}
-                          onPress={() => addPhotoToOwnedShindig('camera')}
-                          style={styles.requestPromptButton}
-                        >
-                          <Text style={styles.requestPromptButtonText}>Take photo</Text>
-                        </Pressable>
-                        <Pressable
-                          disabled={isAddingPhotoToShindig}
-                          onPress={() => addPhotoToOwnedShindig('library')}
-                          style={styles.requestPromptButton}
-                        >
-                          <Text style={styles.requestPromptButtonText}>Choose photo</Text>
-                        </Pressable>
-                      </View>
-                      {isAddingPhotoToShindig ? (
-                        <Text style={styles.helperText}>Adding photo...</Text>
-                      ) : null}
-                    </View>
-                  ) : null}
+                      <Ionicons
+                        color={
+                          activeFeedShindig.state === 'active'
+                            ? theme.colors.textPrimary
+                            : '#FFFFFF'
+                        }
+                        name={
+                          activeFeedShindig.state === 'active'
+                            ? 'checkmark'
+                            : 'refresh-outline'
+                        }
+                        size={20}
+                      />
+                    </Pressable>
+                    <Pressable onPress={openShindigOwnerMenu} style={styles.ownerMenuButton}>
+                      <Ionicons color={theme.colors.textPrimary} name="ellipsis-horizontal" size={20} />
+                    </Pressable>
+                  </View>
                 </View>
               ) : null}
             </View>
+
+            {showCoverPhotoSavedNotice ? (
+              <View style={styles.coverPhotoSavedToast}>
+                <Ionicons color="#63D89A" name="checkmark-circle" size={18} />
+                <Text style={styles.coverPhotoSavedToastText}>Cover photo updated</Text>
+              </View>
+            ) : null}
+
+            {activeFeedShindig.ownerId === userId &&
+            activeFeedShindig.state === 'active' &&
+            showOwnerPhotoPrompt ? (
+              <View style={styles.feedHeaderPromptWrap}>
+                <View style={styles.headerPromptCard}>
+                  <Text style={styles.requestPromptTitle}>Add another photo</Text>
+                  <Text style={styles.requestPromptText}>
+                    Take a new photo or choose one from your library for this ShinDig.
+                  </Text>
+                  <View style={styles.requestPromptActions}>
+                    <Pressable
+                      disabled={isAddingPhotoToShindig}
+                      onPress={() => addPhotoToOwnedShindig('camera')}
+                      style={styles.requestPromptButton}
+                    >
+                      <Text style={styles.requestPromptButtonText}>Take photo</Text>
+                    </Pressable>
+                    <Pressable
+                      disabled={isAddingPhotoToShindig}
+                      onPress={() => addPhotoToOwnedShindig('library')}
+                      style={styles.requestPromptButton}
+                    >
+                      <Text style={styles.requestPromptButtonText}>Choose photo</Text>
+                    </Pressable>
+                  </View>
+                  {isAddingPhotoToShindig ? (
+                    <Text style={styles.helperText}>Adding photo...</Text>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
 
             {activeFeedShindig.ownerId !== userId ? (
               <View style={styles.requestPhotoWrap}>
                 {activeFeedShindig.state === 'active' ? (
                   <>
                     <Pressable
-                      disabled={requestedPhotoShindigIds.includes(activeFeedShindig.id)}
-                      onPress={handleRequestToAddPhoto}
+                      disabled={isAddingPhotoToShindig}
+                      onPress={handleAddPhotoToSharedShindig}
                       style={[
                         styles.requestPhotoButton,
-                        requestedPhotoShindigIds.includes(activeFeedShindig.id) &&
-                          styles.requestPhotoButtonDisabled,
+                        isAddingPhotoToShindig && styles.requestPhotoButtonDisabled,
                       ]}
                     >
                       <Text style={styles.requestPhotoButtonText}>
-                        {requestedPhotoShindigIds.includes(activeFeedShindig.id)
-                          ? 'Photo request sent'
-                          : 'Request to add photo'}
+                        {isAddingPhotoToShindig ? 'Adding photo...' : 'Add photo'}
                       </Text>
                     </Pressable>
 
-                    {showPhotoRequestPrompt &&
-                    !requestedPhotoShindigIds.includes(activeFeedShindig.id) ? (
+                    {showPhotoRequestPrompt ? (
                       <View style={styles.requestPromptCard}>
-                        <Text style={styles.requestPromptTitle}>Add a photo request</Text>
+                        <Text style={styles.requestPromptTitle}>Add a photo to this ShinDig</Text>
                         <Text style={styles.requestPromptText}>
-                          Choose a photo from your library or take a new one for this ShinDig.
+                          Take a new photo or choose one from your library. Your photo will appear
+                          in the feed right away.
                         </Text>
                         <View style={styles.requestPromptActions}>
                           <Pressable
-                            disabled={isSubmittingPhotoRequest}
-                            onPress={() => submitPhotoRequest('camera')}
+                            disabled={isAddingPhotoToShindig}
+                            onPress={() => addPhotoToSharedShindig('camera')}
                             style={styles.requestPromptButton}
                           >
                             <Text style={styles.requestPromptButtonText}>Take photo</Text>
                           </Pressable>
                           <Pressable
-                            disabled={isSubmittingPhotoRequest}
-                            onPress={() => submitPhotoRequest('library')}
+                            disabled={isAddingPhotoToShindig}
+                            onPress={() => addPhotoToSharedShindig('library')}
                             style={styles.requestPromptButton}
                           >
                             <Text style={styles.requestPromptButtonText}>Choose photo</Text>
                           </Pressable>
                         </View>
-                        {isSubmittingPhotoRequest ? (
-                          <Text style={styles.helperText}>Uploading request...</Text>
+                        {isAddingPhotoToShindig ? (
+                          <Text style={styles.helperText}>Adding photo...</Text>
                         ) : null}
                       </View>
                     ) : null}
@@ -1474,26 +2079,60 @@ export function HomeScreen({
                   >
                     <View style={styles.feedCardHeader}>
                       <View style={styles.feedAuthorRow}>
-                        <Text style={styles.feedAuthor}>{profile.name}</Text>
+                        <Text style={styles.feedAuthor}>
+                          {photo.contributor?.name || activeFeedOwner?.name || 'ShinDig Owner'}
+                        </Text>
                         {photo.contributor ? (
                           <Text style={styles.photoCredit}>via {photo.contributor.handle}</Text>
                         ) : null}
+                        {activeFeedShindig.coverPhotoPhotoId === photo.id ? (
+                          <View style={styles.coverPhotoBadge}>
+                            <Text style={styles.coverPhotoBadgeText}>Cover</Text>
+                          </View>
+                        ) : null}
                       </View>
-                      <Text style={styles.feedTime}>Just now</Text>
+                      <View style={styles.feedCardHeaderActions}>
+                        <Text style={styles.feedTime}>Just now</Text>
+                        <Pressable
+                          onPress={() => openPhotoOwnerMenu(photo)}
+                          style={styles.photoMenuButton}
+                        >
+                          <Ionicons
+                            color={theme.colors.textMuted}
+                            name="ellipsis-horizontal"
+                            size={18}
+                          />
+                        </Pressable>
+                      </View>
                     </View>
-                    <Image source={{ uri: photo.photoUrl }} style={styles.feedPhoto} />
+                    <ProgressiveImage
+                      containerStyle={styles.feedPhotoFrame}
+                      imageStyle={styles.feedPhoto}
+                      resizeMode="contain"
+                      sourceUri={photo.photoUrl}
+                    />
                     <View style={styles.socialRow}>
                       <Pressable
+                        delayLongPress={180}
+                        onLongPress={() => void handleOpenPhotoLikeSheet(photo)}
                         onPress={() => handleTogglePhotoLike(photo.id)}
                         style={styles.socialButton}
                       >
-                        <Text style={styles.socialButtonText}>
-                          {photo.likedByMe ? 'Liked' : 'Like'} {photo.likeCount}
-                        </Text>
+                        <Ionicons
+                          color={photo.likedByMe ? '#FF8A5B' : theme.colors.textPrimary}
+                          name={photo.likedByMe ? 'heart' : 'heart-outline'}
+                          size={18}
+                        />
+                        <Text style={styles.socialButtonText}>{photo.likeCount}</Text>
                       </Pressable>
-                      <Text style={styles.socialMeta}>
-                        {photo.comments.length} comment{photo.comments.length === 1 ? '' : 's'}
-                      </Text>
+                      <View style={styles.socialStat}>
+                        <Ionicons
+                          color={theme.colors.textMuted}
+                          name="chatbubble-outline"
+                          size={17}
+                        />
+                        <Text style={styles.socialMeta}>{photo.comments.length}</Text>
+                      </View>
                     </View>
                     <View style={styles.commentComposer}>
                       <TextInput
@@ -1539,14 +2178,21 @@ export function HomeScreen({
               <View style={styles.shindigSocialFooter}>
                 <View style={styles.socialRow}>
                   <Pressable onPress={handleToggleShindigLike} style={styles.socialButton}>
-                    <Text style={styles.socialButtonText}>
-                      {activeFeedShindig.likedByMe ? 'Liked' : 'Like'} {activeFeedShindig.likeCount}
-                    </Text>
+                    <Ionicons
+                      color={activeFeedShindig.likedByMe ? '#FF8A5B' : theme.colors.textPrimary}
+                      name={activeFeedShindig.likedByMe ? 'heart' : 'heart-outline'}
+                      size={18}
+                    />
+                    <Text style={styles.socialButtonText}>{activeFeedShindig.likeCount}</Text>
                   </Pressable>
-                  <Text style={styles.socialMeta}>
-                    {activeFeedShindig.comments.length} comment
-                    {activeFeedShindig.comments.length === 1 ? '' : 's'}
-                  </Text>
+                  <View style={styles.socialStat}>
+                    <Ionicons
+                      color={theme.colors.textMuted}
+                      name="chatbubble-outline"
+                      size={17}
+                    />
+                    <Text style={styles.socialMeta}>{activeFeedShindig.comments.length}</Text>
+                  </View>
                   {isRefreshingFeed ? <Text style={styles.socialMeta}>Updating...</Text> : null}
                 </View>
 
@@ -1602,15 +2248,11 @@ export function HomeScreen({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.topBar}>
-            <Pressable onPress={() => setStep('welcome')} style={styles.backButton}>
-              <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
-            </Pressable>
-            <Text style={styles.screenTitle}>
-              {step === 'create' ? 'Create Your Shindig' : 'Invite Friends'}
-            </Text>
-            <View style={styles.topSpacer} />
-          </View>
+          <PageHeader
+            onBack={() => setStep('welcome')}
+            right={headerActions}
+            title={step === 'create' ? 'Create' : 'Invite'}
+          />
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -1693,95 +2335,196 @@ export function HomeScreen({
 
           {step === 'invite' ? (
             <View style={styles.panel}>
-              <Text style={styles.inviteSubtitle}>
-                Invite confirmed friends in ShinDig or send a text-message invite from your contacts. You can also skip this step and start the feed now.
-              </Text>
-              <TextInput
-                onChangeText={setInviteSearch}
-                placeholder="Search friends or contacts..."
-                placeholderTextColor={theme.colors.textMuted}
-                style={styles.input}
-                value={inviteSearch}
-              />
-              {friends.length > 0 ? (
-                <>
-                  <Text style={styles.inviteSectionLabel}>Your Friends</Text>
-                  <View style={styles.contactList}>
-                    {filteredFriends.map((friend) => {
-                      const isSelected = selectedFriendIds.includes(friend.id);
-                      return (
+              {!isInvitePickerOpen ? (
+                <View style={styles.inviteIntroCard}>
+                  <Text style={styles.inviteHeroTitle}>Invite people to this ShinDig</Text>
+                  <Text style={styles.inviteSubtitle}>
+                    Choose contacts to text and friends already on ShinDig. You can also skip this
+                    for now and start the feed immediately.
+                  </Text>
+                  <View style={styles.inviteSummaryRow}>
+                    <View style={styles.inviteSummaryPill}>
+                      <Text style={styles.inviteSummaryValue}>{selectedContacts.length}</Text>
+                      <Text style={styles.inviteSummaryLabel}>Phone Contacts</Text>
+                    </View>
+                    <View style={styles.inviteSummaryPill}>
+                      <Text style={styles.inviteSummaryValue}>{selectedFriends.length}</Text>
+                      <Text style={styles.inviteSummaryLabel}>ShinDig Friends</Text>
+                    </View>
+                  </View>
+                  <Pressable onPress={() => void openInvitePicker()} style={styles.ctaButton}>
+                    <Text style={styles.ctaButtonText}>Select Contacts</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={isSavingShindig}
+                    onPress={skipInvites}
+                    style={styles.secondaryTextButton}
+                  >
+                    <Text style={styles.secondaryTextButtonLabel}>
+                      {isSavingShindig ? 'Starting...' : 'Select Contacts Later'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.invitePickerCard}>
+                  <View style={styles.invitePickerHeader}>
+                    <Pressable onPress={closeInvitePicker} style={styles.inlineBackButton}>
+                      <Ionicons color={theme.colors.accentSoft} name="chevron-back" size={22} />
+                      <Text style={styles.inlineBackLabel}>Back</Text>
+                    </Pressable>
+                    <Text style={styles.invitePickerTitle}>Select Contacts</Text>
+                    <View style={styles.inlineBackSpacer} />
+                  </View>
+
+                  <TextInput
+                    onChangeText={setInviteSearch}
+                    placeholder="Search friends on ShinDig..."
+                    placeholderTextColor={theme.colors.textMuted}
+                    style={styles.input}
+                    value={inviteSearch}
+                  />
+
+                  {friends.length > 0 ? (
+                    <>
+                      <View style={styles.inviteSectionHeader}>
+                        <Text style={styles.inviteSectionLabel}>Friends On ShinDig</Text>
                         <Pressable
-                          key={friend.id}
-                          onPress={() => toggleFriend(friend.id)}
+                          onPress={toggleAllVisibleFriends}
+                          style={styles.inviteSectionAction}
+                        >
+                          <Text style={styles.inviteSectionActionText}>
+                            {filteredFriends.length > 0 &&
+                            filteredFriends.every((friend) =>
+                              selectedFriendIds.includes(friend.id)
+                            )
+                              ? 'Deselect All'
+                              : 'Select All'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                      <View style={styles.contactList}>
+                        {filteredFriends.map((friend) => {
+                          const isSelected = selectedFriendIds.includes(friend.id);
+                          return (
+                            <Pressable
+                              key={friend.id}
+                              onPress={() => toggleFriend(friend.id)}
+                              style={styles.contactItem}
+                            >
+                              <View
+                                style={[
+                                  styles.contactCheckbox,
+                                  isSelected && styles.contactCheckboxActive,
+                                ]}
+                              >
+                                <Text style={styles.contactCheckboxText}>
+                                  {isSelected ? 'x' : ''}
+                                </Text>
+                              </View>
+                              <View style={styles.contactCopy}>
+                                <Text style={styles.contactName}>{friend.name}</Text>
+                                <Text style={styles.contactPhone}>
+                                  {friend.handle} {friend.city ? ` | ${friend.city}` : ''}
+                                </Text>
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </>
+                  ) : null}
+
+                  <Text style={styles.inviteSectionLabel}>Phone Contacts</Text>
+                  {isLoadingContacts ? (
+                    <Text style={styles.helperText}>Loading contacts...</Text>
+                  ) : (
+                    <>
+                      {contacts.length === 0 ? (
+                        <Text style={styles.helperText}>
+                          No phone contacts with numbers were returned from your device right now.
+                        </Text>
+                      ) : (
+                        <View style={styles.contactList}>
+                          {filteredContacts.map((contact) => {
+                            const isSelected = Boolean(selectedContactsById[contact.id]);
+                            return (
+                              <Pressable
+                                key={contact.id}
+                                onPress={() => toggleContact(contact)}
+                                style={styles.contactItem}
+                              >
+                                <View
+                                  style={[
+                                    styles.contactCheckbox,
+                                    isSelected && styles.contactCheckboxActive,
+                                  ]}
+                                >
+                                  <Text style={styles.contactCheckboxText}>
+                                    {isSelected ? 'x' : ''}
+                                  </Text>
+                                </View>
+                                <View style={styles.contactCopy}>
+                                  <Text style={styles.contactName}>{contact.name}</Text>
+                                  <Text style={styles.contactPhone}>{contact.phoneNumber}</Text>
+                                </View>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </>
+                  )}
+
+                  {selectedContacts.length > 0 ? (
+                    <View style={styles.contactList}>
+                      {selectedContacts.map((contact) => (
+                        <Pressable
+                          key={contact.id}
+                          onPress={() => toggleContact(contact)}
                           style={styles.contactItem}
                         >
-                          <View
-                            style={[
-                              styles.contactCheckbox,
-                              isSelected && styles.contactCheckboxActive,
-                            ]}
-                          >
-                            <Text style={styles.contactCheckboxText}>{isSelected ? 'x' : ''}</Text>
+                          <View style={[styles.contactCheckbox, styles.contactCheckboxActive]}>
+                            <Text style={styles.contactCheckboxText}>x</Text>
                           </View>
                           <View style={styles.contactCopy}>
-                            <Text style={styles.contactName}>{friend.name}</Text>
-                            <Text style={styles.contactPhone}>
-                              {friend.handle} {friend.city ? ` | ${friend.city}` : ''}
-                            </Text>
+                            <Text style={styles.contactName}>{contact.name}</Text>
+                            <Text style={styles.contactPhone}>{contact.phoneNumber}</Text>
                           </View>
                         </Pressable>
-                      );
-                    })}
-                  </View>
-                </>
-              ) : (
-                <Text style={styles.helperText}>
-                  You do not have any in-app friends yet. Use the Friends tab to add them.
-                </Text>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.helperText}>
+                      No phone contacts selected yet. Search or load contacts from your phone.
+                    </Text>
+                  )}
+
+                  <Pressable
+                    disabled={
+                      isSavingShindig || selectedContacts.length + selectedFriends.length === 0
+                    }
+                    onPress={saveShindigAndOpenFeed}
+                    style={[
+                      styles.ctaButton,
+                      (isSavingShindig || selectedContacts.length + selectedFriends.length === 0) &&
+                        styles.buttonDisabled,
+                    ]}
+                  >
+                    <Text style={styles.ctaButtonText}>
+                      {isSavingShindig
+                        ? 'Starting...'
+                        : `Continue with ${selectedContacts.length + selectedFriends.length}`}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={isSavingShindig}
+                    onPress={skipInvites}
+                    style={styles.secondaryTextButton}
+                  >
+                    <Text style={styles.secondaryTextButtonLabel}>Select Contacts Later</Text>
+                  </Pressable>
+                </View>
               )}
-
-              <Text style={styles.inviteSectionLabel}>Invite By Text</Text>
-              {isLoadingContacts ? <Text style={styles.helperText}>Loading contacts...</Text> : null}
-              {!isLoadingContacts && contacts.length === 0 ? (
-                <Text style={styles.helperText}>
-                  No contacts available right now. You can continue without inviting anyone.
-                </Text>
-              ) : null}
-
-              <View style={styles.contactList}>
-                {filteredContacts.map((contact) => {
-                  const isSelected = selectedContactIds.includes(contact.id);
-                  return (
-                    <Pressable
-                      key={contact.id}
-                      onPress={() => toggleContact(contact.id)}
-                      style={styles.contactItem}
-                    >
-                      <View style={[styles.contactCheckbox, isSelected && styles.contactCheckboxActive]}>
-                        <Text style={styles.contactCheckboxText}>{isSelected ? 'x' : ''}</Text>
-                      </View>
-                      <View style={styles.contactCopy}>
-                        <Text style={styles.contactName}>{contact.name}</Text>
-                        <Text style={styles.contactPhone}>{contact.phoneNumber}</Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <Pressable
-                disabled={isSavingShindig}
-                onPress={saveShindigAndOpenFeed}
-                style={[styles.ctaButton, isSavingShindig && styles.buttonDisabled]}
-              >
-                <Text style={styles.ctaButtonText}>
-                  {isSavingShindig
-                    ? 'Starting...'
-                    : selectedContacts.length + selectedFriends.length > 0
-                      ? `Invite ${selectedContacts.length + selectedFriends.length} People`
-                      : 'Start Feed'}
-                </Text>
-              </Pressable>
             </View>
           ) : null}
         </ScrollView>
@@ -1801,7 +2544,7 @@ const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.lg,
     paddingBottom: theme.spacing.xxxl,
-    paddingTop: 72,
+    paddingTop: 28,
   },
   topBar: {
     alignItems: 'center',
@@ -1819,22 +2562,31 @@ const styles = StyleSheet.create({
     width: 52,
   },
   avatarButton: {
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.borderStrong,
     borderRadius: theme.radius.round,
     borderWidth: 2,
     padding: 2,
   },
   avatar: {
     borderRadius: theme.radius.round,
-    height: 52,
-    width: 52,
+    height: 54,
+    width: 54,
   },
   ctaButton: {
     alignItems: 'center',
-    backgroundColor: '#FF615A',
+    backgroundColor: theme.colors.accent,
+    borderColor: 'rgba(255, 196, 184, 0.32)',
     borderRadius: theme.radius.round,
+    borderWidth: 1,
     marginTop: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
+    shadowColor: theme.colors.accentPink,
+    shadowOffset: {
+      height: 8,
+      width: 0,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
     width: '100%',
   },
   ctaButtonText: {
@@ -1848,8 +2600,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: theme.colors.textPrimary,
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
   },
   pastList: {
     gap: theme.spacing.sm,
@@ -1857,8 +2609,8 @@ const styles = StyleSheet.create({
   pastCard: {
     alignItems: 'center',
     backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 22,
     borderWidth: 1,
     flexDirection: 'row',
     padding: theme.spacing.sm,
@@ -1882,14 +2634,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
+  invitedByTag: {
+    color: theme.colors.accentPink,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 6,
+  },
   emptyText: {
     color: theme.colors.textMuted,
     lineHeight: 22,
   },
   screenTitle: {
-    color: theme.colors.textPrimary,
-    fontSize: 22,
-    fontWeight: '700',
+    color: theme.colors.accentPink,
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -1,
   },
   panel: {
     marginTop: theme.spacing.xl,
@@ -1910,8 +2669,8 @@ const styles = StyleSheet.create({
   addPhotoCard: {
     alignItems: 'center',
     backgroundColor: theme.colors.surface,
-    borderColor: '#FF615A',
-    borderRadius: theme.radius.lg,
+    borderColor: theme.colors.accentPink,
+    borderRadius: 22,
     borderStyle: 'dashed',
     borderWidth: 1,
     height: 108,
@@ -1953,9 +2712,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   input: {
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.backgroundAlt,
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
+    borderRadius: 18,
     borderWidth: 1,
     color: theme.colors.textPrimary,
     paddingHorizontal: theme.spacing.md,
@@ -1973,7 +2732,7 @@ const styles = StyleSheet.create({
   suggestionItem: {
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
+    borderRadius: 20,
     borderWidth: 1,
     padding: theme.spacing.md,
   },
@@ -1994,11 +2753,104 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
     textAlign: 'center',
   },
+  inviteIntroCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 30,
+    borderWidth: 1,
+    padding: theme.spacing.lg,
+  },
+  inviteHeroTitle: {
+    color: theme.colors.accentPink,
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -1,
+    textAlign: 'center',
+  },
+  inviteSummaryRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    marginTop: theme.spacing.md,
+  },
+  inviteSummaryPill: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(23, 35, 62, 0.88)',
+    borderColor: theme.colors.border,
+    borderRadius: 22,
+    borderWidth: 1,
+    flex: 1,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+  },
+  inviteSummaryValue: {
+    color: '#E2B8FF',
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  inviteSummaryLabel: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
+    textTransform: 'uppercase',
+  },
+  invitePickerCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 30,
+    borderWidth: 1,
+    padding: theme.spacing.lg,
+  },
+  invitePickerHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.lg,
+  },
+  invitePickerTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.9,
+  },
+  inlineBackButton: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.xs,
+    minWidth: 72,
+  },
+  inlineBackLabel: {
+    color: theme.colors.accentSoft,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  inlineBackSpacer: {
+    minWidth: 72,
+  },
   inviteSectionLabel: {
     color: theme.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  inviteSectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginTop: theme.spacing.lg,
+  },
+  inviteSectionAction: {
+    backgroundColor: 'rgba(23, 35, 62, 0.96)',
+    borderColor: theme.colors.borderStrong,
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+  },
+  inviteSectionActionText: {
+    color: theme.colors.accentPink,
+    fontSize: 13,
+    fontWeight: '700',
   },
   contactList: {
     gap: theme.spacing.sm,
@@ -2006,8 +2858,13 @@ const styles = StyleSheet.create({
   },
   contactItem: {
     alignItems: 'center',
+    backgroundColor: 'rgba(23, 35, 62, 0.88)',
+    borderColor: theme.colors.border,
+    borderRadius: 22,
+    borderWidth: 1,
     flexDirection: 'row',
-    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
   },
   contactCheckbox: {
     alignItems: 'center',
@@ -2019,8 +2876,8 @@ const styles = StyleSheet.create({
     width: 28,
   },
   contactCheckboxActive: {
-    backgroundColor: '#FF615A',
-    borderColor: '#FF615A',
+    backgroundColor: theme.colors.accentPink,
+    borderColor: theme.colors.accentPink,
   },
   contactCheckboxText: {
     color: '#FFFFFF',
@@ -2047,16 +2904,59 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
+  secondaryTextButton: {
+    alignItems: 'center',
+    marginTop: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  secondaryTextButtonLabel: {
+    color: theme.colors.accentSoft,
+    fontSize: 16,
+    fontWeight: '700',
+  },
   feedHeader: {
     alignItems: 'flex-start',
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: theme.spacing.md,
   },
+  feedHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
   feedHeaderActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: theme.spacing.sm,
+    marginLeft: theme.spacing.md,
+  },
+  feedOwnerControls: {
     alignItems: 'flex-end',
     flexShrink: 0,
     marginLeft: theme.spacing.md,
+  },
+  feedHeaderPromptWrap: {
+    marginTop: theme.spacing.md,
+    width: '100%',
+  },
+  coverPhotoSavedToast: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(12, 20, 36, 0.96)',
+    borderColor: 'rgba(99, 216, 154, 0.28)',
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: theme.spacing.xs,
+    marginTop: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  coverPhotoSavedToastText: {
+    color: theme.colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
   },
   feedTitleRow: {
     alignItems: 'center',
@@ -2078,22 +2978,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FF615A',
     borderRadius: theme.radius.round,
-    minWidth: 132,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-  },
-  addPhotoHeaderButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
   },
   stateActionButton: {
     alignItems: 'center',
     borderRadius: theme.radius.round,
-    marginTop: theme.spacing.sm,
-    minWidth: 132,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  ownerMenuButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
   },
   completeButton: {
     backgroundColor: theme.colors.surfaceRaised,
@@ -2103,22 +3007,13 @@ const styles = StyleSheet.create({
   reactivateButton: {
     backgroundColor: '#2E8B57',
   },
-  stateActionButtonText: {
-    color: theme.colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  reactivateButtonText: {
-    color: '#FFFFFF',
-  },
   headerPromptCard: {
     backgroundColor: theme.colors.surfaceRaised,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
-    marginTop: theme.spacing.sm,
-    maxWidth: 280,
     padding: theme.spacing.md,
+    width: '100%',
   },
   stateBadge: {
     borderRadius: theme.radius.round,
@@ -2177,6 +3072,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: theme.spacing.sm,
   },
+  feedCardHeaderActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.xs,
+  },
   feedAuthor: {
     color: theme.colors.textPrimary,
     fontSize: 16,
@@ -2192,14 +3092,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   feedPhoto: {
-    borderRadius: theme.radius.lg,
-    height: 240,
-    marginTop: theme.spacing.sm,
+    height: '100%',
     width: '100%',
+  },
+  feedPhotoFrame: {
+    alignItems: 'center',
+    backgroundColor: '#111827',
+    borderRadius: theme.radius.lg,
+    height: 320,
+    marginTop: theme.spacing.sm,
+    overflow: 'hidden',
   },
   photoCredit: {
     color: theme.colors.textMuted,
     fontSize: 12,
+  },
+  coverPhotoBadge: {
+    backgroundColor: 'rgba(255, 138, 91, 0.2)',
+    borderRadius: theme.radius.round,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+  },
+  coverPhotoBadgeText: {
+    color: '#FFB693',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  photoMenuButton: {
+    alignItems: 'center',
+    height: 28,
+    justifyContent: 'center',
+    width: 28,
   },
   socialRow: {
     alignItems: 'center',
@@ -2208,12 +3132,20 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
   },
   socialButton: {
+    alignItems: 'center',
     backgroundColor: theme.colors.surfaceRaised,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.round,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: theme.spacing.xs,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
+  },
+  socialStat: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.xs,
   },
   socialButtonText: {
     color: theme.colors.textPrimary,
@@ -2223,6 +3155,79 @@ const styles = StyleSheet.create({
   socialMeta: {
     color: theme.colors.textMuted,
     fontSize: 13,
+  },
+  likeSheetBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(4, 8, 18, 0.72)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: theme.spacing.lg,
+  },
+  likeSheetDismissArea: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  likeSheetCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 24,
+    borderWidth: 1,
+    maxHeight: '70%',
+    padding: theme.spacing.lg,
+    width: '100%',
+  },
+  likeSheetHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  likeSheetTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  likeSheetCloseButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
+  },
+  likeSheetList: {
+    gap: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+  },
+  likeSheetRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  likeSheetAvatar: {
+    borderRadius: theme.radius.round,
+    height: 44,
+    width: 44,
+  },
+  likeSheetCopy: {
+    flex: 1,
+    marginLeft: theme.spacing.sm,
+    minWidth: 0,
+  },
+  likeSheetName: {
+    color: theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  likeSheetHandle: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    marginTop: 3,
+  },
+  likeSheetEmpty: {
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    paddingVertical: theme.spacing.lg,
+    textAlign: 'center',
   },
   requestPhotoButton: {
     alignItems: 'center',

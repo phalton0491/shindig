@@ -1,39 +1,82 @@
-import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Image,
+  Pressable,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { AlbumCard } from '../components/AlbumCard';
+import { PageHeader } from '../components/PageHeader';
 import { theme } from '../theme';
 import { FeedShindig } from '../types/models';
 
 type HomeFeedScreenProps = {
   feedShindigs: FeedShindig[];
+  headerActions?: React.ReactNode;
   onOpenFriend: (friendId: string) => void;
   onOpenShindig: (shindig: FeedShindig) => void;
+  onRefresh: () => Promise<void>;
+  scrollToTopSignal?: number;
   onStartShindig: () => void;
 };
 
 export function HomeFeedScreen({
   feedShindigs,
+  headerActions,
   onOpenFriend,
   onOpenShindig,
+  onRefresh,
+  scrollToTopSignal = 0,
   onStartShindig,
 }: HomeFeedScreenProps) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const scrollRef = useRef<ScrollView | null>(null);
+
   function badgeLabel(state: FeedShindig['state']) {
     return state === 'active' ? 'Active' : 'Completed';
   }
 
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({
+      animated: true,
+      y: 0,
+    });
+  }, [scrollToTopSignal]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.topBar}>
-          <View>
-            <Text style={styles.kicker}>SHINDIG FEED</Text>
-          </View>
-          <View style={styles.topSpacer} />
-        </View>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        ref={scrollRef}
+        refreshControl={
+          <RefreshControl
+            onRefresh={() => void handleRefresh()}
+            refreshing={isRefreshing}
+            tintColor={theme.colors.accentSoft}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        <PageHeader right={headerActions} title="Feed" />
 
         <Pressable onPress={onStartShindig} style={styles.ctaButton}>
-          <Text style={styles.ctaButtonText}>Start a Shindig</Text>
+          <Text style={styles.ctaButtonText}>+ Start a ShinDig</Text>
         </Pressable>
+        {isRefreshing ? <Text style={styles.refreshText}>Updating feed...</Text> : null}
 
         {feedShindigs.length > 0 ? (
           <View style={styles.stack}>
@@ -111,20 +154,7 @@ const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.lg,
     paddingBottom: theme.spacing.xxl,
-  },
-  topBar: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  topSpacer: {
-    width: 44,
-  },
-  kicker: {
-    color: theme.colors.accentSoft,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.4,
+    paddingTop: 28,
   },
   stack: {
     gap: theme.spacing.lg,
@@ -132,10 +162,19 @@ const styles = StyleSheet.create({
   },
   ctaButton: {
     alignItems: 'center',
-    backgroundColor: '#FF615A',
+    backgroundColor: theme.colors.accent,
+    borderColor: 'rgba(255, 196, 184, 0.38)',
     borderRadius: theme.radius.round,
+    borderWidth: 1,
     marginTop: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
+    shadowColor: theme.colors.accentPink,
+    shadowOffset: {
+      height: 8,
+      width: 0,
+    },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
     width: '100%',
   },
   ctaButtonText: {
@@ -143,12 +182,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
+  refreshText: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    marginTop: theme.spacing.sm,
+    textAlign: 'center',
+  },
   feedCard: {
     backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.xl,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 26,
     borderWidth: 1,
     padding: theme.spacing.md,
+    shadowColor: '#000000',
+    shadowOffset: {
+      height: 10,
+      width: 0,
+    },
+    shadowOpacity: 0.24,
+    shadowRadius: 20,
   },
   feedCardHeader: {
     alignItems: 'flex-start',
@@ -175,8 +227,8 @@ const styles = StyleSheet.create({
   },
   ownerName: {
     color: theme.colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
   },
   ownerHandle: {
     color: theme.colors.textMuted,
@@ -194,7 +246,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   stateBadgeActive: {
-    backgroundColor: 'rgba(46, 139, 87, 0.18)',
+    backgroundColor: 'rgba(99, 216, 154, 0.16)',
   },
   stateBadgeCompleted: {
     backgroundColor: 'rgba(132, 144, 176, 0.18)',
@@ -221,8 +273,8 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.xl,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 26,
     borderWidth: 1,
     marginTop: theme.spacing.xl,
     padding: theme.spacing.xl,

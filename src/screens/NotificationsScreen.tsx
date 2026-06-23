@@ -2,10 +2,12 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { PageHeader } from '../components/PageHeader';
 import { theme } from '../theme';
 import { AppNotification } from '../types/models';
 
 type NotificationsScreenProps = {
+  headerActions?: React.ReactNode;
   notifications: AppNotification[];
   onAcceptFriendRequest: (friendId: string) => Promise<void>;
   onAcceptShindigInvite: (inviteId: string) => Promise<void>;
@@ -19,6 +21,7 @@ type NotificationsScreenProps = {
 };
 
 export function NotificationsScreen({
+  headerActions,
   notifications,
   onAcceptFriendRequest,
   onAcceptShindigInvite,
@@ -112,13 +115,8 @@ export function NotificationsScreen({
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.topBar}>
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
-          </Pressable>
-        </View>
+        <PageHeader onBack={onBack} right={headerActions} title="Notifications" />
 
-        <Text style={styles.title}>Notifications</Text>
         <Text style={styles.subtitle}>
           Recent friend activity, likes, and comments across your ShinDigs.
         </Text>

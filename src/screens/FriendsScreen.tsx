@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 
+import { PageHeader } from '../components/PageHeader';
 import {
   acceptFriendRequest,
   listFriendRequestsForUser,
@@ -22,6 +23,7 @@ import { FriendProfile, FriendRequest, UserProfile } from '../types/models';
 
 type FriendsScreenProps = {
   friends: FriendProfile[];
+  headerActions?: React.ReactNode;
   onFriendsChanged: () => Promise<void>;
   onOpenFriend: (friendId: string) => void;
   onOpenProfile: () => void;
@@ -31,6 +33,7 @@ type FriendsScreenProps = {
 
 export function FriendsScreen({
   friends,
+  headerActions,
   onFriendsChanged,
   onOpenFriend,
   onOpenProfile,
@@ -41,9 +44,11 @@ export function FriendsScreen({
   const [results, setResults] = useState<FriendProfile[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [error, setError] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [actingFriendId, setActingFriendId] = useState('');
   const deferredQuery = useDeferredValue(query);
+  const [activeSearchQuery, setActiveSearchQuery] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -68,7 +73,7 @@ export function FriendsScreen({
     return () => {
       isMounted = false;
     };
-  }, [userId]);
+  }, [friends, userId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -77,9 +82,13 @@ export function FriendsScreen({
       const normalizedQuery = deferredQuery.trim();
       if (normalizedQuery.length < 2) {
         setResults([]);
+        setHasSearched(false);
+        setActiveSearchQuery('');
+        setIsSearching(false);
         return;
       }
 
+      setActiveSearchQuery(normalizedQuery);
       setIsSearching(true);
       try {
         const excludedIds = [
@@ -94,10 +103,12 @@ export function FriendsScreen({
 
         if (isMounted) {
           setResults(nextResults);
+          setHasSearched(true);
         }
       } catch (nextError) {
         if (isMounted) {
           setError(nextError instanceof Error ? nextError.message : 'Failed to search users.');
+          setHasSearched(true);
         }
       } finally {
         if (isMounted) {
@@ -179,15 +190,10 @@ export function FriendsScreen({
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.topBar}>
-          <View>
-            <Text style={styles.kicker}>FRIENDS</Text>
-            <Text style={styles.title}>Build your ShinDig circle.</Text>
-          </View>
-          <Pressable onPress={onOpenProfile} style={styles.avatarButton}>
-            <Image source={{ uri: profile.avatar }} style={styles.avatar} />
-          </Pressable>
-        </View>
+        <PageHeader
+          right={headerActions}
+          title="Friends"
+        />
 
         <View style={styles.searchCard}>
           <Text style={styles.cardTitle}>Find friends by username</Text>
@@ -196,6 +202,9 @@ export function FriendsScreen({
             onChangeText={(value) => {
               setQuery(value);
               setError('');
+              if (value.trim().length < 2) {
+                setHasSearched(false);
+              }
             }}
             placeholder="Search usernames"
             placeholderTextColor={theme.colors.textMuted}
@@ -228,7 +237,11 @@ export function FriendsScreen({
                 </Pressable>
               </View>
             ))}
-            {!isSearching && deferredQuery.trim().length >= 2 && results.length === 0 ? (
+            {!isSearching &&
+            hasSearched &&
+            activeSearchQuery === deferredQuery.trim() &&
+            deferredQuery.trim().length >= 2 &&
+            results.length === 0 ? (
               <Text style={styles.helperText}>No usernames matched that search.</Text>
             ) : null}
           </View>
@@ -317,41 +330,18 @@ const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.lg,
     paddingBottom: theme.spacing.xxl,
-  },
-  topBar: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  kicker: {
-    color: theme.colors.accentSoft,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.4,
+    paddingTop: 28,
   },
   title: {
-    color: theme.colors.textPrimary,
+    color: theme.colors.accentPink,
     fontSize: 30,
     fontWeight: '800',
-    lineHeight: 36,
-    marginTop: theme.spacing.sm,
-    maxWidth: 240,
-  },
-  avatarButton: {
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.round,
-    borderWidth: 2,
-    padding: 2,
-  },
-  avatar: {
-    borderRadius: theme.radius.round,
-    height: 52,
-    width: 52,
+    letterSpacing: -1,
   },
   searchCard: {
     backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.xl,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 26,
     borderWidth: 1,
     marginTop: theme.spacing.xl,
     padding: theme.spacing.lg,
@@ -363,9 +353,9 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   input: {
-    backgroundColor: theme.colors.surfaceRaised,
+    backgroundColor: theme.colors.backgroundAlt,
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
+    borderRadius: 18,
     borderWidth: 1,
     color: theme.colors.textPrimary,
     paddingHorizontal: theme.spacing.md,
@@ -387,9 +377,9 @@ const styles = StyleSheet.create({
   },
   resultRow: {
     alignItems: 'center',
-    backgroundColor: theme.colors.surfaceRaised,
+    backgroundColor: 'rgba(23, 35, 62, 0.88)',
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
+    borderRadius: 20,
     borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -420,7 +410,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   addButton: {
-    backgroundColor: '#FF615A',
+    backgroundColor: theme.colors.accentPink,
     borderRadius: theme.radius.round,
     marginLeft: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
@@ -455,7 +445,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
+    borderRadius: 22,
     borderWidth: 1,
     flexDirection: 'row',
     padding: theme.spacing.md,
@@ -480,7 +470,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   pendingPill: {
-    backgroundColor: theme.colors.surfaceRaised,
+    backgroundColor: 'rgba(23, 35, 62, 0.92)',
     borderColor: theme.colors.border,
     borderRadius: theme.radius.round,
     borderWidth: 1,

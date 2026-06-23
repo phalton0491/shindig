@@ -1,15 +1,18 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { PageHeader } from '../components/PageHeader';
 import { theme } from '../theme';
 
 type MoreScreenProps = {
+  headerActions?: React.ReactNode;
   onBack: () => void;
   onOpenSettings: () => void;
   onSignOut: () => void | Promise<void>;
 };
 
 export function MoreScreen({
+  headerActions,
   onBack,
   onOpenSettings,
   onSignOut,
@@ -17,13 +20,7 @@ export function MoreScreen({
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.topBar}>
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
-          </Pressable>
-          <Text style={styles.title}>User Settings</Text>
-          <View style={styles.topSpacer} />
-        </View>
+        <PageHeader onBack={onBack} right={headerActions} title="Settings" />
 
         <View style={styles.list}>
           <Pressable onPress={onOpenSettings} style={styles.row}>
@@ -48,21 +45,6 @@ const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.lg,
     paddingBottom: theme.spacing.xxxl,
-  },
-  topBar: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  backButton: {
-    alignItems: 'center',
-    height: 52,
-    justifyContent: 'center',
-    marginLeft: -14,
-    width: 52,
-  },
-  topSpacer: {
-    width: 52,
   },
   title: {
     color: theme.colors.textPrimary,

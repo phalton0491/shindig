@@ -11,11 +11,13 @@ import {
   View,
 } from 'react-native';
 
+import { PageHeader } from '../components/PageHeader';
 import { uploadProfileAvatarData } from '../lib/profiles';
 import { theme } from '../theme';
 import { UserProfile } from '../types/models';
 
 type SettingsScreenProps = {
+  headerActions?: React.ReactNode;
   onBack: () => void;
   onProfileSaved: (profile: UserProfile) => Promise<UserProfile>;
   profile: UserProfile;
@@ -23,6 +25,7 @@ type SettingsScreenProps = {
 };
 
 export function SettingsScreen({
+  headerActions,
   onBack,
   onProfileSaved,
   profile,
@@ -100,15 +103,10 @@ export function SettingsScreen({
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.topBar}>
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
-          </Pressable>
-          <View style={styles.topSpacer} />
-        </View>
+        <PageHeader onBack={onBack} right={headerActions} />
 
         <View style={styles.panel}>
-          <Text style={styles.title}>User settings</Text>
+          <Text style={styles.title}>Settings</Text>
           <Text style={styles.subtitle}>Update your photo and profile details.</Text>
 
           <View style={styles.formGrid}>

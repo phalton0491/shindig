@@ -41,9 +41,8 @@ function mapProfile(row: ProfileRow): UserProfile {
     bio: row.bio?.trim() || 'Tell people what your best days and nights look like.',
     avatar: row.avatar_url || defaultAvatar(firstName, lastName),
     stats: {
-      outings: 0,
       friends: 0,
-      saves: 0,
+      shindigs: 0,
     },
   };
 }

@@ -1,4 +1,5 @@
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { theme } from '../theme';
 
@@ -14,52 +15,40 @@ export function AuthMenu({
   onOpenNotifications,
 }: AuthMenuProps) {
   return (
-    <View pointerEvents="box-none" style={styles.shell}>
-      <View style={styles.row}>
-        <Pressable onPress={onOpenNotifications} style={styles.button}>
-          <Text style={styles.buttonText}>🔔</Text>
-          {notificationCount > 0 ? (
-            <View style={styles.dot} />
-          ) : null}
-        </Pressable>
-        <Pressable onPress={onOpenMenu} style={styles.button}>
-          <View style={styles.hamburger}>
-            <View style={styles.hamburgerLine} />
-            <View style={styles.hamburgerLine} />
-            <View style={styles.hamburgerLine} />
-          </View>
-        </Pressable>
-      </View>
+    <View style={styles.row}>
+      <Pressable onPress={onOpenNotifications} style={styles.button}>
+        <Ionicons color="#FFD77A" name="notifications" size={22} />
+        {notificationCount > 0 ? <View style={styles.dot} /> : null}
+      </Pressable>
+      <Pressable onPress={onOpenMenu} style={styles.button}>
+        <View style={styles.hamburger}>
+          <View style={styles.hamburgerLine} />
+          <View style={styles.hamburgerLine} />
+          <View style={styles.hamburgerLine} />
+        </View>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  shell: {
-    position: 'absolute',
-    right: 16,
-    top: Platform.OS === 'ios' ? 44 : 20,
-    zIndex: 20,
-  },
   row: {
     flexDirection: 'row',
     gap: 8,
-    justifyContent: 'flex-end',
   },
   button: {
     alignItems: 'center',
-    height: 44,
+    backgroundColor: 'rgba(14, 22, 40, 0.88)',
+    borderColor: theme.colors.borderStrong,
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    height: 46,
     justifyContent: 'center',
     position: 'relative',
-    width: 44,
-  },
-  buttonText: {
-    color: theme.colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '700',
+    width: 46,
   },
   dot: {
-    backgroundColor: '#FF615A',
+    backgroundColor: theme.colors.accentPink,
     borderRadius: theme.radius.round,
     height: 10,
     position: 'absolute',
@@ -72,9 +61,9 @@ const styles = StyleSheet.create({
     width: 18,
   },
   hamburgerLine: {
-    backgroundColor: theme.colors.textPrimary,
+    backgroundColor: '#FFFFFF',
     borderRadius: 999,
-    height: 2,
+    height: 2.5,
     width: '100%',
   },
 });

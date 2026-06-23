@@ -6,6 +6,7 @@ import {
   AppState,
   Image,
   Linking,
+  Platform,
   SafeAreaView,
   StyleSheet,
   View,
@@ -26,11 +27,14 @@ import {
   approvePhotoAddRequest,
   claimShindigInvite,
   createShindig,
+  deletePhotoFromShindig,
+  deleteShindig,
   getShindigById,
   listFeedShindigs,
   listShindigsForUser,
   rejectShindigInvite,
   rejectPhotoAddRequest,
+  updateShindigCoverPhoto,
   updateShindigState,
 } from './src/lib/shindigs';
 import { registerForPushNotifications } from './src/lib/push';
@@ -45,6 +49,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { MoreScreen } from './src/screens/MoreScreen';
 import { NotificationsScreen } from './src/screens/NotificationsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { ProfileFriendsScreen } from './src/screens/ProfileFriendsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { theme } from './src/theme';
 import {
@@ -99,6 +104,10 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
   });
 }
 
+function countOwnedShindigs(userId: string, shindigs: SavedShindig[]) {
+  return shindigs.filter((shindig) => shindig.ownerId === userId).length;
+}
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
@@ -108,13 +117,36 @@ export default function App() {
   const [feedShindigs, setFeedShindigs] = useState<FeedShindig[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [activeTab, setActiveTab] = useState<AppTab>('home');
+  const [homeScrollToTopSignal, setHomeScrollToTopSignal] = useState(0);
   const [feedShindig, setFeedShindig] = useState<SavedShindig | null>(null);
   const [highlightedPhotoId, setHighlightedPhotoId] = useState<string | null>(null);
-  const [pendingShindigStep, setPendingShindigStep] = useState<'create' | null>(null);
+  const [pendingShindigStep, setPendingShindigStep] = useState<'create' | 'welcome' | null>(null);
+  const [hideShindigsTabSelection, setHideShindigsTabSelection] = useState(false);
   const [friendProfileDetail, setFriendProfileDetail] = useState<{
+    friends: FriendProfile[];
     profile: UserProfile;
     shindigs: SavedShindig[];
   } | null>(null);
+  const [profileFriendsDetail, setProfileFriendsDetail] = useState<{
+    friends: FriendProfile[];
+    ownerId?: string;
+    ownerName: string;
+    showAddButtons: boolean;
+  } | null>(null);
+  const [feedReturnTarget, setFeedReturnTarget] = useState<
+    | { kind: 'shindigs' }
+    | { kind: 'tab'; tab: AppTab }
+    | {
+        detail: {
+          friends: FriendProfile[];
+          profile: UserProfile;
+          shindigs: SavedShindig[];
+        };
+        kind: 'friendProfile';
+        tab: AppTab;
+      }
+    | { kind: 'notifications'; tab: AppTab }
+  >({ kind: 'shindigs' });
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -140,7 +172,7 @@ export default function App() {
         'Profile load'
       ),
       withTimeout(
-        listShindigsForUser(nextSession.user.id),
+        listShindigsForUser(nextSession.user.id, { includeAcceptedInvites: true }),
         BOOTSTRAP_TIMEOUT_MS,
         'ShinDig load'
       ),
@@ -164,7 +196,7 @@ export default function App() {
         stats: {
           ...nextProfile.stats,
           friends: nextFriends.length,
-          outings: nextShindigs.length,
+          shindigs: countOwnedShindigs(nextSession.user.id, nextShindigs),
         },
       },
       shindigs: nextShindigs,
@@ -279,7 +311,7 @@ export default function App() {
   }, [session?.user?.id]);
 
   useEffect(() => {
-    if (!session?.user) {
+    if (!session?.user || Platform.OS === 'web') {
       return;
     }
 
@@ -449,7 +481,7 @@ export default function App() {
       stats: {
         ...savedProfile.stats,
         friends: friends.length,
-        outings: shindigs.length,
+        shindigs: session ? countOwnedShindigs(session.user.id, shindigs) : shindigs.length,
       },
     };
     setProfile(nextWithStats);
@@ -466,7 +498,7 @@ export default function App() {
         stats: {
           ...profile.stats,
           friends: friends.length,
-          outings: nextShindigs.length,
+          shindigs: session ? countOwnedShindigs(session.user.id, nextShindigs) : nextShindigs.length,
         },
       });
     }
@@ -494,6 +526,103 @@ export default function App() {
       state: args.state,
       userId: session.user.id,
     });
+
+    setShindigs((current) =>
+      current.map((shindig) => (shindig.id === updatedShindig.id ? updatedShindig : shindig))
+    );
+    setFeedShindigs((current) =>
+      current.map((shindig) =>
+        shindig.id === updatedShindig.id ? { ...shindig, ...updatedShindig } : shindig
+      )
+    );
+    setFeedShindig((current) =>
+      current?.id === updatedShindig.id ? updatedShindig : current
+    );
+
+    return updatedShindig;
+  }
+
+  async function handleShindigCoverPhotoChanged(args: {
+    photoId: string;
+    shindigId: string;
+  }) {
+    if (!session?.user) {
+      throw new Error('No active session.');
+    }
+
+    const updatedShindig = await updateShindigCoverPhoto({
+      photoId: args.photoId,
+      shindigId: args.shindigId,
+      userId: session.user.id,
+    });
+
+    setShindigs((current) =>
+      current.map((shindig) => (shindig.id === updatedShindig.id ? updatedShindig : shindig))
+    );
+    setFeedShindigs((current) =>
+      current.map((shindig) =>
+        shindig.id === updatedShindig.id ? { ...shindig, ...updatedShindig } : shindig
+      )
+    );
+    setFeedShindig((current) =>
+      current?.id === updatedShindig.id ? updatedShindig : current
+    );
+
+    return updatedShindig;
+  }
+
+  async function handleShindigDeleted(shindigId: string) {
+    if (!session?.user) {
+      throw new Error('No active session.');
+    }
+
+    await deleteShindig({
+      shindigId,
+      userId: session.user.id,
+    });
+
+    let nextOwnedShindigCount = 0;
+    setShindigs((current) => {
+      const nextShindigs = current.filter((shindig) => shindig.id !== shindigId);
+      nextOwnedShindigCount = session
+        ? countOwnedShindigs(session.user.id, nextShindigs)
+        : nextShindigs.length;
+      return nextShindigs;
+    });
+    setFeedShindigs((current) => current.filter((shindig) => shindig.id !== shindigId));
+    setFeedShindig((current) => (current?.id === shindigId ? null : current));
+
+    if (profile) {
+      setProfile({
+        ...profile,
+        stats: {
+          ...profile.stats,
+          shindigs: nextOwnedShindigCount,
+        },
+      });
+    }
+  }
+
+  async function handleShindigPhotoDeleted(args: {
+    photoId: string;
+    shindigId: string;
+  }) {
+    if (!session?.user) {
+      throw new Error('No active session.');
+    }
+
+    const updatedShindig = await deletePhotoFromShindig({
+      photoId: args.photoId,
+      shindigId: args.shindigId,
+      userId: session.user.id,
+    });
+
+    if (!updatedShindig) {
+      setShindigs((current) => current.filter((shindig) => shindig.id !== args.shindigId));
+      setFeedShindigs((current) => current.filter((shindig) => shindig.id !== args.shindigId));
+      setFeedShindig((current) => (current?.id === args.shindigId ? null : current));
+      return null;
+    }
 
     setShindigs((current) =>
       current.map((shindig) => (shindig.id === updatedShindig.id ? updatedShindig : shindig))
@@ -560,7 +689,7 @@ export default function App() {
     }
 
     const [nextShindigs, nextFeed] = await Promise.all([
-      listShindigsForUser(session.user.id),
+      listShindigsForUser(session.user.id, { includeAcceptedInvites: true }),
       listFeedShindigs({
         friendIds: nextFriends.map((friend) => friend.id),
         userId: session.user.id,
@@ -575,7 +704,7 @@ export default function App() {
         stats: {
           ...profile.stats,
           friends: nextFriends.length,
-          outings: nextShindigs.length,
+          shindigs: countOwnedShindigs(session.user.id, nextShindigs),
         },
       });
     }
@@ -594,12 +723,25 @@ export default function App() {
         'postgres_changes',
         {
           event: '*',
+          schema: 'public',
+          table: 'friendships',
+        },
+        () => {
+          void refreshFriends();
+          void refreshNotifications();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
           filter: `recipient_user_id=eq.${userId}`,
           schema: 'public',
           table: 'notifications',
         },
         () => {
           void refreshNotifications();
+          void refreshFriends();
         }
       )
       .on(
@@ -643,6 +785,17 @@ export default function App() {
           event: '*',
           schema: 'public',
           table: 'shindig_comments',
+        },
+        () => {
+          void refreshShindigsAndFeed();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shindig_stops',
         },
         () => {
           void refreshShindigsAndFeed();
@@ -719,7 +872,7 @@ export default function App() {
 
     const refreshAll = () => {
       void refreshNotifications();
-      void refreshShindigsAndFeed();
+      void refreshFriends();
     };
 
     const intervalId = setInterval(refreshAll, 4000);
@@ -744,12 +897,14 @@ export default function App() {
     setShowMore(false);
     setShowSettings(false);
     setShowNotifications(true);
+    setProfileFriendsDetail(null);
     await markNotificationsRead(session.user.id);
     await refreshNotifications();
   }
 
   async function handleOpenFriendProfile(friendId: string) {
-    const [nextProfile, nextShindigs] = await Promise.all([
+    const [nextFriends, nextProfile, nextShindigs] = await Promise.all([
+      listFriendsForUser(friendId),
       getProfileForUser(friendId),
       listShindigsForUser(friendId),
     ]);
@@ -760,10 +915,82 @@ export default function App() {
 
     setShowSettings(false);
     setShowMore(false);
+    setProfileFriendsDetail(null);
     setFriendProfileDetail({
-      profile: nextProfile,
+      friends: nextFriends,
+      profile: {
+        ...nextProfile,
+        stats: {
+          ...nextProfile.stats,
+          friends: nextFriends.length,
+          shindigs: nextShindigs.length,
+        },
+      },
       shindigs: nextShindigs,
     });
+  }
+
+  function handleOpenOwnFriends() {
+    if (!session?.user || !profile) {
+      return;
+    }
+
+    setShowNotifications(false);
+    setShowMore(false);
+    setShowSettings(false);
+    setFriendProfileDetail(null);
+    setProfileFriendsDetail({
+      friends,
+      ownerId: session.user.id,
+      ownerName: profile.name,
+      showAddButtons: false,
+    });
+  }
+
+  function handleOpenViewedFriends() {
+    if (!friendProfileDetail) {
+      return;
+    }
+
+    setProfileFriendsDetail({
+      friends: friendProfileDetail.friends,
+      ownerName: friendProfileDetail.profile.name,
+      showAddButtons: true,
+    });
+  }
+
+  function handleBackFromFeed() {
+    setFeedShindig(null);
+    setHighlightedPhotoId(null);
+    setPendingShindigStep(null);
+    setHideShindigsTabSelection(false);
+
+    if (feedReturnTarget.kind === 'friendProfile') {
+      setShowNotifications(false);
+      setShowMore(false);
+      setShowSettings(false);
+      setProfileFriendsDetail(null);
+      setActiveTab(feedReturnTarget.tab);
+      setFriendProfileDetail(feedReturnTarget.detail);
+      return;
+    }
+
+    if (feedReturnTarget.kind === 'notifications') {
+      setFriendProfileDetail(null);
+      setProfileFriendsDetail(null);
+      setShowMore(false);
+      setShowSettings(false);
+      setActiveTab(feedReturnTarget.tab);
+      setShowNotifications(true);
+      return;
+    }
+
+    setFriendProfileDetail(null);
+    setProfileFriendsDetail(null);
+    setShowNotifications(false);
+    setShowMore(false);
+    setShowSettings(false);
+    setActiveTab(feedReturnTarget.kind === 'tab' ? feedReturnTarget.tab : 'shindigs');
   }
 
   function handleOpenNotification(notification: AppNotification) {
@@ -789,6 +1016,7 @@ export default function App() {
     setShowMore(false);
     setShowSettings(false);
     setFriendProfileDetail(null);
+    setFeedReturnTarget({ kind: 'notifications', tab: activeTab });
     setFeedShindig(targetShindig);
     setHighlightedPhotoId(notification.photoId || null);
     setActiveTab('shindigs');
@@ -844,7 +1072,7 @@ export default function App() {
       userId: session.user.id,
     });
     const [nextShindigs, nextFeed, nextNotifications] = await Promise.all([
-      listShindigsForUser(session.user.id),
+      listShindigsForUser(session.user.id, { includeAcceptedInvites: true }),
       listFeedShindigs({
         friendIds: friends.map((friend) => friend.id),
         userId: session.user.id,
@@ -873,11 +1101,36 @@ export default function App() {
       return;
     }
 
-    await acceptShindigInvite({
+    const acceptedInvite = await acceptShindigInvite({
       inviteId,
       userId: session.user.id,
     });
-    await Promise.all([refreshFeed(), refreshNotifications()]);
+    const [nextShindigs, nextFeed, nextNotifications] = await Promise.all([
+      listShindigsForUser(session.user.id, { includeAcceptedInvites: true }),
+      listFeedShindigs({
+        friendIds: friends.map((friend) => friend.id),
+        userId: session.user.id,
+      }),
+      listNotificationsForUser(session.user.id),
+    ]);
+
+    const targetShindig =
+      nextShindigs.find((item) => item.id === acceptedInvite.shindig_id) ||
+      nextFeed.find((item) => item.id === acceptedInvite.shindig_id) ||
+      null;
+
+    setShindigs(nextShindigs);
+    setFeedShindigs(nextFeed);
+    setNotifications(nextNotifications);
+    setShowNotifications(false);
+    setShowMore(false);
+    setShowSettings(false);
+    setFriendProfileDetail(null);
+    setHighlightedPhotoId(null);
+    if (targetShindig) {
+      setFeedShindig(targetShindig);
+    }
+    setActiveTab('shindigs');
   }
 
   async function handleRejectShindigInvite(inviteId: string) {
@@ -919,6 +1172,20 @@ export default function App() {
     );
   }
 
+  const headerActions = (
+    <AuthMenu
+      notificationCount={notifications.filter((item) => !item.readAt).length}
+      onOpenMenu={() => {
+        setFriendProfileDetail(null);
+        setProfileFriendsDetail(null);
+        setShowNotifications(false);
+        setShowSettings(false);
+        setShowMore(true);
+      }}
+      onOpenNotifications={handleOpenNotifications}
+    />
+  );
+
   return (
     <>
       <StatusBar style="light" />
@@ -926,6 +1193,7 @@ export default function App() {
         <View style={styles.screenShell}>
           {showNotifications ? (
             <NotificationsScreen
+              headerActions={headerActions}
               onAcceptShindigInvite={handleAcceptShindigInvite}
               notifications={notifications}
               onAcceptFriendRequest={handleAcceptFriendRequest}
@@ -939,6 +1207,7 @@ export default function App() {
             />
           ) : showSettings ? (
             <SettingsScreen
+              headerActions={headerActions}
               onBack={() => {
                 setShowSettings(false);
                 setShowMore(true);
@@ -949,6 +1218,7 @@ export default function App() {
             />
           ) : showMore ? (
             <MoreScreen
+              headerActions={headerActions}
               onBack={() => setShowMore(false)}
               onOpenSettings={() => {
                 setShowMore(false);
@@ -956,10 +1226,30 @@ export default function App() {
               }}
               onSignOut={signOut}
             />
+          ) : profileFriendsDetail ? (
+            <ProfileFriendsScreen
+              currentFriends={friends}
+              currentUserId={session.user.id}
+              currentUserProfile={profile}
+              friends={profileFriendsDetail.friends}
+              headerActions={headerActions}
+              onBack={() => setProfileFriendsDetail(null)}
+              onOpenFriend={handleOpenFriendProfile}
+              onRefreshCurrentFriends={refreshFriends}
+              ownerName={profileFriendsDetail.ownerName}
+              showAddButtons={profileFriendsDetail.showAddButtons}
+            />
           ) : friendProfileDetail ? (
             <FriendProfileScreen
+              headerActions={headerActions}
               onBack={() => setFriendProfileDetail(null)}
+              onOpenFriends={handleOpenViewedFriends}
               onOpenShindig={(shindig) => {
+                setFeedReturnTarget({
+                  detail: friendProfileDetail,
+                  kind: 'friendProfile',
+                  tab: activeTab,
+                });
                 setFeedShindig(shindig);
                 setFriendProfileDetail(null);
                 setActiveTab('shindigs');
@@ -970,12 +1260,18 @@ export default function App() {
           ) : activeTab === 'home' ? (
             <HomeFeedScreen
               feedShindigs={feedShindigs}
+              headerActions={headerActions}
               onOpenFriend={handleOpenFriendProfile}
               onOpenShindig={(shindig) => {
+                setFeedReturnTarget({ kind: 'tab', tab: 'home' });
                 setFeedShindig(shindig);
                 setPendingShindigStep(null);
                 setActiveTab('shindigs');
               }}
+              onRefresh={async () => {
+                await refreshShindigsAndFeed();
+              }}
+              scrollToTopSignal={homeScrollToTopSignal}
               onStartShindig={() => {
                 setFeedShindig(null);
                 setHighlightedPhotoId(null);
@@ -984,9 +1280,15 @@ export default function App() {
               }}
             />
           ) : null}
-          {!showNotifications && !showSettings && !friendProfileDetail && activeTab === 'friends' ? (
+          {!showNotifications &&
+          !showMore &&
+          !showSettings &&
+          !friendProfileDetail &&
+          !profileFriendsDetail &&
+          activeTab === 'friends' ? (
             <FriendsScreen
               friends={friends}
+              headerActions={headerActions}
               onFriendsChanged={refreshFriends}
               onOpenFriend={handleOpenFriendProfile}
               onOpenProfile={() => setActiveTab('profile')}
@@ -994,26 +1296,47 @@ export default function App() {
               userId={session.user.id}
             />
           ) : null}
-          {!showNotifications && !showSettings && !friendProfileDetail && activeTab === 'shindigs' ? (
+          {!showNotifications &&
+          !showMore &&
+          !showSettings &&
+          !friendProfileDetail &&
+          !profileFriendsDetail &&
+          activeTab === 'shindigs' ? (
             <HomeScreen
               friends={friends}
+              headerActions={headerActions}
               initialFeedShindig={feedShindig}
               initialHighlightedPhotoId={highlightedPhotoId}
               initialStep={pendingShindigStep}
+              onBackFromFeed={handleBackFromFeed}
+              onFlowStepChange={(step) => {
+                setHideShindigsTabSelection(step === 'create' || step === 'invite');
+              }}
               onConsumeInitialFeedShindig={() => setFeedShindig(null)}
               onConsumeInitialHighlightedPhotoId={() => setHighlightedPhotoId(null)}
               onConsumeInitialStep={() => setPendingShindigStep(null)}
               onShindigSaved={handleShindigSaved}
+              onShindigDeleted={handleShindigDeleted}
+              onShindigCoverPhotoChanged={handleShindigCoverPhotoChanged}
+              onShindigPhotoDeleted={handleShindigPhotoDeleted}
               onShindigStateChanged={handleShindigStateChanged}
               profile={profile}
               shindigs={shindigs}
               userId={session.user.id}
             />
           ) : null}
-          {!showNotifications && !showSettings && !friendProfileDetail && activeTab === 'profile' ? (
+          {!showNotifications &&
+          !showMore &&
+          !showSettings &&
+          !friendProfileDetail &&
+          !profileFriendsDetail &&
+          activeTab === 'profile' ? (
             <ProfileScreen
+              headerActions={headerActions}
               onBackHome={() => setActiveTab('home')}
+              onOpenFriends={handleOpenOwnFriends}
               onOpenShindig={(shindig) => {
+                setFeedReturnTarget({ kind: 'tab', tab: 'profile' });
                 setFeedShindig(shindig);
                 setActiveTab('shindigs');
               }}
@@ -1022,28 +1345,48 @@ export default function App() {
             />
           ) : null}
         </View>
-        {!showNotifications && !showMore && !showSettings && !friendProfileDetail ? (
-          <AuthMenu
-            notificationCount={notifications.filter((item) => !item.readAt).length}
-            onOpenMenu={() => {
-              setFriendProfileDetail(null);
+        {!showNotifications &&
+        !showMore &&
+        !showSettings &&
+        !friendProfileDetail &&
+        !profileFriendsDetail ? (
+          <BottomNav
+            activeTab={
+              activeTab === 'shindigs' && hideShindigsTabSelection ? null : activeTab
+            }
+            onCreateShindig={() => {
               setShowNotifications(false);
+              setShowMore(false);
               setShowSettings(false);
-              setShowMore(true);
+              setFriendProfileDetail(null);
+              setProfileFriendsDetail(null);
+              setFeedShindig(null);
+              setHighlightedPhotoId(null);
+              setPendingShindigStep('create');
+              setHideShindigsTabSelection(true);
+              setActiveTab('shindigs');
             }}
-            onOpenNotifications={handleOpenNotifications}
+            onSelectTab={(tab) => {
+              if (tab === 'home' && activeTab === 'home') {
+                setHomeScrollToTopSignal((current) => current + 1);
+                return;
+              }
+
+              setShowNotifications(false);
+              setShowMore(false);
+              setShowSettings(false);
+              setFriendProfileDetail(null);
+              setProfileFriendsDetail(null);
+              if (tab === 'shindigs') {
+                setFeedShindig(null);
+                setHighlightedPhotoId(null);
+                setPendingShindigStep('welcome');
+              }
+              setHideShindigsTabSelection(false);
+              setActiveTab(tab);
+            }}
           />
         ) : null}
-        <BottomNav
-          activeTab={activeTab}
-          onSelectTab={(tab) => {
-            setShowNotifications(false);
-            setShowMore(false);
-            setShowSettings(false);
-            setFriendProfileDetail(null);
-            setActiveTab(tab);
-          }}
-        />
       </View>
     </>
   );
