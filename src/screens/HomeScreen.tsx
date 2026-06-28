@@ -50,6 +50,7 @@ import {
   toggleShindigLike,
   unclaimBringItem,
 } from '../lib/shindigs';
+import { searchProfilesByUsername } from '../lib/profiles';
 import { supabase } from '../lib/supabase';
 import { theme } from '../theme';
 import {
@@ -497,7 +498,7 @@ export function HomeScreen({
   const [isAiCoverModalOpen, setIsAiCoverModalOpen] = useState(false);
   const [isGeneratingAiCover, setIsGeneratingAiCover] = useState(false);
   const [shindigName, setShindigName] = useState('');
-  const [shindigTiming, setShindigTiming] = useState<'now' | 'planned'>('now');
+  const [shindigTiming, setShindigTiming] = useState<'now' | 'planned'>('planned');
   const [plannedFor, setPlannedFor] = useState<Date>(() => {
     const next = new Date();
     next.setDate(next.getDate() + 1);
@@ -511,11 +512,16 @@ export function HomeScreen({
   const [selectedLocation, setSelectedLocation] = useState<TimelinePlace | null>(null);
   const [contacts, setContacts] = useState<InviteContact[]>([]);
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
+  const [inviteSearchResults, setInviteSearchResults] = useState<FriendProfile[]>([]);
+  const [selectedInviteUsersById, setSelectedInviteUsersById] = useState<
+    Record<string, FriendProfile>
+  >({});
   const [selectedContactsById, setSelectedContactsById] = useState<Record<string, InviteContact>>(
     {}
   );
   const [inviteSearch, setInviteSearch] = useState('');
   const [isInvitePickerOpen, setIsInvitePickerOpen] = useState(false);
+  const [isSearchingInviteUsers, setIsSearchingInviteUsers] = useState(false);
   const [activeFeedShindig, setActiveFeedShindig] = useState<SavedShindig | null>(null);
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObjectCoords | null>(
     null
@@ -588,6 +594,10 @@ export function HomeScreen({
   const selectedFriends = useMemo(
     () => friends.filter((friend) => selectedFriendIds.includes(friend.id)),
     [friends, selectedFriendIds]
+  );
+  const selectedInviteUsers = useMemo(
+    () => Object.values(selectedInviteUsersById),
+    [selectedInviteUsersById]
   );
   const activeShindigs = useMemo(
     () => shindigs.filter((shindig) => shindig.state === 'active'),
@@ -760,6 +770,46 @@ export function HomeScreen({
       y: Math.max(nextOffset - 120, 0),
     });
   }, [highlightedPhotoId, step, activeFeedShindig]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function runInviteUserSearch() {
+      const query = inviteSearch.trim();
+      if (!isInvitePickerOpen || query.length < 2) {
+        setInviteSearchResults([]);
+        setIsSearchingInviteUsers(false);
+        return;
+      }
+
+      setIsSearchingInviteUsers(true);
+      try {
+        const nextResults = await searchProfilesByUsername({
+          currentUserId: userId,
+          excludedUserIds: friends.map((friend) => friend.id),
+          query,
+        });
+
+        if (isMounted) {
+          setInviteSearchResults(nextResults);
+        }
+      } catch (nextError) {
+        if (isMounted) {
+          setError(nextError instanceof Error ? nextError.message : 'Failed to search ShinDig users.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsSearchingInviteUsers(false);
+        }
+      }
+    }
+
+    void runInviteUserSearch();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [friends, inviteSearch, isInvitePickerOpen, userId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1060,7 +1110,7 @@ export function HomeScreen({
       const generated = await generateShindigCover({
         location: locationQuery.trim() || selectedLocation?.title,
         prompt,
-        scheduledFor: shindigTiming === 'planned' ? plannedFor.toISOString() : null,
+        scheduledFor: plannedFor.toISOString(),
         title: shindigName.trim(),
       });
 
@@ -1106,7 +1156,7 @@ export function HomeScreen({
     setIsAiCoverModalOpen(false);
     setIsGeneratingAiCover(false);
     setShindigName('');
-    setShindigTiming('now');
+    setShindigTiming('planned');
     const nextPlannedDate = new Date();
     nextPlannedDate.setDate(nextPlannedDate.getDate() + 1);
     nextPlannedDate.setHours(19, 0, 0, 0);
@@ -1114,8 +1164,10 @@ export function HomeScreen({
     setShowPlannedDatePicker(false);
     setShowPlannedTimePicker(false);
     setSelectedFriendIds([]);
+    setSelectedInviteUsersById({});
     setSelectedContactsById({});
     setInviteSearch('');
+    setInviteSearchResults([]);
     setBringItemDraft('');
     setCustomBringItemDraft('');
     setShowAllUpcomingBringItems(false);
@@ -1272,7 +1324,7 @@ export function HomeScreen({
       return;
     }
 
-    if (shindigTiming === 'planned' && photos.length > 1) {
+    if (photos.length > 1) {
       setError('Upcoming ShinDigs can only start with one cover photo.');
       return;
     }
@@ -1282,7 +1334,7 @@ export function HomeScreen({
       return;
     }
 
-    if (shindigTiming === 'planned' && plannedFor.getTime() <= Date.now()) {
+    if (plannedFor.getTime() <= Date.now()) {
       setError('Pick a future date and time for this planned ShinDig.');
       return;
     }
@@ -1329,6 +1381,7 @@ export function HomeScreen({
   async function openInvitePicker() {
     setError('');
     setInviteSearch('');
+    setInviteSearchResults([]);
     setIsInvitePickerOpen(true);
     await loadDeviceContacts({ reset: true });
   }
@@ -1337,6 +1390,7 @@ export function HomeScreen({
     contactsRequestIdRef.current += 1;
     setIsLoadingContacts(false);
     setInviteSearch('');
+    setInviteSearchResults([]);
     setIsInvitePickerOpen(false);
   }
 
@@ -1451,6 +1505,21 @@ export function HomeScreen({
     });
   }
 
+  function toggleInviteUser(profile: FriendProfile) {
+    setSelectedInviteUsersById((current) => {
+      if (current[profile.id]) {
+        const next = { ...current };
+        delete next[profile.id];
+        return next;
+      }
+
+      return {
+        ...current,
+        [profile.id]: profile,
+      };
+    });
+  }
+
   async function handleUpcomingInviteResponse(
     shindig: SavedShindig,
     nextStatus: 'accepted' | 'maybe' | 'rejected'
@@ -1492,8 +1561,8 @@ export function HomeScreen({
 
     try {
       const savedShindig = await onShindigSaved({
-        plannedFor: shindigTiming === 'planned' ? plannedFor.toISOString() : null,
-        state: shindigTiming === 'planned' ? 'planned' : 'active',
+        plannedFor: plannedFor.toISOString(),
+        state: 'planned',
         stops: [
           {
             photos,
@@ -1521,11 +1590,17 @@ export function HomeScreen({
       }
 
       const inviteIssues: string[] = [];
+      const selectedAppInvitees = [
+        ...selectedFriends,
+        ...selectedInviteUsers.filter(
+          (candidate) => !selectedFriendIds.includes(candidate.id)
+        ),
+      ];
 
-      if (selectedFriends.length > 0) {
+      if (selectedAppInvitees.length > 0) {
         try {
           const invites = await createAppFriendShindigInvites({
-            friendIds: selectedFriends.map((friend) => friend.id),
+            friendIds: selectedAppInvitees.map((friend) => friend.id),
             inviterUserId: userId,
             shindigId: savedShindigWithCover.id,
           });
@@ -4036,133 +4111,88 @@ export function HomeScreen({
 
           {step === 'create' ? (
             <View style={styles.panel}>
-              <Text style={styles.fieldLabel}>When</Text>
-              <View style={styles.timingToggleRow}>
-                <Pressable
-                  onPress={() => setShindigTiming('now')}
-                  style={[
-                    styles.timingToggleButton,
-                    shindigTiming === 'now' && styles.timingToggleButtonActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.timingToggleText,
-                      shindigTiming === 'now' && styles.timingToggleTextActive,
-                    ]}
-                  >
-                    Start Now
-                  </Text>
-                </Pressable>
+              <Text style={styles.fieldLabel}>Date*</Text>
+              <View style={styles.plannedDateSection}>
                 <Pressable
                   onPress={() => {
-                    setShindigTiming('planned');
-                    setPhotos((current) =>
-                      current.length > 0
-                        ? [{ ...current[0], isPreferredCover: true }]
-                        : current
-                    );
+                    setShowPlannedTimePicker(false);
+                    setShowPlannedDatePicker((current) => !current);
                   }}
-                  style={[
-                    styles.timingToggleButton,
-                    shindigTiming === 'planned' && styles.timingToggleButtonActive,
-                  ]}
+                  style={styles.plannedDateButton}
                 >
-                  <Text
-                    style={[
-                      styles.timingToggleText,
-                      shindigTiming === 'planned' && styles.timingToggleTextActive,
-                    ]}
-                  >
-                    Plan For Later
+                  <Ionicons color={theme.colors.accentSoft} name="calendar-outline" size={18} />
+                  <Text style={styles.plannedDateButtonText}>
+                    {new Date(plannedFor).toLocaleDateString('en-US', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
                   </Text>
                 </Pressable>
+                {showPlannedDatePicker ? (
+                  <View style={styles.plannedDatePickerWrap}>
+                    <DateTimePicker
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      minimumDate={new Date()}
+                      mode="date"
+                      onChange={(event: DateTimePickerEvent, nextValue?: Date) => {
+                        if (Platform.OS !== 'ios') {
+                          setShowPlannedDatePicker(false);
+                        }
+
+                        if (event.type === 'set' && nextValue) {
+                          const merged = new Date(plannedFor);
+                          merged.setFullYear(
+                            nextValue.getFullYear(),
+                            nextValue.getMonth(),
+                            nextValue.getDate()
+                          );
+                          setPlannedFor(merged);
+                        }
+                      }}
+                      textColor={theme.colors.textPrimary}
+                      themeVariant="dark"
+                      value={plannedFor}
+                    />
+                  </View>
+                ) : null}
+
+                <Text style={[styles.fieldLabel, styles.spacedLabel]}>Start Time*</Text>
+                <Pressable
+                  onPress={() => {
+                    setShowPlannedDatePicker(false);
+                    setShowPlannedTimePicker((current) => !current);
+                  }}
+                  style={styles.plannedDateButton}
+                >
+                  <Ionicons color={theme.colors.accentSoft} name="time-outline" size={18} />
+                  <Text style={styles.plannedDateButtonText}>
+                    {formatPlannedTimeLabel(plannedFor.toISOString())}
+                  </Text>
+                </Pressable>
+                {showPlannedTimePicker ? (
+                  <View style={styles.plannedDatePickerWrap}>
+                    <DateTimePicker
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      mode="time"
+                      onChange={(event: DateTimePickerEvent, nextValue?: Date) => {
+                        if (Platform.OS !== 'ios') {
+                          setShowPlannedTimePicker(false);
+                        }
+
+                        if (event.type === 'set' && nextValue) {
+                          const merged = new Date(plannedFor);
+                          merged.setHours(nextValue.getHours(), nextValue.getMinutes(), 0, 0);
+                          setPlannedFor(merged);
+                        }
+                      }}
+                      textColor={theme.colors.textPrimary}
+                      themeVariant="dark"
+                      value={plannedFor}
+                    />
+                  </View>
+                ) : null}
               </View>
-
-              {shindigTiming === 'planned' ? (
-                <View style={styles.plannedDateSection}>
-                  <Text style={styles.fieldLabel}>Date*</Text>
-                  <Pressable
-                    onPress={() => {
-                      setShowPlannedTimePicker(false);
-                      setShowPlannedDatePicker((current) => !current);
-                    }}
-                    style={styles.plannedDateButton}
-                  >
-                    <Ionicons color={theme.colors.accentSoft} name="calendar-outline" size={18} />
-                    <Text style={styles.plannedDateButtonText}>
-                      {new Date(plannedFor).toLocaleDateString('en-US', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </Text>
-                  </Pressable>
-                  {showPlannedDatePicker ? (
-                    <View style={styles.plannedDatePickerWrap}>
-                      <DateTimePicker
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        minimumDate={new Date()}
-                        mode="date"
-                        onChange={(event: DateTimePickerEvent, nextValue?: Date) => {
-                          if (Platform.OS !== 'ios') {
-                            setShowPlannedDatePicker(false);
-                          }
-
-                          if (event.type === 'set' && nextValue) {
-                            const merged = new Date(plannedFor);
-                            merged.setFullYear(
-                              nextValue.getFullYear(),
-                              nextValue.getMonth(),
-                              nextValue.getDate()
-                            );
-                            setPlannedFor(merged);
-                          }
-                        }}
-                        textColor={theme.colors.textPrimary}
-                        themeVariant="dark"
-                        value={plannedFor}
-                      />
-                    </View>
-                  ) : null}
-
-                  <Text style={[styles.fieldLabel, styles.spacedLabel]}>Start Time*</Text>
-                  <Pressable
-                    onPress={() => {
-                      setShowPlannedDatePicker(false);
-                      setShowPlannedTimePicker((current) => !current);
-                    }}
-                    style={styles.plannedDateButton}
-                  >
-                    <Ionicons color={theme.colors.accentSoft} name="time-outline" size={18} />
-                    <Text style={styles.plannedDateButtonText}>
-                      {formatPlannedTimeLabel(plannedFor.toISOString())}
-                    </Text>
-                  </Pressable>
-                  {showPlannedTimePicker ? (
-                    <View style={styles.plannedDatePickerWrap}>
-                      <DateTimePicker
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        mode="time"
-                        onChange={(event: DateTimePickerEvent, nextValue?: Date) => {
-                          if (Platform.OS !== 'ios') {
-                            setShowPlannedTimePicker(false);
-                          }
-
-                          if (event.type === 'set' && nextValue) {
-                            const merged = new Date(plannedFor);
-                            merged.setHours(nextValue.getHours(), nextValue.getMinutes(), 0, 0);
-                            setPlannedFor(merged);
-                          }
-                        }}
-                        textColor={theme.colors.textPrimary}
-                        themeVariant="dark"
-                        value={plannedFor}
-                      />
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
 
               <Text style={styles.fieldLabel}>Shindig Name*</Text>
               <TextInput
@@ -4271,9 +4301,8 @@ export function HomeScreen({
                 <View style={styles.inviteIntroCard}>
                   <Text style={styles.inviteHeroTitle}>Invite people to this ShinDig</Text>
                   <Text style={styles.inviteSubtitle}>
-                    {shindigTiming === 'planned'
-                      ? 'Choose friends and contacts to invite to this future ShinDig. Invited people can accept, reject, or maybe.'
-                      : 'Choose contacts to text and friends already on ShinDig. You can also skip this for now and start the feed immediately.'}
+                    Choose friends and contacts to invite to this future ShinDig. Invited
+                    people can accept, reject, or maybe.
                   </Text>
                   <View style={styles.inviteSummaryRow}>
                     <View style={styles.inviteSummaryPill}>
@@ -4310,12 +4339,19 @@ export function HomeScreen({
                   </View>
 
                   <TextInput
-                    onChangeText={setInviteSearch}
-                    placeholder="Search friends on ShinDig..."
+                    onChangeText={(value) => {
+                      setInviteSearch(value);
+                      setError('');
+                    }}
+                    placeholder="Search friends and ShinDig users..."
                     placeholderTextColor={theme.colors.textMuted}
                     style={styles.input}
                     value={inviteSearch}
                   />
+
+                  {isSearchingInviteUsers ? (
+                    <Text style={styles.helperText}>Searching ShinDig users...</Text>
+                  ) : null}
 
                   {friends.length > 0 ? (
                     <>
@@ -4364,6 +4400,47 @@ export function HomeScreen({
                           );
                         })}
                       </View>
+                    </>
+                  ) : null}
+
+                  {inviteSearch.trim().length >= 2 ? (
+                    <>
+                      <Text style={styles.inviteSectionLabel}>Other Users On ShinDig</Text>
+                      {inviteSearchResults.length > 0 ? (
+                        <View style={styles.contactList}>
+                          {inviteSearchResults.map((profile) => {
+                            const isSelected = Boolean(selectedInviteUsersById[profile.id]);
+                            return (
+                              <Pressable
+                                key={profile.id}
+                                onPress={() => toggleInviteUser(profile)}
+                                style={styles.contactItem}
+                              >
+                                <View
+                                  style={[
+                                    styles.contactCheckbox,
+                                    isSelected && styles.contactCheckboxActive,
+                                  ]}
+                                >
+                                  <Text style={styles.contactCheckboxText}>
+                                    {isSelected ? 'x' : ''}
+                                  </Text>
+                                </View>
+                                <View style={styles.contactCopy}>
+                                  <Text style={styles.contactName}>{profile.name}</Text>
+                                  <Text style={styles.contactPhone}>
+                                    {profile.handle} {profile.city ? ` | ${profile.city}` : ''}
+                                  </Text>
+                                </View>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      ) : !isSearchingInviteUsers ? (
+                        <Text style={styles.helperText}>
+                          No other ShinDig users matched that search.
+                        </Text>
+                      ) : null}
                     </>
                   ) : null}
 
@@ -4432,21 +4509,55 @@ export function HomeScreen({
                     </Text>
                   )}
 
+                  {selectedInviteUsers.length > 0 ? (
+                    <>
+                      <Text style={styles.inviteSectionLabel}>Selected ShinDig Users</Text>
+                      <View style={styles.contactList}>
+                        {selectedInviteUsers.map((profile) => (
+                          <Pressable
+                            key={profile.id}
+                            onPress={() => toggleInviteUser(profile)}
+                            style={styles.contactItem}
+                          >
+                            <View style={[styles.contactCheckbox, styles.contactCheckboxActive]}>
+                              <Text style={styles.contactCheckboxText}>x</Text>
+                            </View>
+                            <View style={styles.contactCopy}>
+                              <Text style={styles.contactName}>{profile.name}</Text>
+                              <Text style={styles.contactPhone}>
+                                {profile.handle} {profile.city ? ` | ${profile.city}` : ''}
+                              </Text>
+                            </View>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </>
+                  ) : null}
+
                   <Pressable
                     disabled={
-                      isSavingShindig || selectedContacts.length + selectedFriends.length === 0
+                      isSavingShindig ||
+                      selectedContacts.length + selectedFriends.length + selectedInviteUsers.length === 0
                     }
                     onPress={saveShindigAndOpenFeed}
                     style={[
                       styles.ctaButton,
-                      (isSavingShindig || selectedContacts.length + selectedFriends.length === 0) &&
+                      (isSavingShindig ||
+                        selectedContacts.length +
+                          selectedFriends.length +
+                          selectedInviteUsers.length ===
+                          0) &&
                         styles.buttonDisabled,
                     ]}
                   >
                     <Text style={styles.ctaButtonText}>
                       {isSavingShindig
                         ? 'Starting...'
-                        : `Continue with ${selectedContacts.length + selectedFriends.length}`}
+                        : `Continue with ${
+                            selectedContacts.length +
+                            selectedFriends.length +
+                            selectedInviteUsers.length
+                          }`}
                     </Text>
                   </Pressable>
                   <Pressable

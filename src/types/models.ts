@@ -111,6 +111,19 @@ export type FeedShindig = SavedShindig & {
   owner: FriendProfile;
 };
 
+export type ShindigChatMessage = {
+  author: FriendProfile;
+  body: string;
+  createdAt: string;
+  id: string;
+  shindigId: string;
+};
+
+export type ShindigChatPreview = {
+  lastMessage?: ShindigChatMessage;
+  shindigId: string;
+};
+
 export type AppNotification = {
   actor: FriendProfile;
   createdAt: string;
@@ -134,6 +147,7 @@ export type AppNotification = {
     | 'photo_comment'
     | 'photo_like'
     | 'shindig_bring_item'
+    | 'shindig_chat_message'
     | 'shindig_invite'
     | 'shindig_comment'
     | 'shindig_like';

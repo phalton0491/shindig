@@ -248,6 +248,14 @@ create table if not exists public.shindig_bring_items (
 alter table public.shindig_bring_items
 add column if not exists is_custom boolean not null default false;
 
+create table if not exists public.shindig_chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  shindig_id uuid not null references public.shindigs (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   recipient_user_id uuid not null references auth.users (id) on delete cascade,
@@ -371,6 +379,7 @@ alter table public.shindig_photo_comments enable row level security;
 alter table public.shindig_photo_requests enable row level security;
 alter table public.shindig_invites enable row level security;
 alter table public.shindig_bring_items enable row level security;
+alter table public.shindig_chat_messages enable row level security;
 alter table public.notifications enable row level security;
 alter table public.user_push_tokens enable row level security;
 
@@ -1044,6 +1053,59 @@ using (
         and public.shindigs.user_id = auth.uid()
     )
 );
+
+drop policy if exists "Accepted users can read shindig chat messages" on public.shindig_chat_messages;
+create policy "Accepted users can read shindig chat messages"
+on public.shindig_chat_messages
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.shindigs
+    where public.shindigs.id = public.shindig_chat_messages.shindig_id
+      and (
+        public.shindigs.user_id = auth.uid()
+        or exists (
+          select 1 from public.shindig_invites
+          where public.shindig_invites.shindig_id = public.shindigs.id
+            and public.shindig_invites.invitee_user_id = auth.uid()
+            and public.shindig_invites.status = 'accepted'
+        )
+      )
+  )
+);
+
+drop policy if exists "Accepted users can create shindig chat messages" on public.shindig_chat_messages;
+create policy "Accepted users can create shindig chat messages"
+on public.shindig_chat_messages
+for insert
+to authenticated
+with check (
+  auth.uid() = user_id
+  and exists (
+    select 1
+    from public.shindigs
+    where public.shindigs.id = public.shindig_chat_messages.shindig_id
+      and (
+        public.shindigs.user_id = auth.uid()
+        or exists (
+          select 1 from public.shindig_invites
+          where public.shindig_invites.shindig_id = public.shindigs.id
+            and public.shindig_invites.invitee_user_id = auth.uid()
+            and public.shindig_invites.status = 'accepted'
+        )
+      )
+  )
+);
+
+do $$
+begin
+  alter publication supabase_realtime add table public.shindig_chat_messages;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end $$;
 
 drop policy if exists "Users can create own photo requests" on public.shindig_photo_requests;
 create policy "Users can create own photo requests"

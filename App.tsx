@@ -52,6 +52,7 @@ import { NotificationsScreen } from './src/screens/NotificationsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ProfileFriendsScreen } from './src/screens/ProfileFriendsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { ShindigChatsScreen } from './src/screens/ShindigChatsScreen';
 import { theme } from './src/theme';
 import {
   AppNotification,
@@ -149,6 +150,7 @@ export default function App() {
     | { kind: 'notifications'; tab: AppTab }
   >({ kind: 'shindigs' });
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showChats, setShowChats] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
@@ -884,6 +886,7 @@ export default function App() {
     }
 
     setFriendProfileDetail(null);
+    setShowChats(false);
     setShowMore(false);
     setShowSettings(false);
     setShowNotifications(true);
@@ -1269,6 +1272,13 @@ export default function App() {
 
   const headerActions = (
     <AuthMenu
+      chatCount={
+        showChats
+          ? 0
+          : notifications.filter(
+              (item) => item.type === 'shindig_chat_message' && !item.readAt
+            ).length
+      }
       notificationCount={
         showNotifications
           ? 0
@@ -1281,9 +1291,18 @@ export default function App() {
       onOpenMenu={() => {
         setFriendProfileDetail(null);
         setProfileFriendsDetail(null);
+        setShowChats(false);
         setShowNotifications(false);
         setShowSettings(false);
         setShowMore(true);
+      }}
+      onOpenChats={() => {
+        setFriendProfileDetail(null);
+        setProfileFriendsDetail(null);
+        setShowNotifications(false);
+        setShowSettings(false);
+        setShowMore(false);
+        setShowChats(true);
       }}
       onOpenNotifications={handleOpenNotifications}
     />
@@ -1308,6 +1327,14 @@ export default function App() {
               onRejectShindigInvite={handleRejectShindigInvite}
               onRejectPhotoRequest={handleRejectPhotoRequest}
               onRejectFriendRequest={handleRejectFriendRequest}
+            />
+          ) : showChats ? (
+            <ShindigChatsScreen
+              headerActions={headerActions}
+              notifications={notifications}
+              onBack={() => setShowChats(false)}
+              shindigs={shindigs}
+              userId={session.user.id}
             />
           ) : showSettings ? (
             <SettingsScreen
@@ -1379,6 +1406,7 @@ export default function App() {
             />
           ) : null}
           {!showNotifications &&
+          !showChats &&
           !showMore &&
           !showSettings &&
           !friendProfileDetail &&
@@ -1395,6 +1423,7 @@ export default function App() {
             />
           ) : null}
           {!showNotifications &&
+          !showChats &&
           !showMore &&
           !showSettings &&
           !friendProfileDetail &&
@@ -1427,6 +1456,7 @@ export default function App() {
             />
           ) : null}
           {!showNotifications &&
+          !showChats &&
           !showMore &&
           !showSettings &&
           !friendProfileDetail &&
@@ -1447,6 +1477,7 @@ export default function App() {
           ) : null}
         </View>
         {!showNotifications &&
+        !showChats &&
         !showMore &&
         !showSettings &&
         !friendProfileDetail &&
@@ -1457,6 +1488,7 @@ export default function App() {
             }
             onCreateShindig={() => {
               setShowNotifications(false);
+              setShowChats(false);
               setShowMore(false);
               setShowSettings(false);
               setFriendProfileDetail(null);
@@ -1474,6 +1506,7 @@ export default function App() {
               }
 
               setShowNotifications(false);
+              setShowChats(false);
               setShowMore(false);
               setShowSettings(false);
               setFriendProfileDetail(null);

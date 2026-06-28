@@ -259,6 +259,32 @@ export async function markNotificationsRead(userId: string) {
   }
 }
 
+export async function markChatNotificationsRead(args: {
+  shindigId?: string;
+  userId: string;
+}) {
+  let query = client()
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('recipient_user_id', args.userId)
+    .eq('type', 'shindig_chat_message')
+    .is('read_at', null);
+
+  if (args.shindigId) {
+    query = query.eq('shindig_id', args.shindigId);
+  }
+
+  const { error } = await query;
+
+  if (error && isMissingNotificationSchema(error)) {
+    return;
+  }
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function dismissFriendRequestNotification(args: {
   actorUserId: string;
   recipientUserId: string;

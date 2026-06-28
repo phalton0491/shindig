@@ -402,6 +402,12 @@ function mapShindigs(args: {
   stops: ShindigStopRow[];
 }): SavedShindig[] {
   return args.shindigs.map((shindig) => {
+    const effectiveState =
+      shindig.state === 'planned' &&
+      shindig.planned_for &&
+      new Date(shindig.planned_for).getTime() <= Date.now()
+        ? 'active'
+        : shindig.state;
     const bringItems = args.bringItems
       .filter((item) => item.shindig_id === shindig.id)
       .map<ShindigBringItem>((item) => ({
@@ -489,7 +495,7 @@ function mapShindigs(args: {
       ownerId: shindig.user_id,
       photoCount: photos.length,
       plannedFor: shindig.planned_for || null,
-      state: shindig.state,
+      state: effectiveState,
       stops,
       title: shindig.title,
     } satisfies SavedShindig;

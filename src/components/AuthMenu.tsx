@@ -4,13 +4,17 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { theme } from '../theme';
 
 type AuthMenuProps = {
+  chatCount: number;
   notificationCount: number;
+  onOpenChats: () => void;
   onOpenMenu: () => void;
   onOpenNotifications: () => void;
 };
 
 export function AuthMenu({
+  chatCount,
   notificationCount,
+  onOpenChats,
   onOpenMenu,
   onOpenNotifications,
 }: AuthMenuProps) {
@@ -19,6 +23,10 @@ export function AuthMenu({
       <Pressable onPress={onOpenNotifications} style={styles.button}>
         <Ionicons color="#FFD77A" name="notifications" size={22} />
         {notificationCount > 0 ? <View style={styles.dot} /> : null}
+      </Pressable>
+      <Pressable onPress={onOpenChats} style={styles.button}>
+        <Ionicons color={theme.colors.textPrimary} name="chatbubble-ellipses-outline" size={21} />
+        {chatCount > 0 ? <View style={styles.dot} /> : null}
       </Pressable>
       <Pressable onPress={onOpenMenu} style={styles.button}>
         <View style={styles.hamburger}>
