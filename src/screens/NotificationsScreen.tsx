@@ -11,6 +11,7 @@ type NotificationsScreenProps = {
   notifications: AppNotification[];
   onAcceptFriendRequest: (friendId: string) => Promise<void>;
   onAcceptShindigInvite: (inviteId: string) => Promise<void>;
+  onMaybeShindigInvite: (inviteId: string) => Promise<void>;
   onOpenNotification: (notification: AppNotification) => void;
   onApprovePhotoRequest: (requestId: string) => Promise<void>;
   onBack: () => void;
@@ -25,6 +26,7 @@ export function NotificationsScreen({
   notifications,
   onAcceptFriendRequest,
   onAcceptShindigInvite,
+  onMaybeShindigInvite,
   onOpenNotification,
   onApprovePhotoRequest,
   onBack,
@@ -35,6 +37,20 @@ export function NotificationsScreen({
 }: NotificationsScreenProps) {
   const [actingFriendId, setActingFriendId] = useState('');
   const [actingRequestId, setActingRequestId] = useState('');
+
+  function isUpcomingInvite(notification: AppNotification) {
+    return (
+      notification.type === 'shindig_invite' &&
+      Boolean(notification.inviteId) &&
+      notification.shindigState === 'planned' &&
+      Boolean(notification.shindigPlannedFor) &&
+      new Date(notification.shindigPlannedFor!).getTime() > Date.now()
+    );
+  }
+
+  function canChangeInviteResponse(notification: AppNotification) {
+    return isUpcomingInvite(notification) && notification.inviteStatus === 'pending';
+  }
 
   async function handleAcceptFriendRequest(friendId: string) {
     setActingFriendId(friendId);
@@ -81,6 +97,15 @@ export function NotificationsScreen({
     }
   }
 
+  async function handleMaybeInvite(inviteId: string) {
+    setActingRequestId(inviteId);
+    try {
+      await onMaybeShindigInvite(inviteId);
+    } finally {
+      setActingRequestId('');
+    }
+  }
+
   async function handleRejectPhotoRequest(requestId: string) {
     setActingRequestId(requestId);
     try {
@@ -100,12 +125,16 @@ export function NotificationsScreen({
     }
 
     if (notification.type === 'shindig_invite') {
-      if (notification.inviteStatus === 'accepted') {
+      if (notification.inviteStatus === 'accepted' && !canChangeInviteResponse(notification)) {
         return `Accepted ShinDig invite from ${notification.actor.name}.`;
       }
 
-      if (notification.inviteStatus === 'rejected') {
+      if (notification.inviteStatus === 'rejected' && !canChangeInviteResponse(notification)) {
         return `Rejected ShinDig invite from ${notification.actor.name}.`;
+      }
+
+      if (notification.inviteStatus === 'maybe' && !canChangeInviteResponse(notification)) {
+        return `Marked ShinDig invite from ${notification.actor.name} as maybe.`;
       }
     }
 
@@ -174,7 +203,42 @@ export function NotificationsScreen({
                   </View>
                 ) : null}
                 {notification.type === 'shindig_invite' && notification.inviteId ? (
-                  notification.inviteStatus === 'accepted' ? (
+                  canChangeInviteResponse(notification) ? (
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        disabled={actingRequestId === notification.inviteId}
+                        onPress={() => handleAcceptInvite(notification.inviteId!)}
+                        style={[
+                          styles.acceptButton,
+                          notification.inviteStatus === 'accepted' && styles.selectedResponseButton,
+                        ]}
+                      >
+                        <Text style={styles.acceptButtonText}>
+                          {actingRequestId === notification.inviteId ? '...' : 'Accept'}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        disabled={actingRequestId === notification.inviteId}
+                        onPress={() => handleMaybeInvite(notification.inviteId!)}
+                        style={[
+                          styles.maybeButton,
+                          notification.inviteStatus === 'maybe' && styles.selectedResponseButton,
+                        ]}
+                      >
+                        <Text style={styles.maybeButtonText}>Maybe</Text>
+                      </Pressable>
+                      <Pressable
+                        disabled={actingRequestId === notification.inviteId}
+                        onPress={() => handleRejectInvite(notification.inviteId!)}
+                        style={[
+                          styles.rejectButton,
+                          notification.inviteStatus === 'rejected' && styles.selectedResponseRejectButton,
+                        ]}
+                      >
+                        <Text style={styles.rejectButtonText}>Reject</Text>
+                      </Pressable>
+                    </View>
+                  ) : notification.inviteStatus === 'accepted' ? (
                     <View style={styles.actionRow}>
                       <View style={styles.resolvedPillApproved}>
                         <Ionicons color="#FFFFFF" name="checkmark" size={16} />
@@ -186,6 +250,13 @@ export function NotificationsScreen({
                       <View style={styles.resolvedPillRejected}>
                         <Ionicons color={theme.colors.textSecondary} name="close" size={16} />
                         <Text style={styles.resolvedPillRejectedText}>Invite declined</Text>
+                      </View>
+                    </View>
+                  ) : notification.inviteStatus === 'maybe' ? (
+                    <View style={styles.actionRow}>
+                      <View style={styles.resolvedPillMaybe}>
+                        <Ionicons color="#FFFFFF" name="help" size={16} />
+                        <Text style={styles.resolvedPillMaybeText}>Maybe</Text>
                       </View>
                     </View>
                   ) : (
@@ -387,6 +458,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  resolvedPillMaybe: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: theme.colors.accentPurple,
+    borderRadius: theme.radius.round,
+    flexDirection: 'row',
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  resolvedPillMaybeText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
   acceptButton: {
     backgroundColor: theme.colors.accentPink,
     borderRadius: theme.radius.round,
@@ -397,6 +483,25 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
+  },
+  maybeButton: {
+    backgroundColor: theme.colors.accentPurple,
+    borderRadius: theme.radius.round,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  maybeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  selectedResponseButton: {
+    borderColor: '#FFFFFF',
+    borderWidth: 1,
+  },
+  selectedResponseRejectButton: {
+    borderColor: theme.colors.accentPink,
+    borderWidth: 1,
   },
   rejectButton: {
     backgroundColor: theme.colors.surfaceRaised,

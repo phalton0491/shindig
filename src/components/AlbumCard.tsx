@@ -25,7 +25,7 @@ export function AlbumCard({ shindig }: AlbumCardProps) {
       containerStyle={styles.card}
       imageStyle={styles.image}
       resizeMode="contain"
-      sourceUri={shindig.coverPhotoUrl || fallbackPhoto}
+      sourceUri={shindig.coverPhotoThumbnailUrl || shindig.coverPhotoUrl || fallbackPhoto}
     >
       <View style={styles.topGlow} />
       <View style={styles.overlay}>

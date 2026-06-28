@@ -36,6 +36,10 @@ export function HomeFeedScreen({
   const scrollRef = useRef<ScrollView | null>(null);
 
   function badgeLabel(state: FeedShindig['state']) {
+    if (state === 'planned') {
+      return 'Upcoming';
+    }
+
     return state === 'active' ? 'Active' : 'Completed';
   }
 
@@ -91,7 +95,11 @@ export function HomeFeedScreen({
                     <View
                       style={[
                         styles.stateBadge,
-                        shindig.state === 'active' ? styles.stateBadgeActive : styles.stateBadgeCompleted,
+                        shindig.state === 'active'
+                          ? styles.stateBadgeActive
+                          : shindig.state === 'planned'
+                            ? styles.stateBadgeUpcoming
+                            : styles.stateBadgeCompleted,
                       ]}
                     >
                       <Text
@@ -99,17 +107,22 @@ export function HomeFeedScreen({
                           styles.stateBadgeText,
                           shindig.state === 'active'
                             ? styles.stateBadgeTextActive
-                            : styles.stateBadgeTextCompleted,
+                            : shindig.state === 'planned'
+                              ? styles.stateBadgeTextUpcoming
+                              : styles.stateBadgeTextCompleted,
                         ]}
                       >
                         {badgeLabel(shindig.state)}
                       </Text>
                     </View>
                     <Text style={styles.dateText}>
-                      {new Date(shindig.createdAt).toLocaleDateString('en-US', {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
+                      {new Date(shindig.plannedFor || shindig.createdAt).toLocaleDateString(
+                        'en-US',
+                        {
+                          day: 'numeric',
+                          month: 'short',
+                        }
+                      )}
                     </Text>
                   </View>
                 </View>
@@ -220,6 +233,9 @@ const styles = StyleSheet.create({
   stateBadgeActive: {
     backgroundColor: 'rgba(99, 216, 154, 0.16)',
   },
+  stateBadgeUpcoming: {
+    backgroundColor: 'rgba(255, 79, 160, 0.16)',
+  },
   stateBadgeCompleted: {
     backgroundColor: 'rgba(132, 144, 176, 0.18)',
   },
@@ -230,6 +246,9 @@ const styles = StyleSheet.create({
   },
   stateBadgeTextActive: {
     color: '#63D89A',
+  },
+  stateBadgeTextUpcoming: {
+    color: theme.colors.accentPink,
   },
   stateBadgeTextCompleted: {
     color: theme.colors.textMuted,

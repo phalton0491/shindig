@@ -7,6 +7,9 @@ import * as Location from 'expo-location';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import * as SMS from 'expo-sms';
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import {
   ActionSheetIOS,
   Alert,
@@ -27,26 +30,33 @@ import {
 
 import { PageHeader } from '../components/PageHeader';
 import { ProgressiveImage } from '../components/ProgressiveImage';
+import { generateShindigCover } from '../lib/ai';
 import { searchPlaces } from '../lib/places';
 import { createNotification } from '../lib/notifications';
 import {
+  addBringItem,
   addPhotoToShindig,
   addPhotoComment,
   addShindigComment,
+  claimBringItem,
   createAppFriendShindigInvites,
   createPhoneShindigInvite,
+  deleteBringItem,
   deletePhotoComment,
   deleteShindigComment,
   getShindigById,
   listPhotoLikeProfiles,
   togglePhotoLike,
   toggleShindigLike,
+  unclaimBringItem,
 } from '../lib/shindigs';
 import { supabase } from '../lib/supabase';
 import { theme } from '../theme';
 import {
   FriendProfile,
   SavedShindig,
+  ShindigBringItem,
+  ShindigInviteParticipant,
   SavedShindigPhoto,
   ShindigState,
   TimelinePlace,
@@ -60,11 +70,16 @@ type HomeScreenProps = {
   initialFeedShindig?: SavedShindig | null;
   initialHighlightedPhotoId?: string | null;
   initialStep?: 'create' | 'welcome' | null;
+  onAcceptUpcomingInvite?: (inviteId: string) => Promise<void>;
   onFlowStepChange?: (step: FlowStep) => void;
   onConsumeInitialFeedShindig?: () => void;
   onConsumeInitialHighlightedPhotoId?: () => void;
   onConsumeInitialStep?: () => void;
+  onMaybeUpcomingInvite?: (inviteId: string) => Promise<void>;
+  onRejectUpcomingInvite?: (inviteId: string) => Promise<void>;
   onShindigSaved: (args: {
+    plannedFor?: string | null;
+    state?: ShindigState;
     stops: {
       photos: DraftPhoto[];
       place: TimelinePlace;
@@ -97,6 +112,7 @@ type DraftPhoto = {
   base64: string;
   contentType?: string;
   fileExtension?: string;
+  isPreferredCover?: boolean;
   localUri: string;
 };
 
@@ -129,6 +145,22 @@ function formatDateLabel(value: string) {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+  });
+}
+
+function formatPlannedDateLabel(value: string) {
+  return new Date(value).toLocaleString('en-US', {
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    month: 'short',
+  });
+}
+
+function formatPlannedTimeLabel(value: string) {
+  return new Date(value).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
   });
 }
 
@@ -188,6 +220,19 @@ function mimeTypeFromExtension(extension: string) {
       return 'image/webp';
     default:
       return 'image/jpeg';
+  }
+}
+
+function fileExtensionFromMimeType(mimeType: string) {
+  switch (mimeType) {
+    case 'image/png':
+      return 'png';
+    case 'image/webp':
+      return 'webp';
+    case 'image/heic':
+      return 'heic';
+    default:
+      return 'jpg';
   }
 }
 
@@ -312,6 +357,10 @@ function getPhotoNotificationRecipient(
 }
 
 function shindigStateLabel(state: ShindigState) {
+  if (state === 'planned') {
+    return 'Upcoming';
+  }
+
   return state === 'active' ? 'Active' : 'Completed';
 }
 
@@ -321,6 +370,104 @@ function sortPhotosNewestFirst<T extends { createdAt: string }>(photos: T[]) {
   );
 }
 
+function buildCurrentUserProfile(profile: UserProfile, userId: string): FriendProfile {
+  return {
+    avatar: profile.avatar,
+    city: profile.city,
+    handle: profile.handle,
+    id: userId,
+    name: profile.name,
+  };
+}
+
+function upcomingBringActivityRecipientIds(shindig: SavedShindig, actorUserId: string) {
+  if (shindig.state !== 'planned') {
+    return [];
+  }
+
+  return Array.from(
+    new Set([
+      ...shindig.inviteParticipants
+        .filter((participant) => participant.status === 'accepted')
+        .map((participant) => participant.profile.id),
+      shindig.ownerId,
+    ])
+  ).filter((recipientUserId) => recipientUserId !== actorUserId);
+}
+
+type UpcomingActivityItem = {
+  detail: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  id: string;
+  imageUrl?: string;
+  title: string;
+};
+
+function uniqueProfiles(profiles: FriendProfile[]) {
+  return Array.from(new Map(profiles.map((profile) => [profile.id, profile])).values());
+}
+
+function buildAttendeeGroups(shindig: SavedShindig) {
+  const accepted = uniqueProfiles(
+    shindig.inviteParticipants
+      .filter((participant) => participant.status === 'accepted')
+      .map((participant) => participant.profile)
+  );
+  const maybe = uniqueProfiles(
+    shindig.inviteParticipants
+      .filter((participant) => participant.status === 'maybe')
+      .map((participant) => participant.profile)
+  );
+  const pending = uniqueProfiles(
+    shindig.inviteParticipants
+      .filter((participant) => participant.status === 'pending')
+      .map((participant) => participant.profile)
+  );
+
+  return { accepted, maybe, pending };
+}
+
+function buildUpcomingActivityItems(args: {
+  ownerName: string;
+  shindig: SavedShindig;
+}): UpcomingActivityItem[] {
+  const photoItems = args.shindig.stops
+    .flatMap((stop) => stop.photos)
+    .map((photo) => ({
+      createdAt: photo.createdAt,
+      detail: formatRelativeTimestamp(photo.createdAt),
+      icon: 'camera' as const,
+      id: `photo-${photo.id}`,
+      imageUrl: photo.thumbnailUrl || photo.photoUrl,
+      title: `${photo.contributor?.name || args.ownerName} uploaded a photo`,
+    }));
+
+  const bringItems = args.shindig.bringItems
+    .filter((item) => item.claimedBy && item.claimedAt)
+    .map((item) => ({
+      createdAt: item.claimedAt || item.createdAt,
+      detail: formatRelativeTimestamp(item.claimedAt || item.createdAt),
+      icon: 'gift' as const,
+      id: `bring-${item.id}`,
+      title: `${item.claimedBy?.name || 'Someone'} claimed ${item.label}`,
+    }));
+
+  const commentItems = args.shindig.comments.map((comment) => ({
+    createdAt: comment.createdAt,
+    detail: formatRelativeTimestamp(comment.createdAt),
+    icon: 'chatbubble-ellipses' as const,
+    id: `comment-${comment.id}`,
+    title: `${comment.author.name} commented`,
+  }));
+
+  return [...photoItems, ...bringItems, ...commentItems]
+    .sort(
+      (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+    )
+    .slice(0, 6)
+    .map(({ createdAt: _createdAt, ...item }) => item);
+}
+
 export function HomeScreen({
   friends,
   headerActions,
@@ -328,10 +475,13 @@ export function HomeScreen({
   initialFeedShindig,
   initialHighlightedPhotoId,
   initialStep,
+  onAcceptUpcomingInvite,
   onFlowStepChange,
   onConsumeInitialFeedShindig,
   onConsumeInitialHighlightedPhotoId,
   onConsumeInitialStep,
+  onMaybeUpcomingInvite,
+  onRejectUpcomingInvite,
   onShindigSaved,
   onShindigDeleted,
   onShindigCoverPhotoChanged,
@@ -343,7 +493,19 @@ export function HomeScreen({
 }: HomeScreenProps) {
   const [step, setStep] = useState<FlowStep>('welcome');
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
+  const [aiCoverPrompt, setAiCoverPrompt] = useState('');
+  const [isAiCoverModalOpen, setIsAiCoverModalOpen] = useState(false);
+  const [isGeneratingAiCover, setIsGeneratingAiCover] = useState(false);
   const [shindigName, setShindigName] = useState('');
+  const [shindigTiming, setShindigTiming] = useState<'now' | 'planned'>('now');
+  const [plannedFor, setPlannedFor] = useState<Date>(() => {
+    const next = new Date();
+    next.setDate(next.getDate() + 1);
+    next.setHours(19, 0, 0, 0);
+    return next;
+  });
+  const [showPlannedDatePicker, setShowPlannedDatePicker] = useState(false);
+  const [showPlannedTimePicker, setShowPlannedTimePicker] = useState(false);
   const [locationQuery, setLocationQuery] = useState('');
   const [locationResults, setLocationResults] = useState<TimelinePlace[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<TimelinePlace | null>(null);
@@ -373,6 +535,13 @@ export function HomeScreen({
   const [showCoverPhotoSavedNotice, setShowCoverPhotoSavedNotice] = useState(false);
   const [highlightedPhotoId, setHighlightedPhotoId] = useState('');
   const [feedBackMode, setFeedBackMode] = useState<'external' | 'welcome'>('welcome');
+  const [expandedPhoto, setExpandedPhoto] = useState<SavedShindigPhoto | null>(null);
+  const [actingUpcomingInviteId, setActingUpcomingInviteId] = useState('');
+  const [bringItemDraft, setBringItemDraft] = useState('');
+  const [customBringItemDraft, setCustomBringItemDraft] = useState('');
+  const [actingBringItemId, setActingBringItemId] = useState('');
+  const [showAllUpcomingBringItems, setShowAllUpcomingBringItems] = useState(false);
+  const [plannedFeedViewMode, setPlannedFeedViewMode] = useState<'feed' | 'overview'>('overview');
   const [isLikeSheetVisible, setIsLikeSheetVisible] = useState(false);
   const [isLoadingLikeSheet, setIsLoadingLikeSheet] = useState(false);
   const [likeSheetProfiles, setLikeSheetProfiles] = useState<FriendProfile[]>([]);
@@ -380,6 +549,7 @@ export function HomeScreen({
   const deferredLocationQuery = useDeferredValue(locationQuery);
   const feedScrollRef = useRef<ScrollView | null>(null);
   const photoOffsetsRef = useRef<Record<string, number>>({});
+  const sectionOffsetsRef = useRef<Record<string, number>>({});
   const activeFeedRefreshIdRef = useRef(0);
   const contactsRequestIdRef = useRef(0);
   const coverPhotoSavedNoticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -423,6 +593,17 @@ export function HomeScreen({
     () => shindigs.filter((shindig) => shindig.state === 'active'),
     [shindigs]
   );
+  const plannedShindigs = useMemo(
+    () =>
+      shindigs
+        .filter((shindig) => shindig.state === 'planned')
+        .sort((left, right) => {
+          const leftTime = left.plannedFor ? new Date(left.plannedFor).getTime() : 0;
+          const rightTime = right.plannedFor ? new Date(right.plannedFor).getTime() : 0;
+          return leftTime - rightTime;
+        }),
+    [shindigs]
+  );
   const completedShindigs = useMemo(
     () => shindigs.filter((shindig) => shindig.state === 'completed'),
     [shindigs]
@@ -460,6 +641,50 @@ export function HomeScreen({
 
     return `created by ${activeFeedOwner?.handle || '@user'}`;
   }, [activeFeedOwner, activeFeedShindig, userId]);
+  const canCurrentUserClaimBringItems = useMemo(
+    () =>
+      Boolean(
+        activeFeedShindig &&
+          activeFeedShindig.state === 'planned' &&
+          activeFeedShindig.ownerId !== userId &&
+          activeFeedShindig.inviteStatus &&
+          activeFeedShindig.inviteStatus !== 'rejected'
+      ),
+    [activeFeedShindig, userId]
+  );
+  const standardBringItems = useMemo(
+    () => activeFeedShindig?.bringItems.filter((item) => !item.isCustom) || [],
+    [activeFeedShindig]
+  );
+  const customBringItems = useMemo(
+    () => activeFeedShindig?.bringItems.filter((item) => item.isCustom) || [],
+    [activeFeedShindig]
+  );
+  const displayedStandardBringItems = useMemo(
+    () => (showAllUpcomingBringItems ? standardBringItems : standardBringItems.slice(0, 4)),
+    [showAllUpcomingBringItems, standardBringItems]
+  );
+  const displayedCustomBringItems = useMemo(
+    () => (showAllUpcomingBringItems ? customBringItems : customBringItems.slice(0, 2)),
+    [customBringItems, showAllUpcomingBringItems]
+  );
+  const upcomingAttendeeGroups = useMemo(
+    () =>
+      activeFeedShindig
+        ? buildAttendeeGroups(activeFeedShindig)
+        : { accepted: [], maybe: [], pending: [] as FriendProfile[] },
+    [activeFeedShindig]
+  );
+  const upcomingActivity = useMemo(
+    () =>
+      activeFeedShindig
+        ? buildUpcomingActivityItems({
+            ownerName: activeFeedOwner?.name || 'ShinDig host',
+            shindig: activeFeedShindig,
+          })
+        : [],
+    [activeFeedOwner?.name, activeFeedShindig]
+  );
 
   useEffect(() => {
     onFlowStepChange?.(step);
@@ -471,6 +696,7 @@ export function HomeScreen({
     }
 
     setError('');
+    setPlannedFeedViewMode('overview');
     setActiveFeedShindig(initialFeedShindig);
     setFeedBackMode('external');
     setStep('feed');
@@ -494,6 +720,21 @@ export function HomeScreen({
     }
     onConsumeInitialStep?.();
   }, [initialStep, onConsumeInitialStep]);
+
+  useEffect(() => {
+    if (step !== 'feed' || !activeFeedShindig) {
+      return;
+    }
+
+    const matchingShindig = shindigs.find((shindig) => shindig.id === activeFeedShindig.id);
+    if (!matchingShindig) {
+      return;
+    }
+
+    setActiveFeedShindig((current) =>
+      current?.id === matchingShindig.id ? matchingShindig : current
+    );
+  }, [activeFeedShindig?.id, shindigs, step]);
 
   useEffect(() => {
     if (!initialHighlightedPhotoId) {
@@ -631,11 +872,11 @@ export function HomeScreen({
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      allowsMultipleSelection: true,
+      allowsMultipleSelection: shindigTiming !== 'planned',
       base64: true,
       mediaTypes: ['images'],
-      quality: 0.8,
-      selectionLimit: 10,
+      quality: 0.6,
+      selectionLimit: shindigTiming === 'planned' ? 1 : 10,
     });
 
     if (result.canceled) {
@@ -648,10 +889,13 @@ export function HomeScreen({
         base64: asset.base64!,
         contentType: asset.mimeType,
         fileExtension: fileExtensionFromUri(asset.uri),
+        isPreferredCover: shindigTiming === 'planned',
         localUri: asset.uri,
       }));
 
-    setPhotos((current) => [...current, ...nextPhotos]);
+    setPhotos((current) =>
+      shindigTiming === 'planned' ? nextPhotos.slice(0, 1) : [...current, ...nextPhotos]
+    );
   }
 
   async function handleTakePhoto() {
@@ -665,7 +909,7 @@ export function HomeScreen({
     const result = await ImagePicker.launchCameraAsync({
       base64: true,
       mediaTypes: ['images'],
-      quality: 0.8,
+      quality: 0.6,
     });
 
     if (result.canceled || !result.assets[0]?.base64 || !result.assets[0]?.uri) {
@@ -673,15 +917,15 @@ export function HomeScreen({
     }
 
     const asset = result.assets[0];
-    setPhotos((current) => [
-      ...current,
-      {
-        base64: asset.base64!,
-        contentType: asset.mimeType,
-        fileExtension: fileExtensionFromUri(asset.uri),
-        localUri: asset.uri,
-      },
-    ]);
+    const nextPhoto = {
+      base64: asset.base64!,
+      contentType: asset.mimeType,
+      fileExtension: fileExtensionFromUri(asset.uri),
+      isPreferredCover: shindigTiming === 'planned',
+      localUri: asset.uri,
+    } satisfies DraftPhoto;
+
+    setPhotos((current) => (shindigTiming === 'planned' ? [nextPhoto] : [...current, nextPhoto]));
   }
 
   function openPhotoSourcePicker() {
@@ -693,7 +937,7 @@ export function HomeScreen({
         {
           cancelButtonIndex,
           options,
-          title: 'Add Photo',
+          title: shindigTiming === 'planned' ? 'Choose Cover Photo' : 'Add Photo',
         },
         (buttonIndex) => {
           if (buttonIndex === 0) {
@@ -708,7 +952,12 @@ export function HomeScreen({
       return;
     }
 
-    Alert.alert('Add Photo', 'Choose a photo source.', [
+    Alert.alert(
+      shindigTiming === 'planned' ? 'Choose Cover Photo' : 'Add Photo',
+      shindigTiming === 'planned'
+        ? 'Choose the single cover photo for this upcoming ShinDig.'
+        : 'Choose a photo source.',
+      [
       {
         onPress: () => {
           void handleTakePhoto();
@@ -725,7 +974,8 @@ export function HomeScreen({
         style: 'cancel',
         text: 'Cancel',
       },
-    ]);
+      ]
+    );
   }
 
   async function pickSinglePhoto(source: 'camera' | 'library', messages: {
@@ -744,7 +994,7 @@ export function HomeScreen({
       result = await ImagePicker.launchCameraAsync({
         base64: true,
         mediaTypes: ['images'],
-        quality: 0.8,
+        quality: 0.6,
       });
     } else {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -756,7 +1006,7 @@ export function HomeScreen({
       result = await ImagePicker.launchImageLibraryAsync({
         base64: true,
         mediaTypes: ['images'],
-        quality: 0.8,
+        quality: 0.6,
         selectionLimit: 1,
       });
     }
@@ -783,6 +1033,62 @@ export function HomeScreen({
     setPhotos((current) => current.filter((photo) => photo.localUri !== localUri));
   }
 
+  function openAiCoverPrompt() {
+    setError('');
+    const promptSeed = [
+      shindigName.trim() ? `Theme around ${shindigName.trim()}` : '',
+      locationQuery.trim() ? `at ${locationQuery.trim()}` : '',
+      'stylish event cover, nightlife editorial, cinematic lighting',
+    ]
+      .filter(Boolean)
+      .join(', ');
+    setAiCoverPrompt((current) => current || promptSeed);
+    setIsAiCoverModalOpen(true);
+  }
+
+  async function handleGenerateAiCover() {
+    const prompt = aiCoverPrompt.trim();
+    if (!prompt) {
+      setError('Enter a prompt for the AI-generated cover image.');
+      return;
+    }
+
+    setIsGeneratingAiCover(true);
+    setError('');
+
+    try {
+      const generated = await generateShindigCover({
+        location: locationQuery.trim() || selectedLocation?.title,
+        prompt,
+        scheduledFor: shindigTiming === 'planned' ? plannedFor.toISOString() : null,
+        title: shindigName.trim(),
+      });
+
+      const extension = fileExtensionFromMimeType(generated.mimeType);
+      const generatedPhoto = {
+        base64: generated.base64,
+        contentType: generated.mimeType,
+        fileExtension: extension,
+        isPreferredCover: true,
+        localUri: `data:${generated.mimeType};base64,${generated.base64}`,
+      } satisfies DraftPhoto;
+
+      setPhotos((current) => [
+        generatedPhoto,
+        ...current.map((photo) => ({ ...photo, isPreferredCover: false })),
+      ]);
+      setIsAiCoverModalOpen(false);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Could not generate an AI cover image right now.'
+      );
+    } finally {
+      setIsGeneratingAiCover(false);
+    }
+  }
+
   function selectLocation(place: TimelinePlace) {
     setSelectedLocation(place);
     setLocationQuery(place.title);
@@ -796,10 +1102,24 @@ export function HomeScreen({
     setLocationQuery('');
     setLocationResults([]);
     setPhotos([]);
+    setAiCoverPrompt('');
+    setIsAiCoverModalOpen(false);
+    setIsGeneratingAiCover(false);
     setShindigName('');
+    setShindigTiming('now');
+    const nextPlannedDate = new Date();
+    nextPlannedDate.setDate(nextPlannedDate.getDate() + 1);
+    nextPlannedDate.setHours(19, 0, 0, 0);
+    setPlannedFor(nextPlannedDate);
+    setShowPlannedDatePicker(false);
+    setShowPlannedTimePicker(false);
     setSelectedFriendIds([]);
     setSelectedContactsById({});
     setInviteSearch('');
+    setBringItemDraft('');
+    setCustomBringItemDraft('');
+    setShowAllUpcomingBringItems(false);
+    setPlannedFeedViewMode('overview');
     setIsInvitePickerOpen(false);
     setContacts([]);
     setActiveFeedShindig(null);
@@ -809,6 +1129,10 @@ export function HomeScreen({
 
   function openPastShindig(shindig: SavedShindig) {
     setError('');
+    setBringItemDraft('');
+    setCustomBringItemDraft('');
+    setShowAllUpcomingBringItems(false);
+    setPlannedFeedViewMode('overview');
     setActiveFeedShindig(shindig);
     setFeedBackMode('welcome');
     setStep('feed');
@@ -903,6 +1227,18 @@ export function HomeScreen({
           void refreshActiveFeed(shindigId);
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          filter: `shindig_id=eq.${shindigId}`,
+          schema: 'public',
+          table: 'shindig_bring_items',
+        },
+        () => {
+          void refreshActiveFeed(shindigId);
+        }
+      )
       .subscribe();
 
     return () => {
@@ -911,18 +1247,19 @@ export function HomeScreen({
   }, [activeFeedShindig?.id, step]);
 
   useEffect(() => {
-    if (step !== 'feed' || !activeFeedShindig) {
+    if (step !== 'feed' || !activeFeedShindig || activeFeedShindig.state !== 'planned') {
       return;
     }
 
+    const shindigId = activeFeedShindig.id;
     const intervalId = setInterval(() => {
-      void refreshActiveFeed(activeFeedShindig.id);
-    }, 4000);
+      void refreshActiveFeed(shindigId);
+    }, 3000);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [activeFeedShindig?.id, step]);
+  }, [activeFeedShindig?.id, activeFeedShindig?.state, step]);
 
   async function continueToInvite() {
     if (!shindigName.trim()) {
@@ -935,8 +1272,18 @@ export function HomeScreen({
       return;
     }
 
+    if (shindigTiming === 'planned' && photos.length > 1) {
+      setError('Upcoming ShinDigs can only start with one cover photo.');
+      return;
+    }
+
     if (!selectedLocation && !locationQuery.trim()) {
       setError('Choose a starting location before continuing.');
+      return;
+    }
+
+    if (shindigTiming === 'planned' && plannedFor.getTime() <= Date.now()) {
+      setError('Pick a future date and time for this planned ShinDig.');
       return;
     }
 
@@ -1104,6 +1451,34 @@ export function HomeScreen({
     });
   }
 
+  async function handleUpcomingInviteResponse(
+    shindig: SavedShindig,
+    nextStatus: 'accepted' | 'maybe' | 'rejected'
+  ) {
+    if (!shindig.inviteId) {
+      return;
+    }
+
+    setActingUpcomingInviteId(shindig.inviteId);
+    setError('');
+
+    try {
+      if (nextStatus === 'accepted') {
+        await onAcceptUpcomingInvite?.(shindig.inviteId);
+      } else if (nextStatus === 'maybe') {
+        await onMaybeUpcomingInvite?.(shindig.inviteId);
+      } else {
+        await onRejectUpcomingInvite?.(shindig.inviteId);
+      }
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Could not update your upcoming ShinDig response.'
+      );
+    } finally {
+      setActingUpcomingInviteId('');
+    }
+  }
+
   async function saveShindigAndOpenFeed() {
     const startingPlace = selectedLocation || (locationQuery.trim() ? buildManualPlace(locationQuery) : null);
 
@@ -1117,6 +1492,8 @@ export function HomeScreen({
 
     try {
       const savedShindig = await onShindigSaved({
+        plannedFor: shindigTiming === 'planned' ? plannedFor.toISOString() : null,
+        state: shindigTiming === 'planned' ? 'planned' : 'active',
         stops: [
           {
             photos,
@@ -1126,6 +1503,22 @@ export function HomeScreen({
         title: shindigName.trim(),
         userId,
       });
+      const preferredCoverDraftIndex = photos.findIndex((photo) => photo.isPreferredCover);
+      let savedShindigWithCover = savedShindig;
+
+      if (preferredCoverDraftIndex >= 0) {
+        const savedPhotosByOldest = [...savedShindig.stops.flatMap((stop) => stop.photos)].sort(
+          (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+        );
+        const preferredCoverPhoto = savedPhotosByOldest[preferredCoverDraftIndex];
+
+        if (preferredCoverPhoto) {
+          savedShindigWithCover = await onShindigCoverPhotoChanged({
+            photoId: preferredCoverPhoto.id,
+            shindigId: savedShindig.id,
+          });
+        }
+      }
 
       const inviteIssues: string[] = [];
 
@@ -1134,7 +1527,7 @@ export function HomeScreen({
           const invites = await createAppFriendShindigInvites({
             friendIds: selectedFriends.map((friend) => friend.id),
             inviterUserId: userId,
-            shindigId: savedShindig.id,
+            shindigId: savedShindigWithCover.id,
           });
 
           await Promise.all(
@@ -1144,9 +1537,14 @@ export function HomeScreen({
                 createNotification({
                   actorUserId: userId,
                   inviteId: invite.id,
-                  message: `${profile.name} added you to the ShinDig "${savedShindig.title}".`,
+                  message:
+                    shindigTiming === 'planned'
+                      ? `${profile.name} invited you to the planned ShinDig "${savedShindigWithCover.title}" on ${formatPlannedDateLabel(
+                          plannedFor.toISOString()
+                        )}.`
+                      : `${profile.name} added you to the ShinDig "${savedShindigWithCover.title}".`,
                   recipientUserId: invite.invitee_user_id!,
-                  shindigId: savedShindig.id,
+                  shindigId: savedShindigWithCover.id,
                   type: 'shindig_invite',
                 })
               )
@@ -1169,7 +1567,7 @@ export function HomeScreen({
 
           const invite = await createPhoneShindigInvite({
             inviterUserId: userId,
-            shindigId: savedShindig.id,
+            shindigId: savedShindigWithCover.id,
           });
           if (!invite.invite_token) {
             throw new Error('The text-message invite link could not be created.');
@@ -1180,7 +1578,11 @@ export function HomeScreen({
 
           await SMS.sendSMSAsync(
             selectedContacts.map((contact) => contact.phoneNumber),
-            `${profile.name} invited you to join the ShinDig "${savedShindig.title}". If you are new, sign up first. If you already have ShinDig, open this link to review the invite: ${inviteUrl}`
+            shindigTiming === 'planned'
+              ? `${profile.name} invited you to the planned ShinDig "${savedShindigWithCover.title}" on ${formatPlannedDateLabel(
+                  plannedFor.toISOString()
+                )}. If you are new, sign up first. If you already have ShinDig, open this link to review the invite: ${inviteUrl}`
+              : `${profile.name} invited you to join the ShinDig "${savedShindigWithCover.title}". If you are new, sign up first. If you already have ShinDig, open this link to review the invite: ${inviteUrl}`
           );
         } catch (nextError) {
           inviteIssues.push(
@@ -1191,7 +1593,7 @@ export function HomeScreen({
         }
       }
 
-      setActiveFeedShindig(savedShindig);
+      setActiveFeedShindig(savedShindigWithCover);
       setStep('feed');
       if (inviteIssues.length > 0) {
         setError(inviteIssues.join(' '));
@@ -1210,21 +1612,235 @@ export function HomeScreen({
       return;
     }
 
-    const wasLiked = activeFeedShindig.likedByMe;
+    const targetShindig = activeFeedShindig;
+    const wasLiked = targetShindig.likedByMe;
+    setActiveFeedShindig((current) =>
+      current
+        ? {
+            ...current,
+            likeCount: current.likeCount + (current.likedByMe ? -1 : 1),
+            likedByMe: !current.likedByMe,
+          }
+        : current
+    );
+
     await toggleShindigLike({
-      shindigId: activeFeedShindig.id,
+      shindigId: targetShindig.id,
       userId,
     });
-    if (!wasLiked && activeFeedShindig.ownerId !== userId) {
+    if (!wasLiked && targetShindig.ownerId !== userId) {
       await createNotification({
         actorUserId: userId,
-        message: `${profile.name} liked your ShinDig "${activeFeedShindig.title}".`,
-        recipientUserId: activeFeedShindig.ownerId,
-        shindigId: activeFeedShindig.id,
+        message: `${profile.name} liked your ShinDig "${targetShindig.title}".`,
+        recipientUserId: targetShindig.ownerId,
+        shindigId: targetShindig.id,
         type: 'shindig_like',
       });
     }
-    await refreshActiveFeed(activeFeedShindig.id);
+  }
+
+  async function handleAddBringItem() {
+    if (!activeFeedShindig || activeFeedShindig.ownerId !== userId) {
+      return;
+    }
+
+    const targetShindig = activeFeedShindig;
+    const nextLabel = bringItemDraft.trim();
+    if (!nextLabel) {
+      setError('Enter something people should bring.');
+      return;
+    }
+
+    setActingBringItemId('new');
+    setError('');
+
+    try {
+      await addBringItem({
+        label: nextLabel,
+        shindigId: targetShindig.id,
+        userId,
+      });
+      const recipientIds = upcomingBringActivityRecipientIds(targetShindig, userId);
+
+      if (recipientIds.length > 0) {
+        await Promise.all(
+          recipientIds.map((recipientUserId) =>
+            createNotification({
+              actorUserId: userId,
+              message: `${profile.name} added "${nextLabel}" to the bring list for "${targetShindig.title}".`,
+              recipientUserId,
+              shindigId: targetShindig.id,
+              type: 'shindig_bring_item',
+            })
+          )
+        );
+      }
+      setBringItemDraft('');
+      await refreshActiveFeed(targetShindig.id);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Could not add that bring-list item.'
+      );
+    } finally {
+      setActingBringItemId('');
+    }
+  }
+
+  async function handleAddCustomBringItem() {
+    if (!activeFeedShindig || !canCurrentUserClaimBringItems) {
+      return;
+    }
+
+    const nextLabel = customBringItemDraft.trim();
+    if (!nextLabel) {
+      setError('Type what you are bringing first.');
+      return;
+    }
+
+    setActingBringItemId('custom-new');
+    setError('');
+
+    try {
+      await addBringItem({
+        claimForCreator: true,
+        isCustom: true,
+        label: nextLabel,
+        shindigId: activeFeedShindig.id,
+        userId,
+      });
+      const recipientIds = upcomingBringActivityRecipientIds(activeFeedShindig, userId);
+      if (recipientIds.length > 0) {
+        await Promise.all(
+          recipientIds.map((recipientUserId) =>
+            createNotification({
+              actorUserId: userId,
+              message: `${profile.name} added a custom bring-list item "${nextLabel}" for "${activeFeedShindig.title}".`,
+              recipientUserId,
+              shindigId: activeFeedShindig.id,
+              type: 'shindig_bring_item',
+            })
+          )
+        );
+      }
+      setCustomBringItemDraft('');
+      await refreshActiveFeed(activeFeedShindig.id);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Could not add your custom bring-list item.'
+      );
+    } finally {
+      setActingBringItemId('');
+    }
+  }
+
+  async function handleClaimBringItem(item: ShindigBringItem) {
+    if (!activeFeedShindig || !canCurrentUserClaimBringItems) {
+      return;
+    }
+
+    const targetShindig = activeFeedShindig;
+    setActingBringItemId(item.id);
+    setError('');
+
+    try {
+      if (item.claimedBy?.id === userId) {
+        await unclaimBringItem({
+          itemId: item.id,
+          shindigId: targetShindig.id,
+          userId,
+        });
+        const recipientIds = upcomingBringActivityRecipientIds(targetShindig, userId);
+        if (recipientIds.length > 0) {
+          await Promise.all(
+            recipientIds.map((recipientUserId) =>
+              createNotification({
+                actorUserId: userId,
+                message: `${profile.name} removed themselves from bringing "${item.label}" for "${targetShindig.title}".`,
+                recipientUserId,
+                shindigId: targetShindig.id,
+                type: 'shindig_bring_item',
+              })
+            )
+          );
+        }
+      } else {
+        await claimBringItem({
+          itemId: item.id,
+          shindigId: targetShindig.id,
+          userId,
+        });
+        const recipientIds = upcomingBringActivityRecipientIds(targetShindig, userId);
+        if (recipientIds.length > 0) {
+          await Promise.all(
+            recipientIds.map((recipientUserId) =>
+              createNotification({
+                actorUserId: userId,
+                message: `${profile.name} chose to bring "${item.label}" for "${targetShindig.title}".`,
+                recipientUserId,
+                shindigId: targetShindig.id,
+                type: 'shindig_bring_item',
+              })
+            )
+          );
+        }
+      }
+
+      await refreshActiveFeed(targetShindig.id);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Could not update that bring-list item.'
+      );
+    } finally {
+      setActingBringItemId('');
+    }
+  }
+
+  async function handleDeleteBringItem(itemId: string) {
+    if (!activeFeedShindig || activeFeedShindig.ownerId !== userId) {
+      return;
+    }
+
+    const targetShindig = activeFeedShindig;
+    const targetItem = targetShindig.bringItems.find((item) => item.id === itemId) || null;
+    setActingBringItemId(itemId);
+    setError('');
+
+    try {
+      await deleteBringItem({
+        itemId,
+        shindigId: targetShindig.id,
+        userId,
+      });
+      const recipientIds = upcomingBringActivityRecipientIds(targetShindig, userId);
+      if (recipientIds.length > 0 && targetItem) {
+        await Promise.all(
+          recipientIds.map((recipientUserId) =>
+            createNotification({
+              actorUserId: userId,
+              message: `${profile.name} removed "${targetItem.label}" from the bring list for "${targetShindig.title}".`,
+              recipientUserId,
+              shindigId: targetShindig.id,
+              type: 'shindig_bring_item',
+            })
+          )
+        );
+      }
+      await refreshActiveFeed(targetShindig.id);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Could not remove that bring-list item.'
+      );
+    } finally {
+      setActingBringItemId('');
+    }
   }
 
   async function handleAddShindigComment() {
@@ -1232,22 +1848,39 @@ export function HomeScreen({
       return;
     }
 
+    const targetShindig = activeFeedShindig;
+    const nextBody = shindigCommentDraft.trim();
+    const optimisticComment = {
+      author: buildCurrentUserProfile(profile, userId),
+      body: nextBody,
+      createdAt: new Date().toISOString(),
+      id: `local-shindig-comment-${Date.now()}`,
+    } satisfies SavedShindig['comments'][number];
+
+    setActiveFeedShindig((current) =>
+      current
+        ? {
+            ...current,
+            comments: [optimisticComment, ...current.comments],
+          }
+        : current
+    );
+    setShindigCommentDraft('');
+
     await addShindigComment({
-      body: shindigCommentDraft,
-      shindigId: activeFeedShindig.id,
+      body: nextBody,
+      shindigId: targetShindig.id,
       userId,
     });
-    if (activeFeedShindig.ownerId !== userId) {
+    if (targetShindig.ownerId !== userId) {
       await createNotification({
         actorUserId: userId,
-        message: `${profile.name} commented on your ShinDig "${activeFeedShindig.title}".`,
-        recipientUserId: activeFeedShindig.ownerId,
-        shindigId: activeFeedShindig.id,
+        message: `${profile.name} commented on your ShinDig "${targetShindig.title}".`,
+        recipientUserId: targetShindig.ownerId,
+        shindigId: targetShindig.id,
         type: 'shindig_comment',
       });
     }
-    setShindigCommentDraft('');
-    await refreshActiveFeed(activeFeedShindig.id);
   }
 
   async function handleTogglePhotoLike(photoId: string) {
@@ -1255,9 +1888,29 @@ export function HomeScreen({
       return;
     }
 
-    const targetPhoto = activeFeedShindig.stops.flatMap((stop) => stop.photos).find((photo) => photo.id === photoId);
+    const targetShindig = activeFeedShindig;
+    const targetPhoto = targetShindig.stops.flatMap((stop) => stop.photos).find((photo) => photo.id === photoId);
     const wasLiked = targetPhoto?.likedByMe;
-    const recipientUserId = getPhotoNotificationRecipient(activeFeedShindig, photoId);
+    const recipientUserId = getPhotoNotificationRecipient(targetShindig, photoId);
+    setActiveFeedShindig((current) =>
+      current
+        ? {
+            ...current,
+            stops: current.stops.map((stop) => ({
+              ...stop,
+              photos: stop.photos.map((photo) =>
+                photo.id === photoId
+                  ? {
+                      ...photo,
+                      likeCount: photo.likeCount + (photo.likedByMe ? -1 : 1),
+                      likedByMe: !photo.likedByMe,
+                    }
+                  : photo
+              ),
+            })),
+          }
+        : current
+    );
     await togglePhotoLike({
       photoId,
       userId,
@@ -1265,14 +1918,13 @@ export function HomeScreen({
     if (!wasLiked && recipientUserId !== userId) {
       await createNotification({
         actorUserId: userId,
-        message: `${profile.name} liked a photo in your ShinDig "${activeFeedShindig.title}".`,
+        message: `${profile.name} liked a photo in your ShinDig "${targetShindig.title}".`,
         photoId,
         recipientUserId,
-        shindigId: activeFeedShindig.id,
+        shindigId: targetShindig.id,
         type: 'photo_like',
       });
     }
-    await refreshActiveFeed(activeFeedShindig.id);
   }
 
   async function handleOpenPhotoLikeSheet(photo: SavedShindigPhoto) {
@@ -1304,7 +1956,33 @@ export function HomeScreen({
       return;
     }
 
-    const recipientUserId = getPhotoNotificationRecipient(activeFeedShindig, photoId);
+    const targetShindig = activeFeedShindig;
+    const recipientUserId = getPhotoNotificationRecipient(targetShindig, photoId);
+    const optimisticComment = {
+      author: buildCurrentUserProfile(profile, userId),
+      body: nextBody,
+      createdAt: new Date().toISOString(),
+      id: `local-photo-comment-${photoId}-${Date.now()}`,
+    } satisfies SavedShindigPhoto['comments'][number];
+
+    setActiveFeedShindig((current) =>
+      current
+        ? {
+            ...current,
+            stops: current.stops.map((stop) => ({
+              ...stop,
+              photos: stop.photos.map((photo) =>
+                photo.id === photoId
+                  ? {
+                      ...photo,
+                      comments: [optimisticComment, ...photo.comments],
+                    }
+                  : photo
+              ),
+            })),
+          }
+        : current
+    );
 
     await addPhotoComment({
       body: nextBody,
@@ -1314,15 +1992,14 @@ export function HomeScreen({
     if (recipientUserId !== userId) {
       await createNotification({
         actorUserId: userId,
-        message: `${profile.name} commented on a photo in your ShinDig "${activeFeedShindig.title}".`,
+        message: `${profile.name} commented on a photo in your ShinDig "${targetShindig.title}".`,
         photoId,
         recipientUserId,
-        shindigId: activeFeedShindig.id,
+        shindigId: targetShindig.id,
         type: 'photo_comment',
       });
     }
     setPhotoCommentDrafts((current) => ({ ...current, [photoId]: '' }));
-    await refreshActiveFeed(activeFeedShindig.id);
   }
 
   async function handleDeleteShindigComment(commentId: string) {
@@ -1334,7 +2011,14 @@ export function HomeScreen({
       commentId,
       userId,
     });
-    await refreshActiveFeed(activeFeedShindig.id);
+    setActiveFeedShindig((current) =>
+      current
+        ? {
+            ...current,
+            comments: current.comments.filter((comment) => comment.id !== commentId),
+          }
+        : current
+    );
   }
 
   async function handleDeletePhotoComment(commentId: string) {
@@ -1346,7 +2030,20 @@ export function HomeScreen({
       commentId,
       userId,
     });
-    await refreshActiveFeed(activeFeedShindig.id);
+    setActiveFeedShindig((current) =>
+      current
+        ? {
+            ...current,
+            stops: current.stops.map((stop) => ({
+              ...stop,
+              photos: stop.photos.map((photo) => ({
+                ...photo,
+                comments: photo.comments.filter((comment) => comment.id !== commentId),
+              })),
+            })),
+          }
+        : current
+    );
   }
 
   async function handleSelectCoverPhoto(photoId: string) {
@@ -1406,6 +2103,10 @@ export function HomeScreen({
     ]);
   }
 
+  function handleInviteMorePeopleFromMenu() {
+    void handleShareUpcomingShindig();
+  }
+
   function openShindigOwnerMenu() {
     if (!activeFeedShindig) {
       return;
@@ -1414,13 +2115,16 @@ export function HomeScreen({
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          cancelButtonIndex: 1,
-          destructiveButtonIndex: 0,
-          options: ['Delete ShinDig', 'Cancel'],
+          cancelButtonIndex: 2,
+          destructiveButtonIndex: 1,
+          options: ['Invite More People', 'Delete ShinDig', 'Cancel'],
           title: activeFeedShindig.title,
         },
         (buttonIndex) => {
           if (buttonIndex === 0) {
+            handleInviteMorePeopleFromMenu();
+          }
+          if (buttonIndex === 1) {
             openDeleteShindigPrompt();
           }
         }
@@ -1428,12 +2132,31 @@ export function HomeScreen({
       return;
     }
 
-    openDeleteShindigPrompt();
+    Alert.alert(activeFeedShindig.title, 'Manage this ShinDig.', [
+      {
+        onPress: handleInviteMorePeopleFromMenu,
+        text: 'Invite More People',
+      },
+      {
+        onPress: openDeleteShindigPrompt,
+        style: 'destructive',
+        text: 'Delete ShinDig',
+      },
+      {
+        style: 'cancel',
+        text: 'Cancel',
+      },
+    ]);
   }
 
   function openPhotoOwnerMenu(photo: SavedShindigPhoto) {
     const isCurrentCover = activeFeedShindig?.coverPhotoPhotoId === photo.id;
-    const canSelectCover = activeFeedShindig?.ownerId === userId;
+    const canSelectCover = Boolean(
+      activeFeedShindig &&
+        (activeFeedShindig.ownerId === userId ||
+          (activeFeedShindig.state !== 'planned' &&
+            activeFeedShindig.inviteStatus === 'accepted'))
+    );
     const canDeletePhoto =
       photo.contributor?.id === userId ||
       (!photo.contributor && activeFeedShindig?.ownerId === userId);
@@ -1630,11 +2353,87 @@ export function HomeScreen({
     }
   }
 
+  function scrollToUpcomingSection(key: 'activity' | 'bring' | 'memories') {
+    const y = sectionOffsetsRef.current[key];
+    if (typeof y !== 'number') {
+      return;
+    }
+
+    feedScrollRef.current?.scrollTo({
+      animated: true,
+      y: Math.max(y - 120, 0),
+    });
+  }
+
+  async function handleShareUpcomingShindig() {
+    if (!activeFeedShindig) {
+      return;
+    }
+
+    try {
+      const detail = activeFeedShindig.plannedFor
+        ? ` on ${formatPlannedDateLabel(activeFeedShindig.plannedFor)}`
+        : '';
+
+      if (activeFeedShindig.ownerId === userId) {
+        const invite = await createPhoneShindigInvite({
+          inviterUserId: userId,
+          shindigId: activeFeedShindig.id,
+        });
+        const inviteUrl = `${INVITE_LINK_BASE}?invite=${encodeURIComponent(invite.invite_token || '')}`;
+        await Share.share({
+          message: `${profile.name} invited you to "${activeFeedShindig.title}"${detail}. Open this invite: ${inviteUrl}`,
+          title: activeFeedShindig.title,
+        });
+        return;
+      }
+
+      await Share.share({
+        message: `${activeFeedShindig.title}${detail}`,
+        title: activeFeedShindig.title,
+      });
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to share this upcoming ShinDig.'
+      );
+    }
+  }
+
+  async function handleUpcomingPrimaryPhotoAction() {
+    if (!activeFeedShindig) {
+      return;
+    }
+
+    if (activeFeedShindig.state === 'planned') {
+      setShowOwnerPhotoPrompt(activeFeedShindig.ownerId === userId);
+      setShowPhotoRequestPrompt(activeFeedShindig.ownerId !== userId);
+      setPlannedFeedViewMode('feed');
+      return;
+    }
+
+    if (activeFeedShindig.ownerId === userId) {
+      handleAddPhotoToOwnedShindig();
+      return;
+    }
+
+    await handleAddPhotoToSharedShindig();
+  }
+
+  async function handleUpcomingRsvpButton() {
+    if (!activeFeedShindig?.inviteId || activeFeedShindig.ownerId === userId) {
+      return;
+    }
+
+    const nextStatus =
+      activeFeedShindig.inviteStatus === 'accepted' ? 'maybe' : 'accepted';
+    await handleUpcomingInviteResponse(activeFeedShindig, nextStatus);
+  }
+
   async function handleAddPhotoToSharedShindig() {
     if (
       !activeFeedShindig ||
       activeFeedShindig.ownerId === userId ||
-      activeFeedShindig.state !== 'active'
+      activeFeedShindig.state === 'completed'
     ) {
       return;
     }
@@ -1647,7 +2446,7 @@ export function HomeScreen({
     if (
       !activeFeedShindig ||
       activeFeedShindig.ownerId !== userId ||
-      activeFeedShindig.state !== 'active'
+      activeFeedShindig.state === 'completed'
     ) {
       return;
     }
@@ -1660,7 +2459,7 @@ export function HomeScreen({
     if (
       !activeFeedShindig ||
       activeFeedShindig.ownerId !== userId ||
-      activeFeedShindig.state !== 'active'
+      activeFeedShindig.state === 'completed'
     ) {
       return;
     }
@@ -1697,7 +2496,7 @@ export function HomeScreen({
     if (
       !activeFeedShindig ||
       activeFeedShindig.ownerId === userId ||
-      activeFeedShindig.state !== 'active'
+      activeFeedShindig.state === 'completed'
     ) {
       return;
     }
@@ -1765,6 +2564,11 @@ export function HomeScreen({
   }
 
   function handleBackFromFeedScreen() {
+    if (activeFeedShindig?.state === 'planned' && plannedFeedViewMode === 'feed') {
+      setPlannedFeedViewMode('overview');
+      return;
+    }
+
     if (feedBackMode === 'external' && onBackFromFeed) {
       onBackFromFeed();
       return;
@@ -1783,12 +2587,87 @@ export function HomeScreen({
             <Text style={styles.ctaButtonText}>Start a Shindig</Text>
           </Pressable>
 
-          {activeShindigs.length === 0 && completedShindigs.length === 0 ? (
+          {plannedShindigs.length === 0 && activeShindigs.length === 0 && completedShindigs.length === 0 ? (
             <Text style={styles.emptyText}>
               Start your first ShinDig to build a shared photo feed and archive it here.
             </Text>
           ) : (
             <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Upcoming Shindigs</Text>
+              </View>
+
+              {plannedShindigs.length > 0 ? (
+                <View style={styles.pastList}>
+                  {plannedShindigs.map((shindig) => (
+                    <Pressable
+                      key={shindig.id}
+                      onPress={() => openPastShindig(shindig)}
+                      style={styles.pastCard}
+                    >
+                      <Image
+                        source={{
+                          uri:
+                            shindig.coverPhotoThumbnailUrl ||
+                            shindig.coverPhotoUrl ||
+                            'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
+                        }}
+                        style={styles.pastCardImage}
+                      />
+                      <View style={styles.pastCardCopy}>
+                        <Text style={styles.pastCardTitle}>{shindig.title}</Text>
+                        <Text style={styles.pastCardMeta}>
+                          {shindig.plannedFor
+                            ? `Upcoming ${formatPlannedDateLabel(shindig.plannedFor)}`
+                            : formatDateLabel(shindig.createdAt)}
+                        </Text>
+                        {shindig.invitedBy ? (
+                          <Text style={styles.invitedByTag}>via {shindig.invitedBy.handle}</Text>
+                        ) : null}
+                        {shindig.invitedBy && shindig.inviteId ? (
+                          <View style={styles.upcomingInviteActions}>
+                            <Pressable
+                              disabled={actingUpcomingInviteId === shindig.inviteId}
+                              onPress={() => void handleUpcomingInviteResponse(shindig, 'accepted')}
+                              style={[
+                                styles.upcomingInviteButton,
+                                shindig.inviteStatus === 'accepted' && styles.upcomingInviteButtonActive,
+                              ]}
+                            >
+                              <Text style={styles.upcomingInviteButtonText}>
+                                {actingUpcomingInviteId === shindig.inviteId ? '...' : 'Accept'}
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              disabled={actingUpcomingInviteId === shindig.inviteId}
+                              onPress={() => void handleUpcomingInviteResponse(shindig, 'maybe')}
+                              style={[
+                                styles.upcomingInviteButtonSecondary,
+                                shindig.inviteStatus === 'maybe' && styles.upcomingInviteButtonActive,
+                              ]}
+                            >
+                              <Text style={styles.upcomingInviteButtonText}>Maybe</Text>
+                            </Pressable>
+                            <Pressable
+                              disabled={actingUpcomingInviteId === shindig.inviteId}
+                              onPress={() => void handleUpcomingInviteResponse(shindig, 'rejected')}
+                              style={[
+                                styles.upcomingInviteButtonSecondary,
+                                shindig.inviteStatus === 'rejected' && styles.upcomingInviteRejectActive,
+                              ]}
+                            >
+                              <Text style={styles.upcomingInviteButtonText}>Reject</Text>
+                            </Pressable>
+                          </View>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.emptyText}>No upcoming ShinDigs right now.</Text>
+              )}
+
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Active Shindigs</Text>
               </View>
@@ -1804,6 +2683,7 @@ export function HomeScreen({
                       <Image
                         source={{
                           uri:
+                            shindig.coverPhotoThumbnailUrl ||
                             shindig.coverPhotoUrl ||
                             'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
                         }}
@@ -1838,6 +2718,7 @@ export function HomeScreen({
                       <Image
                         source={{
                           uri:
+                            shindig.coverPhotoThumbnailUrl ||
                             shindig.coverPhotoUrl ||
                             'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
                         }}
@@ -1867,6 +2748,559 @@ export function HomeScreen({
     const feedPhotos = sortPhotosNewestFirst(
       activeFeedShindig.stops.flatMap((stop) => stop.photos)
     );
+    const coverPhotoUri =
+      activeFeedShindig.coverPhotoUrl ||
+      activeFeedShindig.coverPhotoThumbnailUrl ||
+      feedPhotos[0]?.photoUrl ||
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80';
+    const claimedByMeCount = activeFeedShindig.bringItems.filter(
+      (item) => item.claimedBy?.id === userId
+    ).length;
+
+    if (activeFeedShindig.state === 'planned' && plannedFeedViewMode === 'overview') {
+      return (
+        <SafeAreaView style={styles.safeArea}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.flex}
+          >
+            <Modal
+              animationType="fade"
+              onRequestClose={() => setExpandedPhoto(null)}
+              transparent
+              visible={Boolean(expandedPhoto)}
+            >
+              <View style={styles.photoViewerBackdrop}>
+                <Pressable
+                  onPress={() => setExpandedPhoto(null)}
+                  style={styles.photoViewerDismissArea}
+                />
+                <View style={styles.photoViewerCard}>
+                  <Pressable
+                    onPress={() => setExpandedPhoto(null)}
+                    style={styles.photoViewerCloseButton}
+                  >
+                    <Ionicons color="#FFFFFF" name="close" size={22} />
+                  </Pressable>
+                  {expandedPhoto ? (
+                    <ProgressiveImage
+                      containerStyle={styles.photoViewerFrame}
+                      imageStyle={styles.photoViewerImage}
+                      resizeMode="contain"
+                      sourceUri={expandedPhoto.photoUrl}
+                    />
+                  ) : null}
+                </View>
+              </View>
+            </Modal>
+            <ScrollView
+              contentContainerStyle={styles.upcomingScreenContent}
+              keyboardShouldPersistTaps="handled"
+              ref={feedScrollRef}
+              showsVerticalScrollIndicator={false}
+            >
+              <PageHeader
+                onBack={handleBackFromFeedScreen}
+                right={headerActions}
+                title="Upcoming ShinDig"
+              />
+
+              <View style={styles.upcomingHeroCard}>
+                <Image source={{ uri: coverPhotoUri }} style={styles.upcomingHeroImage} />
+                <View style={styles.upcomingHeroOverlay} />
+                <View style={styles.upcomingHeroContent}>
+                  <View style={styles.upcomingBadge}>
+                    <Text style={styles.upcomingBadgeText}>UPCOMING</Text>
+                  </View>
+                  <Text style={styles.upcomingHeroTitle}>{activeFeedShindig.title}</Text>
+                  <View style={styles.upcomingHeroMetaRow}>
+                    <Text style={styles.upcomingHeroMetaText}>
+                      {activeFeedShindig.plannedFor
+                        ? formatPlannedDateLabel(activeFeedShindig.plannedFor)
+                        : 'Date coming soon'}
+                    </Text>
+                    <Text style={styles.upcomingHeroMetaDot}>•</Text>
+                    <Text style={styles.upcomingHeroMetaText}>{activeFeedCreatorLabel}</Text>
+                  </View>
+                  <View style={styles.upcomingHeroStatsRow}>
+                    <View style={styles.upcomingHeroStat}>
+                      <Ionicons color={theme.colors.accentPink} name="people" size={14} />
+                      <Text style={styles.upcomingHeroStatText}>
+                        {upcomingAttendeeGroups.accepted.length} Going
+                      </Text>
+                    </View>
+                    <View style={styles.upcomingHeroStat}>
+                      <Ionicons color={theme.colors.textPrimary} name="chatbubble-outline" size={14} />
+                      <Text style={styles.upcomingHeroStatText}>
+                        {activeFeedShindig.comments.length} Comments
+                      </Text>
+                    </View>
+                    <View style={styles.upcomingHeroStat}>
+                      <Ionicons color={theme.colors.textPrimary} name="images-outline" size={14} />
+                      <Text style={styles.upcomingHeroStatText}>
+                        {feedPhotos.length} Photos
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.upcomingHeroActionRow}>
+                    <Pressable
+                      onPress={() => void handleShareUpcomingShindig()}
+                      style={styles.upcomingPillButtonSecondary}
+                    >
+                      <Ionicons color={theme.colors.textPrimary} name="share-outline" size={15} />
+                      <Text style={styles.upcomingPillButtonSecondaryText}>Share</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void handleUpcomingPrimaryPhotoAction()}
+                      style={styles.upcomingPillButtonSecondary}
+                    >
+                      <Ionicons color={theme.colors.textPrimary} name="camera-outline" size={15} />
+                      <Text style={styles.upcomingPillButtonSecondaryText}>Add Photo</Text>
+                    </Pressable>
+                    {activeFeedShindig.ownerId === userId ? (
+                      <Pressable
+                        onPress={openShindigOwnerMenu}
+                        style={styles.upcomingPillButtonSecondary}
+                      >
+                        <Ionicons
+                          color={theme.colors.textPrimary}
+                          name="ellipsis-horizontal"
+                          size={15}
+                        />
+                        <Text style={styles.upcomingPillButtonSecondaryText}>More</Text>
+                      </Pressable>
+                    ) : null}
+                    {activeFeedShindig.ownerId !== userId && activeFeedShindig.inviteId ? (
+                      <Pressable
+                        disabled={actingUpcomingInviteId === activeFeedShindig.inviteId}
+                        onPress={() => void handleUpcomingRsvpButton()}
+                        style={styles.upcomingPillButtonPrimary}
+                      >
+                        <Text style={styles.upcomingPillButtonPrimaryText}>
+                          {actingUpcomingInviteId === activeFeedShindig.inviteId
+                            ? 'Saving...'
+                            : activeFeedShindig.inviteStatus === 'accepted'
+                              ? 'Going'
+                              : activeFeedShindig.inviteStatus === 'maybe'
+                                ? 'Maybe'
+                                : 'RSVP'}
+                        </Text>
+                        <Ionicons color="#FFFFFF" name="chevron-down" size={14} />
+                      </Pressable>
+                    ) : (
+                      <View style={styles.upcomingHostPill}>
+                        <Text style={styles.upcomingHostPillText}>
+                          {activeFeedShindig.ownerId === userId ? 'Hosting' : 'Invited'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.upcomingQuickActionsRow}>
+                <Pressable
+                  onPress={() => scrollToUpcomingSection('bring')}
+                  style={styles.upcomingQuickAction}
+                >
+                  <View style={[styles.upcomingQuickActionIconWrap, styles.upcomingQuickActionPink]}>
+                    <Ionicons color="#FFFFFF" name="gift-outline" size={18} />
+                  </View>
+                  <Text style={styles.upcomingQuickActionText}>Bring{'\n'}Something</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleUpcomingPrimaryPhotoAction()}
+                  style={styles.upcomingQuickAction}
+                >
+                  <View
+                    style={[styles.upcomingQuickActionIconWrap, styles.upcomingQuickActionPurple]}
+                  >
+                    <Ionicons color="#FFFFFF" name="camera-outline" size={18} />
+                  </View>
+                  <Text style={styles.upcomingQuickActionText}>Upload{'\n'}Photo</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.upcomingDashboardGrid}>
+                <View
+                  onLayout={(event) => {
+                    sectionOffsetsRef.current.bring = event.nativeEvent.layout.y;
+                  }}
+                  style={[styles.upcomingPanelCard, styles.upcomingPanelWide]}
+                >
+                  <View style={styles.upcomingPanelHeader}>
+                    <View style={styles.upcomingPanelHeaderLeft}>
+                      <Ionicons color={theme.colors.accentPink} name="calendar-outline" size={16} />
+                      <Text style={styles.upcomingPanelTitle}>Things to Bring</Text>
+                    </View>
+                    <Text style={styles.upcomingPanelActionText}>Help make this shindig amazing</Text>
+                  </View>
+
+                  {activeFeedShindig.ownerId === userId ? (
+                    <View style={styles.bringListComposer}>
+                      <TextInput
+                        onChangeText={setBringItemDraft}
+                        onSubmitEditing={() => void handleAddBringItem()}
+                        placeholder="Add an item to bring"
+                        placeholderTextColor={theme.colors.textMuted}
+                        returnKeyType="done"
+                        style={styles.bringListInput}
+                        value={bringItemDraft}
+                      />
+                      <Pressable
+                        disabled={actingBringItemId === 'new'}
+                        onPress={() => void handleAddBringItem()}
+                        style={styles.bringListAddButton}
+                      >
+                        <Text style={styles.bringListAddButtonText}>
+                          {actingBringItemId === 'new' ? 'Adding...' : 'Add'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+
+                  <View style={styles.bringListItemsCompact}>
+                    {displayedStandardBringItems.map((item) => {
+                      const isClaimedByMe = item.claimedBy?.id === userId;
+                      const isClaimedByOther =
+                        Boolean(item.claimedBy?.id) && item.claimedBy?.id !== userId;
+                      const claimedAvatars = activeFeedShindig.bringItems
+                        .filter((candidate) => candidate.label === item.label && candidate.claimedBy)
+                        .map((candidate) => candidate.claimedBy!)
+                        .slice(0, 3);
+
+                      return (
+                        <View key={item.id} style={styles.bringListItemCard}>
+                          <View style={styles.bringListItemTopRow}>
+                            <View style={styles.bringListItemLead}>
+                              <Text style={styles.bringListEmoji}>
+                                {item.label.toLowerCase().includes('beer')
+                                  ? '🍺'
+                                  : item.label.toLowerCase().includes('bread')
+                                    ? '🍞'
+                                    : item.label.toLowerCase().includes('pasta')
+                                      ? '🍝'
+                                      : item.label.toLowerCase().includes('weed')
+                                        ? '🌿'
+                                        : '🎉'}
+                              </Text>
+                              <View style={styles.bringListItemCopy}>
+                                <Text style={styles.bringListItemLabel}>{item.label}</Text>
+                                <Text style={styles.bringListItemMeta}>
+                                  {item.claimedBy
+                                    ? isClaimedByMe
+                                      ? '1 of 1 claimed • You'
+                                      : `1 of 1 claimed • ${item.claimedBy.name}`
+                                    : '0 of 1 claimed'}
+                                </Text>
+                              </View>
+                            </View>
+                            {activeFeedShindig.ownerId === userId ? (
+                              <Pressable
+                                disabled={actingBringItemId === item.id}
+                                onPress={() => void handleDeleteBringItem(item.id)}
+                                style={styles.bringListDeleteButton}
+                              >
+                                <Ionicons color="#FF8A80" name="trash-outline" size={18} />
+                              </Pressable>
+                            ) : canCurrentUserClaimBringItems ? (
+                              <Pressable
+                                disabled={actingBringItemId === item.id || isClaimedByOther}
+                                onPress={() => void handleClaimBringItem(item)}
+                                style={[
+                                  styles.bringListClaimButton,
+                                  !isClaimedByMe &&
+                                    !isClaimedByOther &&
+                                    styles.bringListClaimButtonPrimary,
+                                  isClaimedByOther && styles.bringListClaimButtonDisabled,
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.bringListClaimButtonText,
+                                    !isClaimedByMe &&
+                                      !isClaimedByOther &&
+                                      styles.bringListClaimButtonTextPrimary,
+                                    isClaimedByOther && styles.bringListClaimButtonTextDisabled,
+                                  ]}
+                                >
+                                  {actingBringItemId === item.id
+                                    ? 'Saving...'
+                                    : isClaimedByMe
+                                      ? 'Undo'
+                                      : isClaimedByOther
+                                        ? 'Taken'
+                                        : "I'm bringing it"}
+                                </Text>
+                              </Pressable>
+                            ) : null}
+                          </View>
+                          <View style={styles.upcomingMiniAvatarRow}>
+                            {claimedAvatars.map((avatar) => (
+                              <Image
+                                key={`${item.id}-${avatar.id}`}
+                                source={{ uri: avatar.avatar }}
+                                style={styles.upcomingMiniAvatar}
+                              />
+                            ))}
+                            {claimedAvatars.length === 0 ? (
+                              <Text style={styles.upcomingEmptyMiniText}>Nobody yet</Text>
+                            ) : null}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  {canCurrentUserClaimBringItems || customBringItems.length > 0 ? (
+                    <View style={styles.customBringSection}>
+                      <Text style={styles.customBringTitle}>Other</Text>
+                      {canCurrentUserClaimBringItems ? (
+                        <View style={styles.bringListComposer}>
+                          <TextInput
+                            onChangeText={setCustomBringItemDraft}
+                            onSubmitEditing={() => void handleAddCustomBringItem()}
+                            placeholder="Type a custom item"
+                            placeholderTextColor={theme.colors.textMuted}
+                            returnKeyType="done"
+                            style={styles.bringListInput}
+                            value={customBringItemDraft}
+                          />
+                          <Pressable
+                            disabled={actingBringItemId === 'custom-new'}
+                            onPress={() => void handleAddCustomBringItem()}
+                            style={styles.bringListAddButton}
+                          >
+                            <Text style={styles.bringListAddButtonText}>
+                              {actingBringItemId === 'custom-new' ? 'Adding...' : 'Add'}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
+                      {displayedCustomBringItems.length > 0 ? (
+                        <View style={styles.bringListItems}>
+                          {displayedCustomBringItems.map((item) => {
+                            const isClaimedByMe = item.claimedBy?.id === userId;
+                            const canRemoveCustomItem =
+                              activeFeedShindig.ownerId === userId || isClaimedByMe;
+
+                            return (
+                              <View key={item.id} style={styles.bringListItemRow}>
+                                <View style={styles.bringListItemCopy}>
+                                  <Text style={styles.bringListItemLabel}>{item.label}</Text>
+                                  <Text style={styles.bringListItemMeta}>
+                                    {item.claimedBy
+                                      ? `${item.claimedBy.name} added this custom item`
+                                      : 'Custom item'}
+                                  </Text>
+                                </View>
+                                {canRemoveCustomItem ? (
+                                  <Pressable
+                                    disabled={actingBringItemId === item.id}
+                                    onPress={() => void handleDeleteBringItem(item.id)}
+                                    style={styles.bringListClaimButton}
+                                  >
+                                    <Text style={styles.bringListClaimButtonText}>Remove</Text>
+                                  </Pressable>
+                                ) : null}
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  {standardBringItems.length > 4 || customBringItems.length > 2 ? (
+                    <Pressable
+                      onPress={() => setShowAllUpcomingBringItems((current) => !current)}
+                      style={styles.upcomingPanelFooter}
+                    >
+                      <Text style={styles.upcomingPanelFooterText}>
+                        {showAllUpcomingBringItems ? 'Show fewer items' : 'See all items'}
+                      </Text>
+                      <Ionicons
+                        color={theme.colors.textMuted}
+                        name={showAllUpcomingBringItems ? 'chevron-up' : 'chevron-down'}
+                        size={14}
+                      />
+                    </Pressable>
+                  ) : null}
+                </View>
+
+                <View style={styles.upcomingDashboardSide}>
+                  <View style={styles.upcomingPanelCard}>
+                    <View style={styles.upcomingPanelHeader}>
+                      <View style={styles.upcomingPanelHeaderLeft}>
+                        <Ionicons color={theme.colors.accentPink} name="people" size={16} />
+                        <Text style={styles.upcomingPanelTitle}>Attendees</Text>
+                      </View>
+                      <Text style={styles.upcomingPanelActionLink}>See all</Text>
+                    </View>
+                    <View style={styles.upcomingAttendeeGroup}>
+                      <Text style={styles.upcomingAttendeeGroupLabel}>
+                        Going ({upcomingAttendeeGroups.accepted.length})
+                      </Text>
+                      <View style={styles.upcomingAttendeeAvatarRow}>
+                        {upcomingAttendeeGroups.accepted.slice(0, 7).map((person) => (
+                          <Image
+                            key={`accepted-${person.id}`}
+                            source={{ uri: person.avatar }}
+                            style={styles.upcomingAttendeeAvatar}
+                          />
+                        ))}
+                        {upcomingAttendeeGroups.accepted.length > 7 ? (
+                          <View style={styles.upcomingAttendeeOverflow}>
+                            <Text style={styles.upcomingAttendeeOverflowText}>
+                              +{upcomingAttendeeGroups.accepted.length - 7}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                    <View style={styles.upcomingAttendeeGroup}>
+                      <Text style={styles.upcomingAttendeeGroupLabel}>
+                        Maybe ({upcomingAttendeeGroups.maybe.length})
+                      </Text>
+                      <View style={styles.upcomingAttendeeAvatarRow}>
+                        {upcomingAttendeeGroups.maybe.slice(0, 5).map((person) => (
+                          <Image
+                            key={`maybe-${person.id}`}
+                            source={{ uri: person.avatar }}
+                            style={styles.upcomingAttendeeAvatar}
+                          />
+                        ))}
+                      </View>
+                    </View>
+                    <View style={styles.upcomingAttendeeGroup}>
+                      <Text style={styles.upcomingAttendeeGroupLabel}>
+                        Invited ({upcomingAttendeeGroups.pending.length})
+                      </Text>
+                      <View style={styles.upcomingAttendeeAvatarRow}>
+                        {upcomingAttendeeGroups.pending.slice(0, 5).map((person) => (
+                          <Image
+                            key={`pending-${person.id}`}
+                            source={{ uri: person.avatar }}
+                            style={styles.upcomingAttendeeAvatar}
+                          />
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+
+                  <View
+                    onLayout={(event) => {
+                      sectionOffsetsRef.current.activity = event.nativeEvent.layout.y;
+                    }}
+                    style={styles.upcomingPanelCard}
+                  >
+                    <View style={styles.upcomingPanelHeader}>
+                      <View style={styles.upcomingPanelHeaderLeft}>
+                        <Ionicons color={theme.colors.accentPink} name="flash" size={16} />
+                        <Text style={styles.upcomingPanelTitle}>Activity</Text>
+                      </View>
+                      <Text style={styles.upcomingPanelActionLink}>See all</Text>
+                    </View>
+                    <View style={styles.upcomingActivityList}>
+                      {upcomingActivity.map((item) => (
+                        <View key={item.id} style={styles.upcomingActivityItem}>
+                          <View style={styles.upcomingActivityLead}>
+                            {item.imageUrl ? (
+                              <Image
+                                source={{ uri: item.imageUrl }}
+                                style={styles.upcomingActivityThumb}
+                              />
+                            ) : (
+                              <View style={styles.upcomingActivityIcon}>
+                                <Ionicons color={theme.colors.textPrimary} name={item.icon} size={14} />
+                              </View>
+                            )}
+                            <View style={styles.upcomingActivityCopy}>
+                              <Text style={styles.upcomingActivityTitle}>{item.title}</Text>
+                              <Text style={styles.upcomingActivityTime}>{item.detail}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      ))}
+                      {upcomingActivity.length === 0 ? (
+                        <Text style={styles.bringListEmptyText}>No activity yet.</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+
+                <View
+                  onLayout={(event) => {
+                    sectionOffsetsRef.current.memories = event.nativeEvent.layout.y;
+                  }}
+                  style={[styles.upcomingPanelCard, styles.upcomingPanelWide]}
+                >
+                  <View style={styles.upcomingPanelHeader}>
+                    <View style={styles.upcomingPanelHeaderLeft}>
+                      <Ionicons color={theme.colors.accentPink} name="camera" size={16} />
+                      <Text style={styles.upcomingPanelTitle}>Feed</Text>
+                    </View>
+                    <Pressable
+                      onPress={() => scrollToUpcomingSection('memories')}
+                      style={styles.upcomingMemoriesAction}
+                    >
+                      <Text style={styles.upcomingPanelActionLink}>+ Add Photo</Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.upcomingMemoriesGrid}>
+                    {feedPhotos.slice(0, 6).map((photo) => (
+                      <Pressable
+                        key={photo.id}
+                        onPress={() => setExpandedPhoto(photo)}
+                        style={styles.upcomingMemoryTile}
+                      >
+                        <Image
+                          source={{ uri: photo.thumbnailUrl || photo.photoUrl }}
+                          style={styles.upcomingMemoryImage}
+                        />
+                      </Pressable>
+                    ))}
+                    {feedPhotos.length === 0 ? (
+                      <View style={styles.upcomingMemoriesEmpty}>
+                        <Text style={styles.bringListEmptyText}>
+                          Photos will appear here once the shindig starts.
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Pressable
+                    onPress={() => setPlannedFeedViewMode('feed')}
+                    style={styles.upcomingMemoriesFooter}
+                  >
+                    <Text style={styles.upcomingPanelFooterLink}>
+                      View feed ({feedPhotos.length})
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {canCurrentUserClaimBringItems && claimedByMeCount === 0 ? (
+                <View style={styles.upcomingBottomCta}>
+                  <View style={styles.upcomingBottomCtaCopy}>
+                    <Text style={styles.upcomingBottomCtaTitle}>Haven't claimed anything yet!</Text>
+                    <Text style={styles.upcomingBottomCtaText}>
+                      Pick something to bring and make it epic.
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => scrollToUpcomingSection('bring')}
+                    style={styles.upcomingBottomCtaButton}
+                  >
+                    <Text style={styles.upcomingBottomCtaButtonText}>Browse Items</Text>
+                    <Ionicons color={theme.colors.accentPurple} name="arrow-forward" size={16} />
+                  </Pressable>
+                </View>
+              ) : null}
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      );
+    }
 
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -1921,6 +3355,35 @@ export function HomeScreen({
               </View>
             </View>
           </Modal>
+          <Modal
+            animationType="fade"
+            onRequestClose={() => setExpandedPhoto(null)}
+            transparent
+            visible={Boolean(expandedPhoto)}
+          >
+            <View style={styles.photoViewerBackdrop}>
+              <Pressable
+                onPress={() => setExpandedPhoto(null)}
+                style={styles.photoViewerDismissArea}
+              />
+              <View style={styles.photoViewerCard}>
+                <Pressable
+                  onPress={() => setExpandedPhoto(null)}
+                  style={styles.photoViewerCloseButton}
+                >
+                  <Ionicons color="#FFFFFF" name="close" size={22} />
+                </Pressable>
+                {expandedPhoto ? (
+                  <ProgressiveImage
+                    containerStyle={styles.photoViewerFrame}
+                    imageStyle={styles.photoViewerImage}
+                    resizeMode="contain"
+                    sourceUri={expandedPhoto.photoUrl}
+                  />
+                ) : null}
+              </View>
+            </View>
+          </Modal>
           <ScrollView
             contentContainerStyle={styles.content}
             keyboardShouldPersistTaps="handled"
@@ -1938,7 +3401,9 @@ export function HomeScreen({
                       styles.stateBadge,
                       activeFeedShindig.state === 'active'
                         ? styles.stateBadgeActive
-                        : styles.stateBadgeCompleted,
+                        : activeFeedShindig.state === 'planned'
+                          ? styles.stateBadgeUpcoming
+                          : styles.stateBadgeCompleted,
                     ]}
                   >
                     <Text
@@ -1946,7 +3411,9 @@ export function HomeScreen({
                         styles.stateBadgeText,
                         activeFeedShindig.state === 'active'
                           ? styles.stateBadgeTextActive
-                          : styles.stateBadgeTextCompleted,
+                          : activeFeedShindig.state === 'planned'
+                            ? styles.stateBadgeTextUpcoming
+                            : styles.stateBadgeTextCompleted,
                       ]}
                     >
                       {shindigStateLabel(activeFeedShindig.state)}
@@ -1954,13 +3421,16 @@ export function HomeScreen({
                   </View>
                 </View>
                 <Text style={styles.feedParticipants}>
+                  {activeFeedShindig.plannedFor
+                    ? `upcoming ${formatPlannedDateLabel(activeFeedShindig.plannedFor)} • `
+                    : ''}
                   {activeFeedCreatorLabel} • {feedPhotos.length} photo{feedPhotos.length === 1 ? '' : 's'}
                 </Text>
               </View>
               {activeFeedShindig.ownerId === userId ? (
                 <View style={styles.feedOwnerControls}>
                   <View style={styles.feedHeaderActions}>
-                    {activeFeedShindig.state === 'active' ? (
+                    {activeFeedShindig.state !== 'completed' ? (
                       <Pressable
                         onPress={handleAddPhotoToOwnedShindig}
                         style={styles.addPhotoHeaderButton}
@@ -1970,28 +3440,37 @@ export function HomeScreen({
                     ) : null}
 
                     <Pressable
-                      onPress={() =>
-                        handleUpdateShindigState(
-                          activeFeedShindig.state === 'active' ? 'completed' : 'active'
-                        )
-                      }
+                      onPress={() => {
+                        const nextState =
+                          activeFeedShindig.state === 'planned'
+                            ? 'active'
+                            : activeFeedShindig.state === 'completed'
+                              ? 'active'
+                              : 'completed';
+                        handleUpdateShindigState(nextState);
+                      }}
                       style={[
                         styles.stateActionButton,
-                        activeFeedShindig.state === 'active'
-                          ? styles.completeButton
-                          : styles.reactivateButton,
+                        activeFeedShindig.state === 'planned'
+                          ? styles.startButton
+                          : activeFeedShindig.state === 'completed'
+                            ? styles.reactivateButton
+                            : styles.completeButton,
                       ]}
                     >
                       <Ionicons
                         color={
-                          activeFeedShindig.state === 'active'
-                            ? theme.colors.textPrimary
-                            : '#FFFFFF'
+                          activeFeedShindig.state === 'planned' ||
+                          activeFeedShindig.state === 'completed'
+                            ? '#FFFFFF'
+                            : theme.colors.textPrimary
                         }
                         name={
-                          activeFeedShindig.state === 'active'
-                            ? 'checkmark'
-                            : 'refresh-outline'
+                          activeFeedShindig.state === 'planned'
+                            ? 'play'
+                            : activeFeedShindig.state === 'completed'
+                            ? 'refresh-outline'
+                            : 'checkmark'
                         }
                         size={20}
                       />
@@ -2012,7 +3491,7 @@ export function HomeScreen({
             ) : null}
 
             {activeFeedShindig.ownerId === userId &&
-            activeFeedShindig.state === 'active' &&
+            activeFeedShindig.state !== 'completed' &&
             showOwnerPhotoPrompt ? (
               <View style={styles.feedHeaderPromptWrap}>
                 <View style={styles.headerPromptCard}>
@@ -2045,7 +3524,7 @@ export function HomeScreen({
 
             {activeFeedShindig.ownerId !== userId ? (
               <View style={styles.requestPhotoWrap}>
-                {activeFeedShindig.state === 'active' ? (
+                {activeFeedShindig.state !== 'completed' ? (
                   <>
                     <Pressable
                       disabled={isAddingPhotoToShindig}
@@ -2097,6 +3576,218 @@ export function HomeScreen({
               </View>
             ) : null}
 
+            {false ? (
+              <View style={styles.bringListCard}>
+                <View style={styles.bringListHeader}>
+                  <View style={styles.bringListHeaderCopy}>
+                    <Text style={styles.bringListTitle}>Things to bring</Text>
+                    <Text style={styles.bringListSubtitle}>
+                      {activeFeedShindig!.ownerId === userId
+                        ? 'Add items your guests can claim.'
+                        : 'Claim one or more items so the host knows who is bringing what.'}
+                    </Text>
+                  </View>
+                  <View style={styles.bringListCountBadge}>
+                    <Text style={styles.bringListCountText}>
+                      {activeFeedShindig!.bringItems.length}
+                    </Text>
+                  </View>
+                </View>
+
+                {activeFeedShindig!.ownerId === userId ? (
+                  <View style={styles.bringListComposer}>
+                    <TextInput
+                      onChangeText={setBringItemDraft}
+                      onSubmitEditing={() => void handleAddBringItem()}
+                      placeholder="Add an item to bring"
+                      placeholderTextColor={theme.colors.textMuted}
+                      returnKeyType="done"
+                      style={styles.bringListInput}
+                      value={bringItemDraft}
+                    />
+                    <Pressable
+                      disabled={actingBringItemId === 'new'}
+                      onPress={() => void handleAddBringItem()}
+                      style={styles.bringListAddButton}
+                    >
+                      <Text style={styles.bringListAddButtonText}>
+                        {actingBringItemId === 'new' ? 'Adding...' : 'Add'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+
+                {standardBringItems.length > 0 ? (
+                  <View style={styles.bringListItems}>
+                    {standardBringItems.map((item) => {
+                      const isClaimedByMe = item.claimedBy?.id === userId;
+                      const isClaimedByOther =
+                        Boolean(item.claimedBy?.id) && item.claimedBy?.id !== userId;
+
+                      return (
+                        <View key={item.id} style={styles.bringListItemRow}>
+                          <View style={styles.bringListItemCopy}>
+                            <Text style={styles.bringListItemLabel}>{item.label}</Text>
+                            <Text style={styles.bringListItemMeta}>
+                              {item.claimedBy
+                                ? isClaimedByMe
+                                  ? 'You are bringing this'
+                                  : `${item.claimedBy.name} is bringing this`
+                                : 'Still available'}
+                            </Text>
+                          </View>
+
+                          {activeFeedShindig!.ownerId === userId ? (
+                            <Pressable
+                              disabled={actingBringItemId === item.id}
+                              onPress={() => void handleDeleteBringItem(item.id)}
+                              style={styles.bringListDeleteButton}
+                            >
+                              <Ionicons color="#FF8A80" name="trash-outline" size={18} />
+                            </Pressable>
+                          ) : canCurrentUserClaimBringItems ? (
+                            <Pressable
+                              disabled={actingBringItemId === item.id || isClaimedByOther}
+                              onPress={() => void handleClaimBringItem(item)}
+                              style={[
+                                styles.bringListClaimButton,
+                                !isClaimedByMe &&
+                                  !isClaimedByOther &&
+                                  styles.bringListClaimButtonPrimary,
+                                isClaimedByOther && styles.bringListClaimButtonDisabled,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.bringListClaimButtonText,
+                                  !isClaimedByMe &&
+                                    !isClaimedByOther &&
+                                    styles.bringListClaimButtonTextPrimary,
+                                  isClaimedByOther && styles.bringListClaimButtonTextDisabled,
+                                ]}
+                              >
+                                {actingBringItemId === item.id
+                                  ? 'Saving...'
+                                  : isClaimedByMe
+                                    ? 'Undo'
+                                    : isClaimedByOther
+                                      ? 'Taken'
+                                      : 'I’ll bring it'}
+                              </Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text style={styles.bringListEmptyText}>
+                    {activeFeedShindig!.ownerId === userId
+                      ? 'No bring-list items yet.'
+                      : 'The host has not added a bring list yet.'}
+                  </Text>
+                )}
+
+                {canCurrentUserClaimBringItems || customBringItems.length > 0 ? (
+                  <View style={styles.customBringSection}>
+                    <Text style={styles.customBringTitle}>Other</Text>
+                    <Text style={styles.customBringSubtitle}>
+                      {canCurrentUserClaimBringItems
+                        ? 'Add a custom item if you are bringing something not listed above.'
+                        : 'Custom items invited guests added for this ShinDig.'}
+                    </Text>
+                    {canCurrentUserClaimBringItems ? (
+                      <View style={styles.bringListComposer}>
+                        <TextInput
+                          onChangeText={setCustomBringItemDraft}
+                          onSubmitEditing={() => void handleAddCustomBringItem()}
+                          placeholder="Type a custom item"
+                          placeholderTextColor={theme.colors.textMuted}
+                          returnKeyType="done"
+                          style={styles.bringListInput}
+                          value={customBringItemDraft}
+                        />
+                        <Pressable
+                          disabled={actingBringItemId === 'custom-new'}
+                          onPress={() => void handleAddCustomBringItem()}
+                          style={styles.bringListAddButton}
+                        >
+                          <Text style={styles.bringListAddButtonText}>
+                            {actingBringItemId === 'custom-new' ? 'Adding...' : 'Add'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+
+                    {customBringItems.length > 0 ? (
+                      <View style={styles.bringListItems}>
+                        {customBringItems.map((item) => {
+                          const isClaimedByMe = item.claimedBy?.id === userId;
+                          const isClaimedByOther =
+                            Boolean(item.claimedBy?.id) && item.claimedBy?.id !== userId;
+                          const canRemoveCustomItem =
+                            activeFeedShindig!.ownerId === userId || isClaimedByMe;
+
+                          return (
+                            <View key={item.id} style={styles.bringListItemRow}>
+                              <View style={styles.bringListItemCopy}>
+                                <Text style={styles.bringListItemLabel}>{item.label}</Text>
+                                <Text style={styles.bringListItemMeta}>
+                                  {item.claimedBy
+                                    ? isClaimedByMe
+                                      ? 'You added this custom item'
+                                      : `${item.claimedBy.name} added this custom item`
+                                    : 'Custom item'}
+                                </Text>
+                              </View>
+
+                              {canRemoveCustomItem ? (
+                                <Pressable
+                                  disabled={actingBringItemId === item.id}
+                                  onPress={() => void handleDeleteBringItem(item.id)}
+                                  style={[
+                                    styles.bringListClaimButton,
+                                    isClaimedByMe && styles.bringListClaimButtonPrimary,
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.bringListClaimButtonText,
+                                      isClaimedByMe && styles.bringListClaimButtonTextPrimary,
+                                    ]}
+                                  >
+                                    {activeFeedShindig!.ownerId === userId && !isClaimedByMe
+                                      ? 'Delete'
+                                      : 'Remove'}
+                                  </Text>
+                                </Pressable>
+                              ) : (
+                                <View
+                                  style={[
+                                    styles.bringListClaimButton,
+                                    styles.bringListClaimButtonDisabled,
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.bringListClaimButtonText,
+                                      styles.bringListClaimButtonTextDisabled,
+                                    ]}
+                                  >
+                                    {isClaimedByOther ? 'Added' : 'Custom'}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
             <View style={styles.feedCollectionCard}>
               <View style={styles.feedStack}>
                 {feedPhotos.map((photo) => (
@@ -2142,12 +3833,17 @@ export function HomeScreen({
                         </Pressable>
                       </View>
                     </View>
-                    <ProgressiveImage
-                      containerStyle={styles.feedPhotoFrame}
-                      imageStyle={styles.feedPhoto}
-                      resizeMode="contain"
-                      sourceUri={photo.photoUrl}
-                    />
+                    <Pressable
+                      onPress={() => setExpandedPhoto(photo)}
+                      style={styles.feedPhotoPressable}
+                    >
+                      <ProgressiveImage
+                        containerStyle={styles.feedPhotoFrame}
+                        imageStyle={styles.feedPhoto}
+                        resizeMode="contain"
+                        sourceUri={photo.thumbnailUrl || photo.photoUrl}
+                      />
+                    </Pressable>
                     <View style={styles.socialRow}>
                       <Pressable
                         delayLongPress={180}
@@ -2280,6 +3976,51 @@ export function HomeScreen({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
       >
+        <Modal
+          animationType="fade"
+          onRequestClose={() => setIsAiCoverModalOpen(false)}
+          transparent
+          visible={isAiCoverModalOpen}
+        >
+          <View style={styles.aiCoverBackdrop}>
+            <Pressable
+              onPress={() => !isGeneratingAiCover && setIsAiCoverModalOpen(false)}
+              style={styles.aiCoverDismissArea}
+            />
+            <View style={styles.aiCoverCard}>
+              <Text style={styles.aiCoverTitle}>Generate AI Cover</Text>
+              <Text style={styles.aiCoverSubtitle}>
+                Describe the vibe, scene, colors, or mood for this upcoming ShinDig cover.
+              </Text>
+              <TextInput
+                multiline
+                onChangeText={setAiCoverPrompt}
+                placeholder="Example: rooftop summer party at golden hour, pink neon glow, stylish crowd, cinematic editorial"
+                placeholderTextColor={theme.colors.textMuted}
+                style={styles.aiCoverInput}
+                value={aiCoverPrompt}
+              />
+              <View style={styles.aiCoverActions}>
+                <Pressable
+                  disabled={isGeneratingAiCover}
+                  onPress={() => setIsAiCoverModalOpen(false)}
+                  style={styles.aiCoverSecondaryButton}
+                >
+                  <Text style={styles.aiCoverSecondaryButtonText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  disabled={isGeneratingAiCover}
+                  onPress={() => void handleGenerateAiCover()}
+                  style={styles.aiCoverPrimaryButton}
+                >
+                  <Text style={styles.aiCoverPrimaryButtonText}>
+                    {isGeneratingAiCover ? 'Generating...' : 'Generate'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
@@ -2295,6 +4036,134 @@ export function HomeScreen({
 
           {step === 'create' ? (
             <View style={styles.panel}>
+              <Text style={styles.fieldLabel}>When</Text>
+              <View style={styles.timingToggleRow}>
+                <Pressable
+                  onPress={() => setShindigTiming('now')}
+                  style={[
+                    styles.timingToggleButton,
+                    shindigTiming === 'now' && styles.timingToggleButtonActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.timingToggleText,
+                      shindigTiming === 'now' && styles.timingToggleTextActive,
+                    ]}
+                  >
+                    Start Now
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setShindigTiming('planned');
+                    setPhotos((current) =>
+                      current.length > 0
+                        ? [{ ...current[0], isPreferredCover: true }]
+                        : current
+                    );
+                  }}
+                  style={[
+                    styles.timingToggleButton,
+                    shindigTiming === 'planned' && styles.timingToggleButtonActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.timingToggleText,
+                      shindigTiming === 'planned' && styles.timingToggleTextActive,
+                    ]}
+                  >
+                    Plan For Later
+                  </Text>
+                </Pressable>
+              </View>
+
+              {shindigTiming === 'planned' ? (
+                <View style={styles.plannedDateSection}>
+                  <Text style={styles.fieldLabel}>Date*</Text>
+                  <Pressable
+                    onPress={() => {
+                      setShowPlannedTimePicker(false);
+                      setShowPlannedDatePicker((current) => !current);
+                    }}
+                    style={styles.plannedDateButton}
+                  >
+                    <Ionicons color={theme.colors.accentSoft} name="calendar-outline" size={18} />
+                    <Text style={styles.plannedDateButtonText}>
+                      {new Date(plannedFor).toLocaleDateString('en-US', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </Text>
+                  </Pressable>
+                  {showPlannedDatePicker ? (
+                    <View style={styles.plannedDatePickerWrap}>
+                      <DateTimePicker
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        minimumDate={new Date()}
+                        mode="date"
+                        onChange={(event: DateTimePickerEvent, nextValue?: Date) => {
+                          if (Platform.OS !== 'ios') {
+                            setShowPlannedDatePicker(false);
+                          }
+
+                          if (event.type === 'set' && nextValue) {
+                            const merged = new Date(plannedFor);
+                            merged.setFullYear(
+                              nextValue.getFullYear(),
+                              nextValue.getMonth(),
+                              nextValue.getDate()
+                            );
+                            setPlannedFor(merged);
+                          }
+                        }}
+                        textColor={theme.colors.textPrimary}
+                        themeVariant="dark"
+                        value={plannedFor}
+                      />
+                    </View>
+                  ) : null}
+
+                  <Text style={[styles.fieldLabel, styles.spacedLabel]}>Start Time*</Text>
+                  <Pressable
+                    onPress={() => {
+                      setShowPlannedDatePicker(false);
+                      setShowPlannedTimePicker((current) => !current);
+                    }}
+                    style={styles.plannedDateButton}
+                  >
+                    <Ionicons color={theme.colors.accentSoft} name="time-outline" size={18} />
+                    <Text style={styles.plannedDateButtonText}>
+                      {formatPlannedTimeLabel(plannedFor.toISOString())}
+                    </Text>
+                  </Pressable>
+                  {showPlannedTimePicker ? (
+                    <View style={styles.plannedDatePickerWrap}>
+                      <DateTimePicker
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        mode="time"
+                        onChange={(event: DateTimePickerEvent, nextValue?: Date) => {
+                          if (Platform.OS !== 'ios') {
+                            setShowPlannedTimePicker(false);
+                          }
+
+                          if (event.type === 'set' && nextValue) {
+                            const merged = new Date(plannedFor);
+                            merged.setHours(nextValue.getHours(), nextValue.getMinutes(), 0, 0);
+                            setPlannedFor(merged);
+                          }
+                        }}
+                        textColor={theme.colors.textPrimary}
+                        themeVariant="dark"
+                        value={plannedFor}
+                      />
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
               <Text style={styles.fieldLabel}>Shindig Name*</Text>
               <TextInput
                 onChangeText={setShindigName}
@@ -2343,16 +4212,42 @@ export function HomeScreen({
                 ) : null}
               </View>
 
-              <Text style={[styles.fieldLabel, styles.spacedLabel]}>Add Photo</Text>
+              <Text style={[styles.fieldLabel, styles.spacedLabel]}>
+                {shindigTiming === 'planned' ? 'Cover Photo' : 'Add Photo'}
+              </Text>
+              {shindigTiming === 'planned' ? (
+                <Text style={styles.helperText}>
+                  Choose one cover photo now. More photos can be added after the ShinDig starts.
+                </Text>
+              ) : null}
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.photoRow}>
                   <Pressable onPress={openPhotoSourcePicker} style={styles.addPhotoCard}>
                     <Text style={styles.addPhotoPlus}>+</Text>
-                    <Text style={styles.addPhotoText}>Add Photo</Text>
+                    <Text style={styles.addPhotoText}>
+                      {shindigTiming === 'planned' ? 'Choose Cover' : 'Add Photo'}
+                    </Text>
                   </Pressable>
+                  {shindigTiming === 'planned' ? (
+                    <View style={styles.aiPhotoCardDisabled}>
+                      <View style={styles.aiPhotoCard}>
+                      <Ionicons color={theme.colors.accentPink} name="sparkles" size={24} />
+                      <Text style={styles.aiPhotoCardTitle}>AI Cover</Text>
+                      <Text style={styles.aiPhotoCardText}>Prompt a cover image</Text>
+                      </View>
+                      <View style={styles.comingSoonOverlay}>
+                        <Text style={styles.comingSoonOverlayText}>Coming Soon</Text>
+                      </View>
+                    </View>
+                  ) : null}
                   {photos.map((photo) => (
                     <View key={photo.localUri} style={styles.photoPreviewWrap}>
                       <Image source={{ uri: photo.localUri }} style={styles.photoPreview} />
+                      {photo.isPreferredCover ? (
+                        <View style={styles.generatedCoverBadge}>
+                          <Text style={styles.generatedCoverBadgeText}>Cover</Text>
+                        </View>
+                      ) : null}
                       <Pressable
                         onPress={() => removePhoto(photo.localUri)}
                         style={styles.removePhotoButton}
@@ -2376,8 +4271,9 @@ export function HomeScreen({
                 <View style={styles.inviteIntroCard}>
                   <Text style={styles.inviteHeroTitle}>Invite people to this ShinDig</Text>
                   <Text style={styles.inviteSubtitle}>
-                    Choose contacts to text and friends already on ShinDig. You can also skip this
-                    for now and start the feed immediately.
+                    {shindigTiming === 'planned'
+                      ? 'Choose friends and contacts to invite to this future ShinDig. Invited people can accept, reject, or maybe.'
+                      : 'Choose contacts to text and friends already on ShinDig. You can also skip this for now and start the feed immediately.'}
                   </Text>
                   <View style={styles.inviteSummaryRow}>
                     <View style={styles.inviteSummaryPill}>
@@ -2631,6 +4527,61 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
+  timingToggleRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.lg,
+  },
+  timingToggleButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    flex: 1,
+    paddingVertical: theme.spacing.sm,
+  },
+  timingToggleButtonActive: {
+    backgroundColor: 'rgba(255, 79, 160, 0.18)',
+    borderColor: theme.colors.accentPink,
+  },
+  timingToggleText: {
+    color: theme.colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  timingToggleTextActive: {
+    color: theme.colors.textPrimary,
+  },
+  plannedDateSection: {
+    marginBottom: theme.spacing.lg,
+  },
+  plannedDateButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+  },
+  plannedDateButtonText: {
+    color: theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  plannedDatePickerWrap: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    marginTop: theme.spacing.sm,
+    overflow: 'hidden',
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+  },
   sectionHeader: {
     marginTop: theme.spacing.xl,
     marginBottom: theme.spacing.md,
@@ -2676,6 +4627,44 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     marginTop: 6,
+  },
+  upcomingInviteActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.xs,
+    marginTop: theme.spacing.sm,
+  },
+  upcomingInviteButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.accentPink,
+    borderRadius: theme.radius.round,
+    justifyContent: 'center',
+    minHeight: 34,
+    minWidth: 68,
+    paddingHorizontal: theme.spacing.sm,
+  },
+  upcomingInviteButtonSecondary: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 34,
+    minWidth: 68,
+    paddingHorizontal: theme.spacing.sm,
+  },
+  upcomingInviteButtonActive: {
+    borderColor: theme.colors.accentPink,
+    borderWidth: 1,
+  },
+  upcomingInviteRejectActive: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderColor: theme.colors.textMuted,
+  },
+  upcomingInviteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
   emptyText: {
     color: theme.colors.textMuted,
@@ -2724,6 +4713,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: theme.spacing.xs,
   },
+  aiPhotoCard: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderColor: 'rgba(255, 79, 160, 0.42)',
+    borderRadius: 22,
+    borderWidth: 1,
+    height: 108,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.sm,
+    width: 132,
+  },
+  aiPhotoCardDisabled: {
+    position: 'relative',
+  },
+  aiPhotoCardTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: theme.spacing.xs,
+  },
+  aiPhotoCardText: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  comingSoonOverlay: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(4, 8, 18, 0.72)',
+    borderRadius: 22,
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  comingSoonOverlayText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
   photoPreviewWrap: {
     position: 'relative',
   },
@@ -2731,6 +4764,22 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.lg,
     height: 108,
     width: 108,
+  },
+  generatedCoverBadge: {
+    backgroundColor: theme.colors.accentPink,
+    borderRadius: theme.radius.round,
+    left: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    position: 'absolute',
+    top: 6,
+    zIndex: 1,
+  },
+  generatedCoverBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   removePhotoButton: {
     alignItems: 'center',
@@ -2761,6 +4810,82 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     fontSize: 13,
     marginTop: theme.spacing.sm,
+  },
+  aiCoverBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(4, 8, 18, 0.76)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: theme.spacing.lg,
+  },
+  aiCoverDismissArea: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  aiCoverCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: theme.spacing.lg,
+    width: '100%',
+  },
+  aiCoverTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  aiCoverSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 22,
+    marginTop: theme.spacing.sm,
+  },
+  aiCoverInput: {
+    backgroundColor: theme.colors.backgroundAlt,
+    borderColor: theme.colors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    color: theme.colors.textPrimary,
+    marginTop: theme.spacing.lg,
+    minHeight: 132,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    textAlignVertical: 'top',
+  },
+  aiCoverActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
+  },
+  aiCoverSecondaryButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: theme.spacing.md,
+  },
+  aiCoverSecondaryButtonText: {
+    color: theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  aiCoverPrimaryButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.accentPink,
+    borderRadius: theme.radius.round,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: theme.spacing.md,
+  },
+  aiCoverPrimaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
   },
   suggestionList: {
     gap: theme.spacing.sm,
@@ -3041,6 +5166,9 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     borderWidth: 1,
   },
+  startButton: {
+    backgroundColor: theme.colors.accentPink,
+  },
   reactivateButton: {
     backgroundColor: '#2E8B57',
   },
@@ -3060,6 +5188,9 @@ const styles = StyleSheet.create({
   stateBadgeActive: {
     backgroundColor: 'rgba(46, 139, 87, 0.18)',
   },
+  stateBadgeUpcoming: {
+    backgroundColor: 'rgba(255, 79, 160, 0.16)',
+  },
   stateBadgeCompleted: {
     backgroundColor: 'rgba(132, 144, 176, 0.18)',
   },
@@ -3070,6 +5201,9 @@ const styles = StyleSheet.create({
   },
   stateBadgeTextActive: {
     color: '#63D89A',
+  },
+  stateBadgeTextUpcoming: {
+    color: theme.colors.accentPink,
   },
   stateBadgeTextCompleted: {
     color: theme.colors.textMuted,
@@ -3143,8 +5277,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#111827',
     borderRadius: theme.radius.lg,
     height: 320,
-    marginTop: theme.spacing.sm,
     overflow: 'hidden',
+  },
+  feedPhotoPressable: {
+    marginTop: theme.spacing.sm,
   },
   photoCreditBadge: {
     alignSelf: 'flex-start',
@@ -3209,6 +5345,47 @@ const styles = StyleSheet.create({
   socialMeta: {
     color: theme.colors.textMuted,
     fontSize: 13,
+  },
+  photoViewerBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(4, 8, 18, 0.86)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: theme.spacing.lg,
+  },
+  photoViewerDismissArea: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  photoViewerCard: {
+    alignSelf: 'stretch',
+    maxHeight: '82%',
+    position: 'relative',
+  },
+  photoViewerCloseButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(8, 11, 22, 0.72)',
+    borderRadius: theme.radius.round,
+    height: 36,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: theme.spacing.sm,
+    top: theme.spacing.sm,
+    width: 36,
+    zIndex: 2,
+  },
+  photoViewerFrame: {
+    backgroundColor: '#050914',
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 24,
+    borderWidth: 1,
+    height: 520,
+    maxHeight: '100%',
+    overflow: 'hidden',
+    width: '100%',
+  },
+  photoViewerImage: {
+    height: '100%',
+    width: '100%',
   },
   likeSheetBackdrop: {
     alignItems: 'center',
@@ -3340,6 +5517,588 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     fontSize: 13,
     fontWeight: '700',
+  },
+  upcomingScreenContent: {
+    paddingBottom: theme.spacing.xxxl,
+    paddingHorizontal: theme.spacing.xs,
+  },
+  upcomingHeroCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    marginTop: theme.spacing.md,
+    minHeight: 280,
+    overflow: 'hidden',
+  },
+  upcomingHeroImage: {
+    height: '100%',
+    left: 0,
+    position: 'absolute',
+    top: 0,
+    width: '100%',
+  },
+  upcomingHeroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(9, 14, 28, 0.26)',
+  },
+  upcomingHeroContent: {
+    justifyContent: 'flex-end',
+    minHeight: 280,
+    padding: theme.spacing.lg,
+  },
+  upcomingBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 79, 160, 0.18)',
+    borderColor: 'rgba(255, 79, 160, 0.32)',
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    marginBottom: theme.spacing.md,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
+  },
+  upcomingBadgeText: {
+    color: '#FFD2EB',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  upcomingHeroTitle: {
+    color: '#FFFFFF',
+    fontSize: 38,
+    fontWeight: '900',
+    letterSpacing: -1.2,
+  },
+  upcomingHeroMetaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: theme.spacing.sm,
+  },
+  upcomingHeroMetaText: {
+    color: '#F6ECFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  upcomingHeroMetaDot: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  upcomingHeroStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md,
+  },
+  upcomingHeroStat: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  upcomingHeroStatText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  upcomingHeroActionRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
+  },
+  upcomingPillButtonSecondary: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(13, 19, 37, 0.64)',
+    borderColor: 'rgba(255,255,255,0.14)',
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  upcomingPillButtonSecondaryText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  upcomingPillButtonPrimary: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.accentPink,
+    borderRadius: theme.radius.round,
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  upcomingPillButtonPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  upcomingHostPill: {
+    backgroundColor: 'rgba(13, 19, 37, 0.64)',
+    borderColor: 'rgba(255,255,255,0.14)',
+    borderRadius: theme.radius.round,
+    borderWidth: 1,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  upcomingHostPillText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  upcomingQuickActionsRow: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: theme.spacing.md,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
+  },
+  upcomingQuickAction: {
+    alignItems: 'center',
+    flex: 1,
+    gap: theme.spacing.sm,
+  },
+  upcomingQuickActionIconWrap: {
+    alignItems: 'center',
+    borderRadius: 18,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  upcomingQuickActionPink: {
+    backgroundColor: '#F04F8F',
+  },
+  upcomingQuickActionPurple: {
+    backgroundColor: '#AA68FF',
+  },
+  upcomingQuickActionBlue: {
+    backgroundColor: '#5D95FF',
+  },
+  upcomingQuickActionGreen: {
+    backgroundColor: '#7CC85B',
+  },
+  upcomingQuickActionText: {
+    color: theme.colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
+    textAlign: 'center',
+  },
+  upcomingDashboardGrid: {
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md,
+  },
+  upcomingDashboardSide: {
+    gap: theme.spacing.md,
+  },
+  upcomingPanelCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    padding: theme.spacing.md,
+  },
+  upcomingPanelWide: {
+    width: '100%',
+  },
+  upcomingPanelHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.md,
+  },
+  upcomingPanelHeaderLeft: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  upcomingPanelTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  upcomingPanelActionText: {
+    color: theme.colors.textMuted,
+    flexShrink: 1,
+    fontSize: 11,
+    textAlign: 'right',
+  },
+  upcomingPanelActionLink: {
+    color: theme.colors.accentPink,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  upcomingPanelFooter: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    justifyContent: 'center',
+    marginTop: theme.spacing.md,
+  },
+  upcomingPanelFooterText: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  bringListItemsCompact: {
+    gap: theme.spacing.sm,
+  },
+  bringListItemCard: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 12,
+  },
+  bringListItemTopRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    justifyContent: 'space-between',
+  },
+  bringListItemLead: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  bringListEmoji: {
+    fontSize: 20,
+  },
+  upcomingMiniAvatarRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 6,
+  },
+  upcomingMiniAvatar: {
+    borderColor: theme.colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    height: 20,
+    width: 20,
+  },
+  upcomingEmptyMiniText: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+  },
+  upcomingAttendeeGroup: {
+    marginTop: theme.spacing.sm,
+  },
+  upcomingAttendeeGroupLabel: {
+    color: theme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: theme.spacing.sm,
+  },
+  upcomingAttendeeAvatarRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  upcomingAttendeeAvatar: {
+    borderColor: theme.colors.surface,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    height: 28,
+    width: 28,
+  },
+  upcomingAttendeeOverflow: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
+    borderWidth: 1,
+    height: 28,
+    justifyContent: 'center',
+    width: 28,
+  },
+  upcomingAttendeeOverflowText: {
+    color: theme.colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  upcomingActivityList: {
+    gap: theme.spacing.sm,
+  },
+  upcomingActivityItem: {
+    borderBottomColor: theme.colors.border,
+    borderBottomWidth: 1,
+    paddingBottom: theme.spacing.sm,
+  },
+  upcomingActivityLead: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  upcomingActivityIcon: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderRadius: 16,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  upcomingActivityThumb: {
+    borderRadius: theme.radius.md,
+    height: 38,
+    width: 38,
+  },
+  upcomingActivityCopy: {
+    flex: 1,
+  },
+  upcomingActivityTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  upcomingActivityTime: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  upcomingMemoriesAction: {
+    paddingVertical: 2,
+  },
+  upcomingMemoriesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  upcomingMemoryTile: {
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
+    width: '31%',
+  },
+  upcomingMemoryImage: {
+    aspectRatio: 1,
+    width: '100%',
+  },
+  upcomingMemoriesEmpty: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    minHeight: 120,
+    justifyContent: 'center',
+    padding: theme.spacing.md,
+    width: '100%',
+  },
+  upcomingMemoriesFooter: {
+    alignItems: 'center',
+    marginTop: theme.spacing.md,
+  },
+  upcomingPanelFooterLink: {
+    color: theme.colors.accentPink,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  upcomingBottomCta: {
+    alignItems: 'center',
+    backgroundColor: '#F36A77',
+    borderRadius: theme.radius.xl,
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md,
+    padding: theme.spacing.lg,
+  },
+  upcomingBottomCtaCopy: {
+    flex: 1,
+  },
+  upcomingBottomCtaTitle: {
+    color: '#FFF5F7',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  upcomingBottomCtaText: {
+    color: '#FFE3EA',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  upcomingBottomCtaButton: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: theme.radius.round,
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  upcomingBottomCtaButtonText: {
+    color: theme.colors.accentPurple,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  bringListCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    marginTop: theme.spacing.lg,
+    padding: theme.spacing.lg,
+  },
+  bringListHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  bringListHeaderCopy: {
+    flex: 1,
+    paddingRight: theme.spacing.md,
+  },
+  bringListTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  bringListSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 4,
+  },
+  bringListCountBadge: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    minWidth: 34,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
+  },
+  bringListCountText: {
+    color: theme.colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  bringListComposer: {
+    alignItems: 'stretch',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  bringListInput: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    color: theme.colors.textPrimary,
+    flex: 1,
+    minHeight: 48,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  bringListAddButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.accentPink,
+    borderRadius: theme.radius.lg,
+    justifyContent: 'center',
+    minHeight: 48,
+    minWidth: 72,
+    paddingHorizontal: theme.spacing.md,
+  },
+  bringListAddButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  bringListItems: {
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  bringListItemRow: {
+    alignItems: 'flex-start',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 12,
+  },
+  bringListItemCopy: {
+    flex: 1,
+  },
+  bringListItemLabel: {
+    color: theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  bringListItemMeta: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  bringListClaimButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minWidth: 92,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 10,
+  },
+  bringListClaimButtonPrimary: {
+    backgroundColor: theme.colors.accentPink,
+    borderColor: theme.colors.accentPink,
+  },
+  bringListClaimButtonDisabled: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+  },
+  bringListClaimButtonText: {
+    color: theme.colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  bringListClaimButtonTextPrimary: {
+    color: '#FFFFFF',
+  },
+  bringListClaimButtonTextDisabled: {
+    color: theme.colors.textMuted,
+  },
+  bringListDeleteButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+  },
+  bringListEmptyText: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: theme.spacing.md,
+  },
+  customBringSection: {
+    marginTop: theme.spacing.lg,
+  },
+  customBringTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  customBringSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 4,
   },
   commentComposer: {
     flexDirection: 'row',

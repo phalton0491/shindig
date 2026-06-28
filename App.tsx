@@ -1,7 +1,7 @@
 import { Session } from '@supabase/supabase-js';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AppState,
   Image,
@@ -32,6 +32,7 @@ import {
   getShindigById,
   listFeedShindigs,
   listShindigsForUser,
+  maybeShindigInvite,
   rejectShindigInvite,
   rejectPhotoAddRequest,
   updateShindigCoverPhoto,
@@ -153,6 +154,33 @@ export default function App() {
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [bootError, setBootError] = useState('');
   const [pendingInviteToken, setPendingInviteToken] = useState<string | null>(null);
+  const friendsRef = useRef<FriendProfile[]>([]);
+  const profileRef = useRef<UserProfile | null>(null);
+  const refreshTimeoutsRef = useRef<
+    Partial<Record<'friends' | 'notifications' | 'shindigs', ReturnType<typeof setTimeout>>>
+  >({});
+
+  useEffect(() => {
+    friendsRef.current = friends;
+  }, [friends]);
+
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+
+  function scheduleRefresh(
+    kind: 'friends' | 'notifications' | 'shindigs',
+    callback: () => Promise<void>
+  ) {
+    if (refreshTimeoutsRef.current[kind]) {
+      return;
+    }
+
+    refreshTimeoutsRef.current[kind] = setTimeout(() => {
+      delete refreshTimeoutsRef.current[kind];
+      void callback();
+    }, 350);
+  }
 
   async function loadAuthedData(nextSession: Session) {
     const [nextFriends, nextNotifications, nextProfile, nextShindigs] = await Promise.all([
@@ -515,7 +543,7 @@ export default function App() {
 
   async function handleShindigStateChanged(args: {
     shindigId: string;
-    state: 'active' | 'completed';
+    state: 'active' | 'completed' | 'planned';
   }) {
     if (!session?.user) {
       throw new Error('No active session.');
@@ -646,11 +674,11 @@ export default function App() {
 
     const nextFriends = await listFriendsForUser(session.user.id);
     setFriends(nextFriends);
-    if (profile) {
+    if (profileRef.current) {
       setProfile({
-        ...profile,
+        ...profileRef.current,
         stats: {
-          ...profile.stats,
+          ...profileRef.current.stats,
           friends: nextFriends.length,
         },
       });
@@ -662,7 +690,7 @@ export default function App() {
     setFeedShindigs(nextFeed);
   }
 
-  async function refreshFeed(nextFriends = friends) {
+  async function refreshFeed(nextFriends = friendsRef.current) {
     if (!session?.user) {
       return;
     }
@@ -683,7 +711,7 @@ export default function App() {
     setNotifications(nextNotifications);
   }
 
-  async function refreshShindigsAndFeed(nextFriends = friends) {
+  async function refreshShindigsAndFeed(nextFriends = friendsRef.current) {
     if (!session?.user) {
       return;
     }
@@ -698,11 +726,11 @@ export default function App() {
 
     setShindigs(nextShindigs);
     setFeedShindigs(nextFeed);
-    if (profile) {
+    if (profileRef.current) {
       setProfile({
-        ...profile,
+        ...profileRef.current,
         stats: {
-          ...profile.stats,
+          ...profileRef.current.stats,
           friends: nextFriends.length,
           shindigs: countOwnedShindigs(session.user.id, nextShindigs),
         },
@@ -727,8 +755,8 @@ export default function App() {
           table: 'friendships',
         },
         () => {
-          void refreshFriends();
-          void refreshNotifications();
+          scheduleRefresh('friends', refreshFriends);
+          scheduleRefresh('notifications', refreshNotifications);
         }
       )
       .on(
@@ -740,8 +768,8 @@ export default function App() {
           table: 'notifications',
         },
         () => {
-          void refreshNotifications();
-          void refreshFriends();
+          scheduleRefresh('notifications', refreshNotifications);
+          scheduleRefresh('friends', refreshFriends);
         }
       )
       .on(
@@ -753,8 +781,8 @@ export default function App() {
           table: 'shindig_invites',
         },
         () => {
-          void refreshNotifications();
-          void refreshFeed();
+          scheduleRefresh('notifications', refreshNotifications);
+          scheduleRefresh('shindigs', refreshShindigsAndFeed);
         }
       )
       .on(
@@ -765,29 +793,7 @@ export default function App() {
           table: 'shindigs',
         },
         () => {
-          void refreshShindigsAndFeed();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'shindig_likes',
-        },
-        () => {
-          void refreshShindigsAndFeed();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'shindig_comments',
-        },
-        () => {
-          void refreshShindigsAndFeed();
+          scheduleRefresh('shindigs', refreshShindigsAndFeed);
         }
       )
       .on(
@@ -798,29 +804,7 @@ export default function App() {
           table: 'shindig_stops',
         },
         () => {
-          void refreshShindigsAndFeed();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'shindig_photo_likes',
-        },
-        () => {
-          void refreshShindigsAndFeed();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'shindig_photo_comments',
-        },
-        () => {
-          void refreshShindigsAndFeed();
+          scheduleRefresh('shindigs', refreshShindigsAndFeed);
         }
       )
       .on(
@@ -831,7 +815,18 @@ export default function App() {
           table: 'shindig_photos',
         },
         () => {
-          void refreshShindigsAndFeed();
+          scheduleRefresh('shindigs', refreshShindigsAndFeed);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shindig_bring_items',
+        },
+        () => {
+          scheduleRefresh('shindigs', refreshShindigsAndFeed);
         }
       )
       .on(
@@ -843,7 +838,7 @@ export default function App() {
           table: 'shindig_photo_requests',
         },
         () => {
-          void refreshNotifications();
+          scheduleRefresh('notifications', refreshNotifications);
         }
       )
       .on(
@@ -855,7 +850,7 @@ export default function App() {
           table: 'shindig_photo_requests',
         },
         () => {
-          void refreshNotifications();
+          scheduleRefresh('notifications', refreshNotifications);
         }
       )
       .subscribe();
@@ -863,30 +858,25 @@ export default function App() {
     return () => {
       client.removeChannel(channel);
     };
-  }, [session?.user?.id, friends]);
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (!session?.user) {
       return;
     }
 
-    const refreshAll = () => {
-      void refreshNotifications();
-      void refreshFriends();
-    };
-
-    const intervalId = setInterval(refreshAll, 4000);
     const appStateSubscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
-        refreshAll();
+        scheduleRefresh('notifications', refreshNotifications);
+        scheduleRefresh('friends', refreshFriends);
+        scheduleRefresh('shindigs', refreshShindigsAndFeed);
       }
     });
 
     return () => {
-      clearInterval(intervalId);
       appStateSubscription.remove();
     };
-  }, [session?.user?.id, friends]);
+  }, [session?.user?.id]);
 
   async function handleOpenNotifications() {
     if (!session?.user) {
@@ -1097,7 +1087,7 @@ export default function App() {
   }
 
   async function handleAcceptShindigInvite(inviteId: string) {
-    if (!session?.user) {
+    if (!session?.user || !profile) {
       return;
     }
 
@@ -1119,6 +1109,14 @@ export default function App() {
       nextFeed.find((item) => item.id === acceptedInvite.shindig_id) ||
       null;
 
+    await createNotification({
+      actorUserId: session.user.id,
+      message: `${profile.name} accepted your invite to "${targetShindig?.title || 'your ShinDig'}".`,
+      recipientUserId: acceptedInvite.inviter_user_id,
+      shindigId: acceptedInvite.shindig_id,
+      type: 'shindig_invite',
+    });
+
     setShindigs(nextShindigs);
     setFeedShindigs(nextFeed);
     setNotifications(nextNotifications);
@@ -1133,16 +1131,113 @@ export default function App() {
     setActiveTab('shindigs');
   }
 
-  async function handleRejectShindigInvite(inviteId: string) {
-    if (!session?.user) {
+  async function handleAcceptUpcomingShindigInvite(inviteId: string) {
+    if (!session?.user || !profile) {
       return;
     }
 
-    await rejectShindigInvite({
+    const acceptedInvite = await acceptShindigInvite({
       inviteId,
       userId: session.user.id,
     });
+    await createNotification({
+      actorUserId: session.user.id,
+      message: `${profile.name} accepted your invite.`,
+      recipientUserId: acceptedInvite.inviter_user_id,
+      shindigId: acceptedInvite.shindig_id,
+      type: 'shindig_invite',
+    });
+    await Promise.all([refreshNotifications(), refreshShindigsAndFeed()]);
+  }
+
+  async function handleRejectShindigInvite(inviteId: string) {
+    if (!session?.user || !profile) {
+      return;
+    }
+
+    const rejectedInvite = await rejectShindigInvite({
+      inviteId,
+      userId: session.user.id,
+    });
+
+    const targetShindig =
+      shindigs.find((item) => item.id === rejectedInvite.shindig_id) ||
+      feedShindigs.find((item) => item.id === rejectedInvite.shindig_id) ||
+      null;
+
+    await createNotification({
+      actorUserId: session.user.id,
+      message: `${profile.name} declined your invite to "${targetShindig?.title || 'your ShinDig'}".`,
+      recipientUserId: rejectedInvite.inviter_user_id,
+      shindigId: rejectedInvite.shindig_id,
+      type: 'shindig_invite',
+    });
+
     await refreshNotifications();
+  }
+
+  async function handleRejectUpcomingShindigInvite(inviteId: string) {
+    if (!session?.user || !profile) {
+      return;
+    }
+
+    const rejectedInvite = await rejectShindigInvite({
+      inviteId,
+      userId: session.user.id,
+    });
+    await createNotification({
+      actorUserId: session.user.id,
+      message: `${profile.name} declined your invite.`,
+      recipientUserId: rejectedInvite.inviter_user_id,
+      shindigId: rejectedInvite.shindig_id,
+      type: 'shindig_invite',
+    });
+    await Promise.all([refreshNotifications(), refreshShindigsAndFeed()]);
+  }
+
+  async function handleMaybeShindigInvite(inviteId: string) {
+    if (!session?.user || !profile) {
+      return;
+    }
+
+    const maybeInvite = await maybeShindigInvite({
+      inviteId,
+      userId: session.user.id,
+    });
+
+    const targetShindig =
+      shindigs.find((item) => item.id === maybeInvite.shindig_id) ||
+      feedShindigs.find((item) => item.id === maybeInvite.shindig_id) ||
+      null;
+
+    await createNotification({
+      actorUserId: session.user.id,
+      message: `${profile.name} responded maybe to "${targetShindig?.title || 'your ShinDig'}".`,
+      recipientUserId: maybeInvite.inviter_user_id,
+      shindigId: maybeInvite.shindig_id,
+      type: 'shindig_invite',
+    });
+
+    await Promise.all([refreshNotifications(), refreshShindigsAndFeed()]);
+  }
+
+  async function handleMaybeUpcomingShindigInvite(inviteId: string) {
+    if (!session?.user || !profile) {
+      return;
+    }
+
+    const maybeInvite = await maybeShindigInvite({
+      inviteId,
+      userId: session.user.id,
+    });
+    await createNotification({
+      actorUserId: session.user.id,
+      message: `${profile.name} responded maybe to your invite.`,
+      recipientUserId: maybeInvite.inviter_user_id,
+      shindigId: maybeInvite.shindig_id,
+      type: 'shindig_invite',
+    });
+    await Promise.all([refreshNotifications(), refreshShindigsAndFeed()]);
   }
 
   if (!supabase) {
@@ -1174,7 +1269,15 @@ export default function App() {
 
   const headerActions = (
     <AuthMenu
-      notificationCount={notifications.filter((item) => !item.readAt).length}
+      notificationCount={
+        showNotifications
+          ? 0
+          : notifications.filter((item) => !item.readAt).length +
+            shindigs.filter(
+              (shindig) =>
+                shindig.ownerId !== session.user.id && shindig.inviteStatus === 'pending'
+            ).length
+      }
       onOpenMenu={() => {
         setFriendProfileDetail(null);
         setProfileFriendsDetail(null);
@@ -1197,6 +1300,7 @@ export default function App() {
               onAcceptShindigInvite={handleAcceptShindigInvite}
               notifications={notifications}
               onAcceptFriendRequest={handleAcceptFriendRequest}
+              onMaybeShindigInvite={handleMaybeShindigInvite}
               onOpenNotification={handleOpenNotification}
               onApprovePhotoRequest={handleApprovePhotoRequest}
               onBack={() => setShowNotifications(false)}
@@ -1309,6 +1413,9 @@ export default function App() {
               onConsumeInitialFeedShindig={() => setFeedShindig(null)}
               onConsumeInitialHighlightedPhotoId={() => setHighlightedPhotoId(null)}
               onConsumeInitialStep={() => setPendingShindigStep(null)}
+              onAcceptUpcomingInvite={handleAcceptUpcomingShindigInvite}
+              onMaybeUpcomingInvite={handleMaybeUpcomingShindigInvite}
+              onRejectUpcomingInvite={handleRejectUpcomingShindigInvite}
               onShindigSaved={handleShindigSaved}
               onShindigDeleted={handleShindigDeleted}
               onShindigCoverPhotoChanged={handleShindigCoverPhotoChanged}

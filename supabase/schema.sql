@@ -153,6 +153,9 @@ add column if not exists state text not null default 'active';
 alter table public.shindigs
 add column if not exists cover_photo_url text;
 
+alter table public.shindigs
+add column if not exists planned_for timestamptz;
+
 create table if not exists public.shindig_stops (
   id uuid primary key default gen_random_uuid(),
   shindig_id uuid not null references public.shindigs (id) on delete cascade,
@@ -230,6 +233,20 @@ create table if not exists public.shindig_invites (
   status text not null default 'pending',
   created_at timestamptz not null default now()
 );
+
+create table if not exists public.shindig_bring_items (
+  id uuid primary key default gen_random_uuid(),
+  shindig_id uuid not null references public.shindigs (id) on delete cascade,
+  created_by_user_id uuid not null references auth.users (id) on delete cascade,
+  claimed_by_user_id uuid references auth.users (id) on delete set null,
+  label text not null,
+  is_custom boolean not null default false,
+  created_at timestamptz not null default now(),
+  claimed_at timestamptz
+);
+
+alter table public.shindig_bring_items
+add column if not exists is_custom boolean not null default false;
 
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
@@ -353,6 +370,7 @@ alter table public.shindig_photo_likes enable row level security;
 alter table public.shindig_photo_comments enable row level security;
 alter table public.shindig_photo_requests enable row level security;
 alter table public.shindig_invites enable row level security;
+alter table public.shindig_bring_items enable row level security;
 alter table public.notifications enable row level security;
 alter table public.user_push_tokens enable row level security;
 
@@ -363,21 +381,24 @@ for select
 to authenticated
 using (
   auth.uid() = user_id
-  or exists (
-    select 1 from public.friendships
-    where (
-      friendships.user_id = auth.uid()
-      and friendships.friend_id = shindigs.user_id
-    ) or (
-      friendships.friend_id = auth.uid()
-      and friendships.user_id = shindigs.user_id
+  or (
+    shindigs.state <> 'planned'
+    and exists (
+      select 1 from public.friendships
+      where (
+        friendships.user_id = auth.uid()
+        and friendships.friend_id = shindigs.user_id
+      ) or (
+        friendships.friend_id = auth.uid()
+        and friendships.user_id = shindigs.user_id
+      )
     )
   )
   or exists (
     select 1 from public.shindig_invites
     where public.shindig_invites.shindig_id = shindigs.id
       and public.shindig_invites.invitee_user_id = auth.uid()
-      and public.shindig_invites.status = 'accepted'
+      and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
   )
 );
 
@@ -393,8 +414,30 @@ create policy "Users can update own shindigs"
 on public.shindigs
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (
+  auth.uid() = user_id
+  or (
+    state <> 'planned'
+    and exists (
+      select 1 from public.shindig_invites
+      where public.shindig_invites.shindig_id = public.shindigs.id
+        and public.shindig_invites.invitee_user_id = auth.uid()
+        and public.shindig_invites.status = 'accepted'
+    )
+  )
+)
+with check (
+  auth.uid() = user_id
+  or (
+    state <> 'planned'
+    and exists (
+      select 1 from public.shindig_invites
+      where public.shindig_invites.shindig_id = public.shindigs.id
+        and public.shindig_invites.invitee_user_id = auth.uid()
+        and public.shindig_invites.status = 'accepted'
+    )
+  )
+);
 
 drop policy if exists "Users can delete own shindigs" on public.shindigs;
 create policy "Users can delete own shindigs"
@@ -428,7 +471,7 @@ using (
           select 1 from public.shindig_invites
           where public.shindig_invites.shindig_id = public.shindigs.id
             and public.shindig_invites.invitee_user_id = auth.uid()
-            and public.shindig_invites.status = 'accepted'
+      and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
         )
       )
   )
@@ -492,7 +535,7 @@ using (
           select 1 from public.shindig_invites
           where public.shindig_invites.shindig_id = public.shindigs.id
             and public.shindig_invites.invitee_user_id = auth.uid()
-            and public.shindig_invites.status = 'accepted'
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
         )
       )
   )
@@ -524,7 +567,7 @@ with check (
           select 1 from public.shindig_invites
           where public.shindig_invites.shindig_id = public.shindigs.id
             and public.shindig_invites.invitee_user_id = auth.uid()
-            and public.shindig_invites.status = 'accepted'
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
         )
       )
   )
@@ -572,7 +615,7 @@ using (
           select 1 from public.shindig_invites
           where public.shindig_invites.shindig_id = public.shindigs.id
             and public.shindig_invites.invitee_user_id = auth.uid()
-            and public.shindig_invites.status = 'accepted'
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
         )
       )
   )
@@ -604,7 +647,7 @@ with check (
           select 1 from public.shindig_invites
           where public.shindig_invites.shindig_id = public.shindigs.id
             and public.shindig_invites.invitee_user_id = auth.uid()
-            and public.shindig_invites.status = 'accepted'
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
         )
       )
   )
@@ -642,7 +685,7 @@ using (
           select 1 from public.shindig_invites
           where public.shindig_invites.shindig_id = public.shindigs.id
             and public.shindig_invites.invitee_user_id = auth.uid()
-            and public.shindig_invites.status = 'accepted'
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
         )
       )
   )
@@ -674,7 +717,7 @@ with check (
           select 1 from public.shindig_invites
           where public.shindig_invites.shindig_id = public.shindigs.id
             and public.shindig_invites.invitee_user_id = auth.uid()
-            and public.shindig_invites.status = 'accepted'
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
         )
       )
   )
@@ -714,7 +757,7 @@ using (
           select 1 from public.shindig_invites
           where public.shindig_invites.shindig_id = public.shindigs.id
             and public.shindig_invites.invitee_user_id = auth.uid()
-            and public.shindig_invites.status = 'accepted'
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
         )
       )
   )
@@ -748,7 +791,7 @@ with check (
           select 1 from public.shindig_invites
           where public.shindig_invites.shindig_id = public.shindigs.id
             and public.shindig_invites.invitee_user_id = auth.uid()
-            and public.shindig_invites.status = 'accepted'
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
         )
       )
   )
@@ -788,7 +831,7 @@ using (
           select 1 from public.shindig_invites
           where public.shindig_invites.shindig_id = public.shindigs.id
             and public.shindig_invites.invitee_user_id = auth.uid()
-            and public.shindig_invites.status = 'accepted'
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
         )
       )
   )
@@ -822,7 +865,7 @@ with check (
           select 1 from public.shindig_invites
           where public.shindig_invites.shindig_id = public.shindigs.id
             and public.shindig_invites.invitee_user_id = auth.uid()
-            and public.shindig_invites.status = 'accepted'
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
         )
       )
   )
@@ -870,6 +913,137 @@ for update
 to authenticated
 using (auth.uid() = invitee_user_id)
 with check (auth.uid() = invitee_user_id);
+
+drop policy if exists "Users can read visible bring items" on public.shindig_bring_items;
+create policy "Users can read visible bring items"
+on public.shindig_bring_items
+for select
+to authenticated
+using (
+  exists (
+    select 1 from public.shindigs
+    where public.shindigs.id = shindig_bring_items.shindig_id
+      and (
+        public.shindigs.user_id = auth.uid()
+        or exists (
+          select 1 from public.friendships
+          where (
+            friendships.user_id = auth.uid()
+            and friendships.friend_id = public.shindigs.user_id
+          ) or (
+            friendships.friend_id = auth.uid()
+            and friendships.user_id = public.shindigs.user_id
+          )
+        )
+        or exists (
+          select 1 from public.shindig_invites
+          where public.shindig_invites.shindig_id = public.shindigs.id
+            and public.shindig_invites.invitee_user_id = auth.uid()
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
+        )
+      )
+  )
+);
+
+drop policy if exists "Participants can create bring items" on public.shindig_bring_items;
+drop policy if exists "Owners can create bring items" on public.shindig_bring_items;
+create policy "Participants can create bring items"
+on public.shindig_bring_items
+for insert
+to authenticated
+with check (
+  auth.uid() = created_by_user_id
+  and exists (
+    select 1 from public.shindigs
+    where public.shindigs.id = shindig_bring_items.shindig_id
+      and (
+        public.shindigs.user_id = auth.uid()
+        or exists (
+          select 1 from public.shindig_invites
+          where public.shindig_invites.shindig_id = public.shindigs.id
+            and public.shindig_invites.invitee_user_id = auth.uid()
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
+        )
+      )
+  )
+  and (
+    exists (
+      select 1 from public.shindigs
+      where public.shindigs.id = shindig_bring_items.shindig_id
+        and public.shindigs.user_id = auth.uid()
+    )
+    or is_custom = true
+  )
+);
+
+drop policy if exists "Owners and invitees can update bring items" on public.shindig_bring_items;
+create policy "Owners and invitees can update bring items"
+on public.shindig_bring_items
+for update
+to authenticated
+using (
+  exists (
+    select 1 from public.shindigs
+    where public.shindigs.id = shindig_bring_items.shindig_id
+      and (
+        public.shindigs.user_id = auth.uid()
+        or exists (
+          select 1 from public.shindig_invites
+          where public.shindig_invites.shindig_id = public.shindigs.id
+            and public.shindig_invites.invitee_user_id = auth.uid()
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
+        )
+      )
+  )
+  and (
+    claimed_by_user_id is null
+    or claimed_by_user_id = auth.uid()
+    or exists (
+      select 1 from public.shindigs
+      where public.shindigs.id = shindig_bring_items.shindig_id
+        and public.shindigs.user_id = auth.uid()
+    )
+  )
+)
+with check (
+  exists (
+    select 1 from public.shindigs
+    where public.shindigs.id = shindig_bring_items.shindig_id
+      and (
+        public.shindigs.user_id = auth.uid()
+        or exists (
+          select 1 from public.shindig_invites
+          where public.shindig_invites.shindig_id = public.shindigs.id
+            and public.shindig_invites.invitee_user_id = auth.uid()
+            and public.shindig_invites.status in ('accepted', 'pending', 'maybe')
+        )
+      )
+  )
+  and (
+    claimed_by_user_id is null
+    or claimed_by_user_id = auth.uid()
+    or exists (
+      select 1 from public.shindigs
+      where public.shindigs.id = shindig_bring_items.shindig_id
+        and public.shindigs.user_id = auth.uid()
+    )
+  )
+);
+
+drop policy if exists "Owners and creators can delete bring items" on public.shindig_bring_items;
+drop policy if exists "Owners can delete bring items" on public.shindig_bring_items;
+create policy "Owners and creators can delete bring items"
+on public.shindig_bring_items
+for delete
+to authenticated
+using (
+  created_by_user_id = auth.uid()
+  or exists (
+      select 1 from public.shindigs
+      where public.shindigs.id = shindig_bring_items.shindig_id
+        and public.shindigs.user_id = auth.uid()
+    )
+);
 
 drop policy if exists "Users can create own photo requests" on public.shindig_photo_requests;
 create policy "Users can create own photo requests"

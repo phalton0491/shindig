@@ -25,7 +25,13 @@ type PhotoRequestRow = {
 
 type InviteRow = {
   id: string;
-  status: 'accepted' | 'pending' | 'rejected';
+  status: 'accepted' | 'maybe' | 'pending' | 'rejected';
+};
+
+type NotificationShindigRow = {
+  id: string;
+  planned_for: string | null;
+  state: AppNotification['shindigState'];
 };
 
 function client() {
@@ -141,10 +147,14 @@ export async function listNotificationsForUser(userId: string) {
   const inviteIds = rows
     .map((row) => row.invite_id)
     .filter((inviteId): inviteId is string => Boolean(inviteId));
+  const shindigIds = rows
+    .map((row) => row.shindig_id)
+    .filter((shindigId): shindigId is string => Boolean(shindigId));
   const actorProfiles = await getFriendProfilesByIds(actorIds);
   const actorsById = new Map(actorProfiles.map((profile) => [profile.id, profile]));
   let requestRowsById = new Map<string, PhotoRequestRow>();
   let inviteRowsById = new Map<string, InviteRow>();
+  let shindigRowsById = new Map<string, NotificationShindigRow>();
 
   if (requestIds.length > 0) {
     const { data: requestRows, error: requestRowsError } = await client()
@@ -167,6 +177,19 @@ export async function listNotificationsForUser(userId: string) {
 
     if (!inviteRowsError) {
       inviteRowsById = new Map(((inviteRows || []) as InviteRow[]).map((row) => [row.id, row]));
+    }
+  }
+
+  if (shindigIds.length > 0) {
+    const { data: shindigRows, error: shindigRowsError } = await client()
+      .from('shindigs')
+      .select('id, state, planned_for')
+      .in('id', shindigIds);
+
+    if (!shindigRowsError) {
+      shindigRowsById = new Map(
+        ((shindigRows || []) as NotificationShindigRow[]).map((row) => [row.id, row])
+      );
     }
   }
 
@@ -208,6 +231,11 @@ export async function listNotificationsForUser(userId: string) {
       }
       if (row.shindig_id) {
         notification.shindigId = row.shindig_id;
+        const shindigRow = shindigRowsById.get(row.shindig_id);
+        if (shindigRow) {
+          notification.shindigPlannedFor = shindigRow.planned_for;
+          notification.shindigState = shindigRow.state;
+        }
       }
 
       return notification;

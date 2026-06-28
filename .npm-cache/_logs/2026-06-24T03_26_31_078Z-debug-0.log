@@ -1,0 +1,781 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.9.2
+2 info using node@v22.14.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\phalton\Documents\RRCloudWeb\.npmrc
+5 silly config load:file:C:\Users\phalton\.npmrc
+6 silly config load:file:C:\Users\phalton\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install expo-image-manipulator@~14.0.8
+8 verbose argv "install" "expo-image-manipulator@~14.0.8"
+9 verbose logfile logs-max:10 dir:C:\Users\phalton\Documents\shindigapp\shindig\.npm-cache\_logs\2026-06-24T03_26_31_078Z-
+10 verbose logfile C:\Users\phalton\Documents\shindigapp\shindig\.npm-cache\_logs\2026-06-24T03_26_31_078Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+13 warn old lockfile
+13 warn old lockfile The package-lock.json file was created with an old version of npm,
+13 warn old lockfile so supplemental metadata must be fetched from the registry.
+13 warn old lockfile
+13 warn old lockfile This is a one-time fix-up, please be patient...
+13 warn old lockfile
+14 silly inflate node_modules/@babel/code-frame
+15 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fcode-frame cache-miss
+16 silly inflate node_modules/@babel/helper-module-imports
+17 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhelper-module-imports cache-miss
+18 silly inflate node_modules/@babel/helper-plugin-utils
+19 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhelper-plugin-utils cache-miss
+20 silly inflate node_modules/@babel/helper-validator-identifier
+21 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhelper-validator-identifier cache-miss
+22 silly inflate node_modules/@babel/highlight
+23 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhighlight cache-miss
+24 silly inflate node_modules/@babel/highlight/node_modules/ansi-styles
+25 silly packumentCache corgi:https://registry.npmjs.org/ansi-styles cache-miss
+26 silly inflate node_modules/@babel/highlight/node_modules/chalk
+27 silly packumentCache corgi:https://registry.npmjs.org/chalk cache-miss
+28 http fetch GET 200 https://registry.npmjs.org/npm 335ms
+29 http fetch GET 200 https://registry.npmjs.org/@babel%2fhelper-module-imports 281ms (cache miss)
+30 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhelper-module-imports set size:undefined disposed:false
+31 silly inflate node_modules/@babel/highlight/node_modules/color-convert
+32 silly packumentCache corgi:https://registry.npmjs.org/color-convert cache-miss
+33 http fetch GET 200 https://registry.npmjs.org/@babel%2fhighlight 299ms (cache miss)
+34 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhighlight set size:undefined disposed:false
+35 silly inflate node_modules/@babel/highlight/node_modules/color-name
+36 silly packumentCache corgi:https://registry.npmjs.org/color-name cache-miss
+37 http fetch GET 200 https://registry.npmjs.org/@babel%2fhelper-plugin-utils 308ms (cache miss)
+38 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhelper-plugin-utils set size:undefined disposed:false
+39 silly inflate node_modules/@babel/highlight/node_modules/escape-string-regexp
+40 silly packumentCache corgi:https://registry.npmjs.org/escape-string-regexp cache-miss
+41 http fetch GET 200 https://registry.npmjs.org/ansi-styles 315ms (cache miss)
+42 silly packumentCache corgi:https://registry.npmjs.org/ansi-styles set size:undefined disposed:false
+43 silly inflate node_modules/@babel/highlight/node_modules/has-flag
+44 silly packumentCache corgi:https://registry.npmjs.org/has-flag cache-miss
+45 http fetch GET 200 https://registry.npmjs.org/chalk 322ms (cache miss)
+46 silly packumentCache corgi:https://registry.npmjs.org/chalk set size:undefined disposed:false
+47 silly inflate node_modules/@babel/highlight/node_modules/supports-color
+48 silly packumentCache corgi:https://registry.npmjs.org/supports-color cache-miss
+49 http fetch GET 200 https://registry.npmjs.org/@babel%2fhelper-validator-identifier 331ms (cache miss)
+50 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhelper-validator-identifier set size:undefined disposed:false
+51 silly inflate node_modules/@babel/plugin-syntax-jsx
+52 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fplugin-syntax-jsx cache-miss
+53 http fetch GET 200 https://registry.npmjs.org/@babel%2fcode-frame 342ms (cache miss)
+54 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fcode-frame set size:undefined disposed:false
+55 silly inflate node_modules/@babel/runtime
+56 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fruntime cache-miss
+57 http fetch GET 200 https://registry.npmjs.org/color-convert 76ms (cache miss)
+58 silly packumentCache corgi:https://registry.npmjs.org/color-convert set size:undefined disposed:false
+59 silly inflate node_modules/@babel/types
+60 silly packumentCache corgi:https://registry.npmjs.org/@babel%2ftypes cache-miss
+61 http fetch GET 200 https://registry.npmjs.org/color-name 71ms (cache miss)
+62 silly packumentCache corgi:https://registry.npmjs.org/color-name set size:undefined disposed:false
+63 silly inflate node_modules/@date-io/core
+64 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fcore cache-miss
+65 http fetch GET 200 https://registry.npmjs.org/escape-string-regexp 74ms (cache miss)
+66 silly packumentCache corgi:https://registry.npmjs.org/escape-string-regexp set size:undefined disposed:false
+67 silly inflate node_modules/@date-io/date-fns
+68 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fdate-fns cache-miss
+69 http fetch GET 200 https://registry.npmjs.org/has-flag 69ms (cache miss)
+70 silly packumentCache corgi:https://registry.npmjs.org/has-flag set size:undefined disposed:false
+71 silly inflate node_modules/@date-io/dayjs
+72 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fdayjs cache-miss
+73 http fetch GET 200 https://registry.npmjs.org/supports-color 70ms (cache miss)
+74 silly packumentCache corgi:https://registry.npmjs.org/supports-color set size:undefined disposed:false
+75 silly inflate node_modules/@date-io/luxon
+76 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fluxon cache-miss
+77 http fetch GET 200 https://registry.npmjs.org/@babel%2fplugin-syntax-jsx 89ms (cache miss)
+78 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fplugin-syntax-jsx set size:undefined disposed:false
+79 silly inflate node_modules/@date-io/moment
+80 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fmoment cache-miss
+81 http fetch GET 200 https://registry.npmjs.org/@babel%2fruntime 119ms (cache miss)
+82 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fruntime set size:undefined disposed:false
+83 silly inflate node_modules/@emotion/babel-plugin
+84 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fbabel-plugin cache-miss
+85 http fetch GET 200 https://registry.npmjs.org/@babel%2ftypes 134ms (cache miss)
+86 silly packumentCache corgi:https://registry.npmjs.org/@babel%2ftypes set size:undefined disposed:false
+87 silly inflate node_modules/@emotion/cache
+88 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fcache cache-miss
+89 http fetch GET 200 https://registry.npmjs.org/@date-io%2fmoment 85ms (cache miss)
+90 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fmoment set size:undefined disposed:false
+91 silly inflate node_modules/@emotion/hash
+92 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fhash cache-miss
+93 http fetch GET 200 https://registry.npmjs.org/@emotion%2fbabel-plugin 72ms (cache miss)
+94 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fbabel-plugin set size:undefined disposed:false
+95 silly inflate node_modules/@emotion/is-prop-valid
+96 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fis-prop-valid cache-miss
+97 http fetch GET 200 https://registry.npmjs.org/@emotion%2fcache 80ms (cache miss)
+98 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fcache set size:undefined disposed:false
+99 silly inflate node_modules/@emotion/memoize
+100 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fmemoize cache-miss
+101 http fetch GET 200 https://registry.npmjs.org/@emotion%2fhash 83ms (cache miss)
+102 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fhash set size:undefined disposed:false
+103 silly inflate node_modules/@emotion/react
+104 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2freact cache-miss
+105 http fetch GET 200 https://registry.npmjs.org/@emotion%2fis-prop-valid 88ms (cache miss)
+106 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fis-prop-valid set size:undefined disposed:false
+107 silly inflate node_modules/@emotion/serialize
+108 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fserialize cache-miss
+109 http fetch GET 200 https://registry.npmjs.org/@date-io%2fdate-fns 247ms (cache miss)
+110 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fdate-fns set size:undefined disposed:false
+111 silly inflate node_modules/@emotion/sheet
+112 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fsheet cache-miss
+113 http fetch GET 200 https://registry.npmjs.org/@date-io%2fcore 267ms (cache miss)
+114 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fcore set size:undefined disposed:false
+115 silly inflate node_modules/@emotion/styled
+116 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fstyled cache-miss
+117 http fetch GET 200 https://registry.npmjs.org/@date-io%2fluxon 281ms (cache miss)
+118 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fluxon set size:undefined disposed:false
+119 silly inflate node_modules/@emotion/unitless
+120 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2funitless cache-miss
+121 http fetch GET 200 https://registry.npmjs.org/@date-io%2fdayjs 293ms (cache miss)
+122 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fdayjs set size:undefined disposed:false
+123 silly inflate node_modules/@emotion/utils
+124 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2futils cache-miss
+125 http fetch GET 200 https://registry.npmjs.org/@emotion%2fmemoize 110ms (cache miss)
+126 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fmemoize set size:undefined disposed:false
+127 silly inflate node_modules/@emotion/weak-memoize
+128 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fweak-memoize cache-miss
+129 http fetch GET 200 https://registry.npmjs.org/@emotion%2freact 100ms (cache miss)
+130 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2freact set size:undefined disposed:false
+131 silly inflate node_modules/@fortawesome/fontawesome-pro
+132 silly packumentCache corgi:https://npm.fontawesome.com/@fortawesome%2ffontawesome-pro cache-miss
+133 http fetch GET 200 https://registry.npmjs.org/@emotion%2futils 79ms (cache miss)
+134 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2futils set size:undefined disposed:false
+135 silly inflate node_modules/@isaacs/cliui
+136 silly packumentCache corgi:https://registry.npmjs.org/@isaacs%2fcliui cache-miss
+137 http fetch GET 200 https://registry.npmjs.org/@emotion%2fserialize 138ms (cache miss)
+138 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fserialize set size:undefined disposed:false
+139 silly inflate node_modules/@mui/core
+140 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fcore cache-miss
+141 http fetch GET 200 https://registry.npmjs.org/@emotion%2fweak-memoize 77ms (cache miss)
+142 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fweak-memoize set size:undefined disposed:false
+143 silly inflate node_modules/@mui/icons-material
+144 silly packumentCache corgi:https://registry.npmjs.org/@mui%2ficons-material cache-miss
+145 http fetch GET 200 https://registry.npmjs.org/@emotion%2funitless 94ms (cache miss)
+146 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2funitless set size:undefined disposed:false
+147 silly inflate node_modules/@mui/lab
+148 silly packumentCache corgi:https://registry.npmjs.org/@mui%2flab cache-miss
+149 http fetch GET 200 https://registry.npmjs.org/@emotion%2fstyled 143ms (cache miss)
+150 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fstyled set size:undefined disposed:false
+151 silly inflate node_modules/@mui/material
+152 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fmaterial cache-miss
+153 http fetch GET 200 https://registry.npmjs.org/@emotion%2fsheet 200ms (cache miss)
+154 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fsheet set size:undefined disposed:false
+155 silly inflate node_modules/@mui/private-theming
+156 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fprivate-theming cache-miss
+157 http fetch GET 200 https://registry.npmjs.org/@isaacs%2fcliui 75ms (cache miss)
+158 silly packumentCache corgi:https://registry.npmjs.org/@isaacs%2fcliui set size:undefined disposed:false
+159 silly inflate node_modules/@mui/styled-engine
+160 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fstyled-engine cache-miss
+161 http fetch GET 200 https://registry.npmjs.org/@mui%2flab 110ms (cache miss)
+162 silly packumentCache corgi:https://registry.npmjs.org/@mui%2flab set size:undefined disposed:false
+163 silly inflate node_modules/@mui/styles
+164 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fstyles cache-miss
+165 http fetch GET 200 https://registry.npmjs.org/@mui%2ficons-material 133ms (cache miss)
+166 silly packumentCache corgi:https://registry.npmjs.org/@mui%2ficons-material set size:undefined disposed:false
+167 silly inflate node_modules/@mui/system
+168 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fsystem cache-miss
+169 http fetch GET 200 https://registry.npmjs.org/@mui%2fstyled-engine 88ms (cache miss)
+170 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fstyled-engine set size:undefined disposed:false
+171 silly inflate node_modules/@mui/types
+172 silly packumentCache corgi:https://registry.npmjs.org/@mui%2ftypes cache-miss
+173 http fetch GET 200 https://registry.npmjs.org/@mui%2fcore 180ms (cache miss)
+174 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fcore set size:undefined disposed:false
+175 silly inflate node_modules/@mui/utils
+176 silly packumentCache corgi:https://registry.npmjs.org/@mui%2futils cache-miss
+177 http fetch GET 200 https://registry.npmjs.org/@mui%2fprivate-theming 164ms (cache miss)
+178 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fprivate-theming set size:undefined disposed:false
+179 silly inflate node_modules/@polka/url
+180 silly packumentCache corgi:https://registry.npmjs.org/@polka%2furl cache-miss
+181 http fetch GET 200 https://registry.npmjs.org/@mui%2ftypes 94ms (cache miss)
+182 silly packumentCache corgi:https://registry.npmjs.org/@mui%2ftypes set size:undefined disposed:false
+183 silly inflate node_modules/@popperjs/core
+184 silly packumentCache corgi:https://registry.npmjs.org/@popperjs%2fcore cache-miss
+185 http fetch GET 200 https://registry.npmjs.org/@mui%2futils 79ms (cache miss)
+186 silly packumentCache corgi:https://registry.npmjs.org/@mui%2futils set size:undefined disposed:false
+187 silly inflate node_modules/@types/parse-json
+188 silly packumentCache corgi:https://registry.npmjs.org/@types%2fparse-json cache-miss
+189 http fetch GET 200 https://registry.npmjs.org/@mui%2fsystem 132ms (cache miss)
+190 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fsystem set size:undefined disposed:false
+191 silly inflate node_modules/@types/prop-types
+192 silly packumentCache corgi:https://registry.npmjs.org/@types%2fprop-types cache-miss
+193 http fetch GET 200 https://registry.npmjs.org/@mui%2fmaterial 267ms (cache miss)
+194 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fmaterial set size:undefined disposed:false
+195 silly inflate node_modules/@types/react
+196 silly packumentCache corgi:https://registry.npmjs.org/@types%2freact cache-miss
+197 http fetch GET 200 https://registry.npmjs.org/@polka%2furl 75ms (cache miss)
+198 silly packumentCache corgi:https://registry.npmjs.org/@polka%2furl set size:undefined disposed:false
+199 silly inflate node_modules/@types/react-is
+200 silly packumentCache corgi:https://registry.npmjs.org/@types%2freact-is cache-miss
+201 http fetch GET 200 https://registry.npmjs.org/@popperjs%2fcore 85ms (cache miss)
+202 silly packumentCache corgi:https://registry.npmjs.org/@popperjs%2fcore set size:undefined disposed:false
+203 silly inflate node_modules/@types/react-transition-group
+204 silly packumentCache corgi:https://registry.npmjs.org/@types%2freact-transition-group cache-miss
+205 http fetch GET 200 https://registry.npmjs.org/@types%2fprop-types 97ms (cache miss)
+206 silly packumentCache corgi:https://registry.npmjs.org/@types%2fprop-types set size:undefined disposed:false
+207 silly inflate node_modules/@types/scheduler
+208 silly packumentCache corgi:https://registry.npmjs.org/@types%2fscheduler cache-miss
+209 http fetch GET 200 https://registry.npmjs.org/@types%2freact-is 79ms (cache miss)
+210 silly packumentCache corgi:https://registry.npmjs.org/@types%2freact-is set size:undefined disposed:false
+211 silly inflate node_modules/acorn
+212 silly packumentCache corgi:https://registry.npmjs.org/acorn cache-miss
+213 http fetch GET 200 https://registry.npmjs.org/@types%2freact 102ms (cache miss)
+214 silly packumentCache corgi:https://registry.npmjs.org/@types%2freact set size:undefined disposed:false
+215 silly inflate node_modules/acorn-walk
+216 silly packumentCache corgi:https://registry.npmjs.org/acorn-walk cache-miss
+217 http fetch GET 200 https://registry.npmjs.org/@types%2freact-transition-group 64ms (cache miss)
+218 silly packumentCache corgi:https://registry.npmjs.org/@types%2freact-transition-group set size:undefined disposed:false
+219 silly inflate node_modules/ansi-regex
+220 silly packumentCache corgi:https://registry.npmjs.org/ansi-regex cache-miss
+221 http fetch GET 200 https://npm.fontawesome.com/@fortawesome%2ffontawesome-pro 495ms (cache miss)
+222 silly packumentCache corgi:https://npm.fontawesome.com/@fortawesome%2ffontawesome-pro set size:undefined disposed:false
+223 silly inflate node_modules/ansi-styles
+224 silly packumentCache corgi:https://registry.npmjs.org/ansi-styles cache-miss
+225 http cache https://registry.npmjs.org/ansi-styles 12ms (cache hit)
+226 silly packumentCache corgi:https://registry.npmjs.org/ansi-styles set size:29858 disposed:false
+227 silly inflate node_modules/babel-plugin-macros
+228 silly packumentCache corgi:https://registry.npmjs.org/babel-plugin-macros cache-miss
+229 http fetch GET 200 https://registry.npmjs.org/@types%2fscheduler 73ms (cache miss)
+230 silly packumentCache corgi:https://registry.npmjs.org/@types%2fscheduler set size:undefined disposed:false
+231 silly inflate node_modules/balanced-match
+232 silly packumentCache corgi:https://registry.npmjs.org/balanced-match cache-miss
+233 http fetch GET 200 https://registry.npmjs.org/@mui%2fstyles 329ms (cache miss)
+234 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fstyles set size:undefined disposed:false
+235 silly inflate node_modules/brace-expansion
+236 silly packumentCache corgi:https://registry.npmjs.org/brace-expansion cache-miss
+237 http fetch GET 200 https://registry.npmjs.org/@types%2fparse-json 206ms (cache miss)
+238 silly packumentCache corgi:https://registry.npmjs.org/@types%2fparse-json set size:undefined disposed:false
+239 silly inflate node_modules/callsites
+240 silly packumentCache corgi:https://registry.npmjs.org/callsites cache-miss
+241 http fetch GET 200 https://registry.npmjs.org/acorn-walk 77ms (cache miss)
+242 silly packumentCache corgi:https://registry.npmjs.org/acorn-walk set size:undefined disposed:false
+243 silly inflate node_modules/chalk
+244 silly packumentCache corgi:https://registry.npmjs.org/chalk cache-miss
+245 http fetch GET 200 https://registry.npmjs.org/acorn 83ms (cache miss)
+246 silly packumentCache corgi:https://registry.npmjs.org/acorn set size:undefined disposed:false
+247 silly inflate node_modules/clsx
+248 silly packumentCache corgi:https://registry.npmjs.org/clsx cache-miss
+249 http fetch GET 200 https://registry.npmjs.org/ansi-regex 72ms (cache miss)
+250 silly packumentCache corgi:https://registry.npmjs.org/ansi-regex set size:undefined disposed:false
+251 silly inflate node_modules/color-convert
+252 silly packumentCache corgi:https://registry.npmjs.org/color-convert cache-miss
+253 http fetch GET 200 https://registry.npmjs.org/babel-plugin-macros 54ms (cache miss)
+254 silly packumentCache corgi:https://registry.npmjs.org/babel-plugin-macros set size:undefined disposed:false
+255 silly inflate node_modules/color-name
+256 silly packumentCache corgi:https://registry.npmjs.org/color-name cache-miss
+257 http cache https://registry.npmjs.org/color-convert 14ms (cache hit)
+258 silly packumentCache corgi:https://registry.npmjs.org/color-convert set size:26557 disposed:false
+259 silly inflate node_modules/commander
+260 silly packumentCache corgi:https://registry.npmjs.org/commander cache-miss
+261 http cache https://registry.npmjs.org/chalk 22ms (cache hit)
+262 silly packumentCache corgi:https://registry.npmjs.org/chalk set size:47870 disposed:false
+263 silly inflate node_modules/convert-source-map
+264 silly packumentCache corgi:https://registry.npmjs.org/convert-source-map cache-miss
+265 http cache https://registry.npmjs.org/color-name 12ms (cache hit)
+266 silly packumentCache corgi:https://registry.npmjs.org/color-name set size:7908 disposed:false
+267 silly inflate node_modules/cosmiconfig
+268 silly packumentCache corgi:https://registry.npmjs.org/cosmiconfig cache-miss
+269 http fetch GET 200 https://registry.npmjs.org/balanced-match 62ms (cache miss)
+270 silly packumentCache corgi:https://registry.npmjs.org/balanced-match set size:undefined disposed:false
+271 silly inflate node_modules/cross-spawn
+272 silly packumentCache corgi:https://registry.npmjs.org/cross-spawn cache-miss
+273 http fetch GET 200 https://registry.npmjs.org/brace-expansion 64ms (cache miss)
+274 silly packumentCache corgi:https://registry.npmjs.org/brace-expansion set size:undefined disposed:false
+275 silly inflate node_modules/css-vendor
+276 silly packumentCache corgi:https://registry.npmjs.org/css-vendor cache-miss
+277 http fetch GET 200 https://registry.npmjs.org/clsx 56ms (cache miss)
+278 silly packumentCache corgi:https://registry.npmjs.org/clsx set size:undefined disposed:false
+279 silly inflate node_modules/csstype
+280 silly packumentCache corgi:https://registry.npmjs.org/csstype cache-miss
+281 http fetch GET 200 https://registry.npmjs.org/callsites 73ms (cache miss)
+282 silly packumentCache corgi:https://registry.npmjs.org/callsites set size:undefined disposed:false
+283 silly inflate node_modules/dom-helpers
+284 silly packumentCache corgi:https://registry.npmjs.org/dom-helpers cache-miss
+285 http fetch GET 200 https://registry.npmjs.org/cross-spawn 47ms (cache miss)
+286 silly packumentCache corgi:https://registry.npmjs.org/cross-spawn set size:undefined disposed:false
+287 silly inflate node_modules/duplexer
+288 silly packumentCache corgi:https://registry.npmjs.org/duplexer cache-miss
+289 http fetch GET 200 https://registry.npmjs.org/commander 81ms (cache miss)
+290 silly packumentCache corgi:https://registry.npmjs.org/commander set size:undefined disposed:false
+291 silly inflate node_modules/eastasianwidth
+292 silly packumentCache corgi:https://registry.npmjs.org/eastasianwidth cache-miss
+293 http fetch GET 200 https://registry.npmjs.org/cosmiconfig 73ms (cache miss)
+294 silly packumentCache corgi:https://registry.npmjs.org/cosmiconfig set size:undefined disposed:false
+295 silly inflate node_modules/emoji-regex
+296 silly packumentCache corgi:https://registry.npmjs.org/emoji-regex cache-miss
+297 http fetch GET 200 https://registry.npmjs.org/convert-source-map 86ms (cache miss)
+298 silly packumentCache corgi:https://registry.npmjs.org/convert-source-map set size:undefined disposed:false
+299 silly inflate node_modules/error-ex
+300 silly packumentCache corgi:https://registry.npmjs.org/error-ex cache-miss
+301 http fetch GET 200 https://registry.npmjs.org/csstype 69ms (cache miss)
+302 silly packumentCache corgi:https://registry.npmjs.org/csstype set size:undefined disposed:false
+303 silly inflate node_modules/escape-string-regexp
+304 silly packumentCache corgi:https://registry.npmjs.org/escape-string-regexp cache-miss
+305 http fetch GET 200 https://registry.npmjs.org/dom-helpers 61ms (cache miss)
+306 silly packumentCache corgi:https://registry.npmjs.org/dom-helpers set size:undefined disposed:false
+307 silly inflate node_modules/find-root
+308 silly packumentCache corgi:https://registry.npmjs.org/find-root cache-miss
+309 http cache https://registry.npmjs.org/escape-string-regexp 12ms (cache hit)
+310 silly packumentCache corgi:https://registry.npmjs.org/escape-string-regexp set size:9856 disposed:false
+311 silly inflate node_modules/foreground-child
+312 silly packumentCache corgi:https://registry.npmjs.org/foreground-child cache-miss
+313 http fetch GET 200 https://registry.npmjs.org/duplexer 62ms (cache miss)
+314 silly packumentCache corgi:https://registry.npmjs.org/duplexer set size:undefined disposed:false
+315 silly inflate node_modules/function-bind
+316 silly packumentCache corgi:https://registry.npmjs.org/function-bind cache-miss
+317 http fetch GET 200 https://registry.npmjs.org/eastasianwidth 49ms (cache miss)
+318 silly packumentCache corgi:https://registry.npmjs.org/eastasianwidth set size:undefined disposed:false
+319 silly inflate node_modules/glob
+320 silly packumentCache corgi:https://registry.npmjs.org/glob cache-miss
+321 http fetch GET 200 https://registry.npmjs.org/error-ex 60ms (cache miss)
+322 silly packumentCache corgi:https://registry.npmjs.org/error-ex set size:undefined disposed:false
+323 silly inflate node_modules/gzip-size
+324 silly packumentCache corgi:https://registry.npmjs.org/gzip-size cache-miss
+325 http fetch GET 200 https://registry.npmjs.org/emoji-regex 68ms (cache miss)
+326 silly packumentCache corgi:https://registry.npmjs.org/emoji-regex set size:undefined disposed:false
+327 silly inflate node_modules/has
+328 silly packumentCache corgi:https://registry.npmjs.org/has cache-miss
+329 http fetch GET 200 https://registry.npmjs.org/css-vendor 139ms (cache miss)
+330 silly packumentCache corgi:https://registry.npmjs.org/css-vendor set size:undefined disposed:false
+331 silly inflate node_modules/has-flag
+332 silly packumentCache corgi:https://registry.npmjs.org/has-flag cache-miss
+333 http cache https://registry.npmjs.org/has-flag 9ms (cache hit)
+334 silly packumentCache corgi:https://registry.npmjs.org/has-flag set size:6334 disposed:false
+335 silly inflate node_modules/hoist-non-react-statics
+336 silly packumentCache corgi:https://registry.npmjs.org/hoist-non-react-statics cache-miss
+337 http fetch GET 200 https://registry.npmjs.org/foreground-child 56ms (cache miss)
+338 silly packumentCache corgi:https://registry.npmjs.org/foreground-child set size:undefined disposed:false
+339 silly inflate node_modules/hoist-non-react-statics/node_modules/react-is
+340 silly packumentCache corgi:https://registry.npmjs.org/react-is cache-miss
+341 http fetch GET 200 https://registry.npmjs.org/find-root 69ms (cache miss)
+342 silly packumentCache corgi:https://registry.npmjs.org/find-root set size:undefined disposed:false
+343 silly inflate node_modules/hyphenate-style-name
+344 silly packumentCache corgi:https://registry.npmjs.org/hyphenate-style-name cache-miss
+345 http fetch GET 200 https://registry.npmjs.org/glob 74ms (cache miss)
+346 silly packumentCache corgi:https://registry.npmjs.org/glob set size:undefined disposed:false
+347 silly inflate node_modules/import-fresh
+348 silly packumentCache corgi:https://registry.npmjs.org/import-fresh cache-miss
+349 http fetch GET 200 https://registry.npmjs.org/has 60ms (cache miss)
+350 silly packumentCache corgi:https://registry.npmjs.org/has set size:undefined disposed:false
+351 silly inflate node_modules/is-arrayish
+352 silly packumentCache corgi:https://registry.npmjs.org/is-arrayish cache-miss
+353 http fetch GET 200 https://registry.npmjs.org/hoist-non-react-statics 60ms (cache miss)
+354 silly packumentCache corgi:https://registry.npmjs.org/hoist-non-react-statics set size:undefined disposed:false
+355 silly inflate node_modules/is-core-module
+356 silly packumentCache corgi:https://registry.npmjs.org/is-core-module cache-miss
+357 http fetch GET 200 https://registry.npmjs.org/hyphenate-style-name 65ms (cache miss)
+358 silly packumentCache corgi:https://registry.npmjs.org/hyphenate-style-name set size:undefined disposed:false
+359 silly inflate node_modules/is-fullwidth-code-point
+360 silly packumentCache corgi:https://registry.npmjs.org/is-fullwidth-code-point cache-miss
+361 http fetch GET 200 https://registry.npmjs.org/function-bind 123ms (cache miss)
+362 silly packumentCache corgi:https://registry.npmjs.org/function-bind set size:undefined disposed:false
+363 silly inflate node_modules/is-in-browser
+364 silly packumentCache corgi:https://registry.npmjs.org/is-in-browser cache-miss
+365 http fetch GET 200 https://registry.npmjs.org/is-arrayish 55ms (cache miss)
+366 silly packumentCache corgi:https://registry.npmjs.org/is-arrayish set size:undefined disposed:false
+367 silly inflate node_modules/isexe
+368 silly packumentCache corgi:https://registry.npmjs.org/isexe cache-miss
+369 http fetch GET 200 https://registry.npmjs.org/import-fresh 68ms (cache miss)
+370 silly packumentCache corgi:https://registry.npmjs.org/import-fresh set size:undefined disposed:false
+371 silly inflate node_modules/jackspeak
+372 silly packumentCache corgi:https://registry.npmjs.org/jackspeak cache-miss
+373 http fetch GET 200 https://registry.npmjs.org/gzip-size 136ms (cache miss)
+374 silly packumentCache corgi:https://registry.npmjs.org/gzip-size set size:undefined disposed:false
+375 silly inflate node_modules/js-tokens
+376 silly packumentCache corgi:https://registry.npmjs.org/js-tokens cache-miss
+377 http fetch GET 200 https://registry.npmjs.org/is-core-module 65ms (cache miss)
+378 silly packumentCache corgi:https://registry.npmjs.org/is-core-module set size:undefined disposed:false
+379 silly inflate node_modules/json-parse-even-better-errors
+380 silly packumentCache corgi:https://registry.npmjs.org/json-parse-even-better-errors cache-miss
+381 http fetch GET 200 https://registry.npmjs.org/is-fullwidth-code-point 69ms (cache miss)
+382 silly packumentCache corgi:https://registry.npmjs.org/is-fullwidth-code-point set size:undefined disposed:false
+383 silly inflate node_modules/jss
+384 silly packumentCache corgi:https://registry.npmjs.org/jss cache-miss
+385 http fetch GET 200 https://registry.npmjs.org/is-in-browser 73ms (cache miss)
+386 silly packumentCache corgi:https://registry.npmjs.org/is-in-browser set size:undefined disposed:false
+387 silly inflate node_modules/jss-plugin-camel-case
+388 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-camel-case cache-miss
+389 http fetch GET 200 https://registry.npmjs.org/json-parse-even-better-errors 65ms (cache miss)
+390 silly packumentCache corgi:https://registry.npmjs.org/json-parse-even-better-errors set size:undefined disposed:false
+391 silly inflate node_modules/jss-plugin-default-unit
+392 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-default-unit cache-miss
+393 http fetch GET 200 https://registry.npmjs.org/js-tokens 86ms (cache miss)
+394 silly packumentCache corgi:https://registry.npmjs.org/js-tokens set size:undefined disposed:false
+395 silly inflate node_modules/jss-plugin-global
+396 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-global cache-miss
+397 http fetch GET 200 https://registry.npmjs.org/jackspeak 94ms (cache miss)
+398 silly packumentCache corgi:https://registry.npmjs.org/jackspeak set size:undefined disposed:false
+399 silly inflate node_modules/jss-plugin-nested
+400 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-nested cache-miss
+401 http fetch GET 200 https://registry.npmjs.org/isexe 102ms (cache miss)
+402 silly packumentCache corgi:https://registry.npmjs.org/isexe set size:undefined disposed:false
+403 silly inflate node_modules/jss-plugin-props-sort
+404 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-props-sort cache-miss
+405 http fetch GET 200 https://registry.npmjs.org/jss-plugin-camel-case 94ms (cache miss)
+406 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-camel-case set size:undefined disposed:false
+407 silly inflate node_modules/jss-plugin-rule-value-function
+408 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-rule-value-function cache-miss
+409 http fetch GET 200 https://registry.npmjs.org/jss 105ms (cache miss)
+410 silly packumentCache corgi:https://registry.npmjs.org/jss set size:undefined disposed:false
+411 silly inflate node_modules/jss-plugin-vendor-prefixer
+412 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-vendor-prefixer cache-miss
+413 http fetch GET 200 https://registry.npmjs.org/react-is 259ms (cache miss)
+414 silly packumentCache corgi:https://registry.npmjs.org/react-is set size:undefined disposed:false
+415 silly inflate node_modules/lines-and-columns
+416 silly packumentCache corgi:https://registry.npmjs.org/lines-and-columns cache-miss
+417 http fetch GET 200 https://registry.npmjs.org/jss-plugin-default-unit 88ms (cache miss)
+418 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-default-unit set size:undefined disposed:false
+419 silly inflate node_modules/lodash
+420 silly packumentCache corgi:https://registry.npmjs.org/lodash cache-miss
+421 http fetch GET 200 https://registry.npmjs.org/jss-plugin-props-sort 89ms (cache miss)
+422 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-props-sort set size:undefined disposed:false
+423 silly inflate node_modules/loose-envify
+424 silly packumentCache corgi:https://registry.npmjs.org/loose-envify cache-miss
+425 http fetch GET 200 https://registry.npmjs.org/jss-plugin-nested 140ms (cache miss)
+426 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-nested set size:undefined disposed:false
+427 silly inflate node_modules/lru-cache
+428 silly packumentCache corgi:https://registry.npmjs.org/lru-cache cache-miss
+429 http fetch GET 200 https://registry.npmjs.org/lines-and-columns 73ms (cache miss)
+430 silly packumentCache corgi:https://registry.npmjs.org/lines-and-columns set size:undefined disposed:false
+431 silly inflate node_modules/mime
+432 silly packumentCache corgi:https://registry.npmjs.org/mime cache-miss
+433 http fetch GET 200 https://registry.npmjs.org/jss-plugin-global 158ms (cache miss)
+434 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-global set size:undefined disposed:false
+435 silly inflate node_modules/minimatch
+436 silly packumentCache corgi:https://registry.npmjs.org/minimatch cache-miss
+437 http fetch GET 200 https://registry.npmjs.org/lodash 83ms (cache miss)
+438 silly packumentCache corgi:https://registry.npmjs.org/lodash set size:undefined disposed:false
+439 silly inflate node_modules/minipass
+440 silly packumentCache corgi:https://registry.npmjs.org/minipass cache-miss
+441 http fetch GET 200 https://registry.npmjs.org/loose-envify 76ms (cache miss)
+442 silly packumentCache corgi:https://registry.npmjs.org/loose-envify set size:undefined disposed:false
+443 silly inflate node_modules/object-assign
+444 silly packumentCache corgi:https://registry.npmjs.org/object-assign cache-miss
+445 http fetch GET 200 https://registry.npmjs.org/jss-plugin-rule-value-function 129ms (cache miss)
+446 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-rule-value-function set size:undefined disposed:false
+447 silly inflate node_modules/opener
+448 silly packumentCache corgi:https://registry.npmjs.org/opener cache-miss
+449 http fetch GET 200 https://registry.npmjs.org/jss-plugin-vendor-prefixer 131ms (cache miss)
+450 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-vendor-prefixer set size:undefined disposed:false
+451 silly inflate node_modules/package-json-from-dist
+452 silly packumentCache corgi:https://registry.npmjs.org/package-json-from-dist cache-miss
+453 http fetch GET 200 https://registry.npmjs.org/mime 88ms (cache miss)
+454 silly packumentCache corgi:https://registry.npmjs.org/mime set size:undefined disposed:false
+455 silly inflate node_modules/parent-module
+456 silly packumentCache corgi:https://registry.npmjs.org/parent-module cache-miss
+457 http fetch GET 200 https://registry.npmjs.org/lru-cache 103ms (cache miss)
+458 silly packumentCache corgi:https://registry.npmjs.org/lru-cache set size:undefined disposed:false
+459 silly inflate node_modules/parse-json
+460 silly packumentCache corgi:https://registry.npmjs.org/parse-json cache-miss
+461 http fetch GET 200 https://registry.npmjs.org/minipass 86ms (cache miss)
+462 silly packumentCache corgi:https://registry.npmjs.org/minipass set size:undefined disposed:false
+463 silly inflate node_modules/path-key
+464 silly packumentCache corgi:https://registry.npmjs.org/path-key cache-miss
+465 http fetch GET 200 https://registry.npmjs.org/opener 81ms (cache miss)
+466 silly packumentCache corgi:https://registry.npmjs.org/opener set size:undefined disposed:false
+467 silly inflate node_modules/path-parse
+468 silly packumentCache corgi:https://registry.npmjs.org/path-parse cache-miss
+469 http fetch GET 200 https://registry.npmjs.org/package-json-from-dist 75ms (cache miss)
+470 silly packumentCache corgi:https://registry.npmjs.org/package-json-from-dist set size:undefined disposed:false
+471 silly inflate node_modules/path-scurry
+472 silly packumentCache corgi:https://registry.npmjs.org/path-scurry cache-miss
+473 http fetch GET 200 https://registry.npmjs.org/minimatch 108ms (cache miss)
+474 silly packumentCache corgi:https://registry.npmjs.org/minimatch set size:undefined disposed:false
+475 silly inflate node_modules/path-type
+476 silly packumentCache corgi:https://registry.npmjs.org/path-type cache-miss
+477 http fetch GET 200 https://registry.npmjs.org/object-assign 99ms (cache miss)
+478 silly packumentCache corgi:https://registry.npmjs.org/object-assign set size:undefined disposed:false
+479 silly inflate node_modules/prop-types
+480 silly packumentCache corgi:https://registry.npmjs.org/prop-types cache-miss
+481 http fetch GET 200 https://registry.npmjs.org/parent-module 66ms (cache miss)
+482 silly packumentCache corgi:https://registry.npmjs.org/parent-module set size:undefined disposed:false
+483 silly inflate node_modules/prop-types/node_modules/react-is
+484 silly packumentCache corgi:https://registry.npmjs.org/react-is cache-miss
+485 http fetch GET 200 https://registry.npmjs.org/parse-json 63ms (cache miss)
+486 silly packumentCache corgi:https://registry.npmjs.org/parse-json set size:undefined disposed:false
+487 silly inflate node_modules/react-is
+488 silly packumentCache corgi:https://registry.npmjs.org/react-is cache-miss
+489 http cache https://registry.npmjs.org/react-is 23ms (cache hit)
+490 silly packumentCache corgi:https://registry.npmjs.org/react-is set size:2586477 disposed:false
+491 silly inflate node_modules/react-transition-group
+492 silly packumentCache corgi:https://registry.npmjs.org/react-transition-group cache-miss
+493 http cache https://registry.npmjs.org/react-is 45ms (cache hit)
+494 silly packumentCache corgi:https://registry.npmjs.org/react-is set size:2586477 disposed:false
+495 silly inflate node_modules/regenerator-runtime
+496 silly packumentCache corgi:https://registry.npmjs.org/regenerator-runtime cache-miss
+497 http fetch GET 200 https://registry.npmjs.org/path-key 123ms (cache miss)
+498 silly packumentCache corgi:https://registry.npmjs.org/path-key set size:undefined disposed:false
+499 silly inflate node_modules/resolve
+500 silly packumentCache corgi:https://registry.npmjs.org/resolve cache-miss
+501 http fetch GET 200 https://registry.npmjs.org/path-parse 121ms (cache miss)
+502 silly packumentCache corgi:https://registry.npmjs.org/path-parse set size:undefined disposed:false
+503 silly inflate node_modules/resolve-from
+504 silly packumentCache corgi:https://registry.npmjs.org/resolve-from cache-miss
+505 http fetch GET 200 https://registry.npmjs.org/prop-types 121ms (cache miss)
+506 silly packumentCache corgi:https://registry.npmjs.org/prop-types set size:undefined disposed:false
+507 silly inflate node_modules/rifm
+508 silly packumentCache corgi:https://registry.npmjs.org/rifm cache-miss
+509 http fetch GET 200 https://registry.npmjs.org/path-scurry 132ms (cache miss)
+510 silly packumentCache corgi:https://registry.npmjs.org/path-scurry set size:undefined disposed:false
+511 silly inflate node_modules/rimraf
+512 silly packumentCache corgi:https://registry.npmjs.org/rimraf cache-miss
+513 http fetch GET 200 https://registry.npmjs.org/path-type 131ms (cache miss)
+514 silly packumentCache corgi:https://registry.npmjs.org/path-type set size:undefined disposed:false
+515 silly inflate node_modules/safe-buffer
+516 silly packumentCache corgi:https://registry.npmjs.org/safe-buffer cache-miss
+517 http fetch GET 200 https://registry.npmjs.org/react-transition-group 89ms (cache miss)
+518 silly packumentCache corgi:https://registry.npmjs.org/react-transition-group set size:undefined disposed:false
+519 silly inflate node_modules/shebang-command
+520 silly packumentCache corgi:https://registry.npmjs.org/shebang-command cache-miss
+521 http fetch GET 200 https://registry.npmjs.org/resolve-from 62ms (cache miss)
+522 silly packumentCache corgi:https://registry.npmjs.org/resolve-from set size:undefined disposed:false
+523 silly inflate node_modules/shebang-regex
+524 silly packumentCache corgi:https://registry.npmjs.org/shebang-regex cache-miss
+525 http fetch GET 200 https://registry.npmjs.org/regenerator-runtime 77ms (cache miss)
+526 silly packumentCache corgi:https://registry.npmjs.org/regenerator-runtime set size:undefined disposed:false
+527 silly inflate node_modules/signal-exit
+528 silly packumentCache corgi:https://registry.npmjs.org/signal-exit cache-miss
+529 http fetch GET 200 https://registry.npmjs.org/resolve 79ms (cache miss)
+530 silly packumentCache corgi:https://registry.npmjs.org/resolve set size:undefined disposed:false
+531 silly inflate node_modules/sirv
+532 silly packumentCache corgi:https://registry.npmjs.org/sirv cache-miss
+533 http fetch GET 200 https://registry.npmjs.org/safe-buffer 70ms (cache miss)
+534 silly packumentCache corgi:https://registry.npmjs.org/safe-buffer set size:undefined disposed:false
+535 silly inflate node_modules/source-map
+536 silly packumentCache corgi:https://registry.npmjs.org/source-map cache-miss
+537 http fetch GET 200 https://registry.npmjs.org/rifm 80ms (cache miss)
+538 silly packumentCache corgi:https://registry.npmjs.org/rifm set size:undefined disposed:false
+539 silly inflate node_modules/string-width
+540 silly packumentCache corgi:https://registry.npmjs.org/string-width cache-miss
+541 http fetch GET 200 https://registry.npmjs.org/rimraf 79ms (cache miss)
+542 silly packumentCache corgi:https://registry.npmjs.org/rimraf set size:undefined disposed:false
+543 silly inflate node_modules/string-width-cjs
+544 silly packumentCache corgi:https://registry.npmjs.org/string-width-cjs cache-miss
+545 http fetch GET 200 https://registry.npmjs.org/shebang-command 46ms (cache miss)
+546 silly packumentCache corgi:https://registry.npmjs.org/shebang-command set size:undefined disposed:false
+547 silly inflate node_modules/string-width-cjs/node_modules/ansi-regex
+548 silly packumentCache corgi:https://registry.npmjs.org/ansi-regex cache-miss
+549 http cache https://registry.npmjs.org/ansi-regex 7ms (cache hit)
+550 silly packumentCache corgi:https://registry.npmjs.org/ansi-regex set size:19268 disposed:false
+551 silly inflate node_modules/string-width-cjs/node_modules/emoji-regex
+552 silly packumentCache corgi:https://registry.npmjs.org/emoji-regex cache-miss
+553 http cache https://registry.npmjs.org/emoji-regex 8ms (cache hit)
+554 silly packumentCache corgi:https://registry.npmjs.org/emoji-regex set size:40047 disposed:false
+555 silly inflate node_modules/string-width-cjs/node_modules/strip-ansi
+556 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi cache-miss
+557 http fetch GET 200 https://registry.npmjs.org/shebang-regex 62ms (cache miss)
+558 silly packumentCache corgi:https://registry.npmjs.org/shebang-regex set size:undefined disposed:false
+559 silly inflate node_modules/strip-ansi
+560 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi cache-miss
+561 http fetch GET 200 https://registry.npmjs.org/signal-exit 72ms (cache miss)
+562 silly packumentCache corgi:https://registry.npmjs.org/signal-exit set size:undefined disposed:false
+563 silly inflate node_modules/strip-ansi-cjs
+564 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi-cjs cache-miss
+565 http fetch GET 200 https://registry.npmjs.org/sirv 64ms (cache miss)
+566 silly packumentCache corgi:https://registry.npmjs.org/sirv set size:undefined disposed:false
+567 silly inflate node_modules/strip-ansi-cjs/node_modules/ansi-regex
+568 silly packumentCache corgi:https://registry.npmjs.org/ansi-regex cache-hit
+569 silly inflate node_modules/stylis
+570 silly packumentCache corgi:https://registry.npmjs.org/stylis cache-miss
+571 http fetch GET 200 https://registry.npmjs.org/source-map 65ms (cache miss)
+572 silly packumentCache corgi:https://registry.npmjs.org/source-map set size:undefined disposed:false
+573 silly inflate node_modules/supports-color
+574 silly packumentCache corgi:https://registry.npmjs.org/supports-color cache-miss
+575 http fetch GET 200 https://registry.npmjs.org/string-width 66ms (cache miss)
+576 silly packumentCache corgi:https://registry.npmjs.org/string-width set size:undefined disposed:false
+577 silly inflate node_modules/tiny-warning
+578 silly packumentCache corgi:https://registry.npmjs.org/tiny-warning cache-miss
+579 http cache https://registry.npmjs.org/supports-color 11ms (cache hit)
+580 silly packumentCache corgi:https://registry.npmjs.org/supports-color set size:54084 disposed:false
+581 silly inflate node_modules/to-fast-properties
+582 silly packumentCache corgi:https://registry.npmjs.org/to-fast-properties cache-miss
+583 http fetch GET 200 https://registry.npmjs.org/string-width-cjs 74ms (cache miss)
+584 silly packumentCache corgi:https://registry.npmjs.org/string-width-cjs set size:undefined disposed:false
+585 warn old lockfile Could not fetch metadata for string-width-cjs@4.2.3 string-width-cjs: No matching version found for string-width-cjs@4.2.3.
+585 warn old lockfile     at module.exports (C:\Program Files\nodejs\node_modules\npm\node_modules\npm-pick-manifest\lib\index.js:215:23)
+585 warn old lockfile     at RegistryFetcher.manifest (C:\Program Files\nodejs\node_modules\npm\node_modules\pacote\lib\registry.js:130:54)
+585 warn old lockfile     at async C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\build-ideal-tree.js:715:24 {
+585 warn old lockfile   code: 'ETARGET',
+585 warn old lockfile   type: 'version',
+585 warn old lockfile   wanted: '4.2.3',
+585 warn old lockfile   versions: [ '1.0.0', '5.1.1' ],
+585 warn old lockfile   distTags: { latest: '5.1.1' },
+585 warn old lockfile   defaultTag: 'latest'
+585 warn old lockfile }
+586 silly inflate node_modules/totalist
+587 silly packumentCache corgi:https://registry.npmjs.org/totalist cache-miss
+588 http fetch GET 200 https://registry.npmjs.org/strip-ansi 52ms (cache miss)
+589 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi set size:undefined disposed:false
+590 silly inflate node_modules/webpack-bundle-analyzer
+591 silly packumentCache corgi:https://registry.npmjs.org/webpack-bundle-analyzer cache-miss
+592 http fetch GET 200 https://registry.npmjs.org/strip-ansi 58ms (cache miss)
+593 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi set size:undefined disposed:false
+594 silly inflate node_modules/which
+595 silly packumentCache corgi:https://registry.npmjs.org/which cache-miss
+596 http fetch GET 200 https://registry.npmjs.org/stylis 73ms (cache miss)
+597 silly packumentCache corgi:https://registry.npmjs.org/stylis set size:undefined disposed:false
+598 silly inflate node_modules/wrap-ansi
+599 silly packumentCache corgi:https://registry.npmjs.org/wrap-ansi cache-miss
+600 http fetch GET 200 https://registry.npmjs.org/totalist 62ms (cache miss)
+601 silly packumentCache corgi:https://registry.npmjs.org/totalist set size:undefined disposed:false
+602 silly inflate node_modules/wrap-ansi/node_modules/ansi-styles
+603 silly packumentCache corgi:https://registry.npmjs.org/ansi-styles cache-hit
+604 silly inflate node_modules/wrap-ansi-cjs
+605 silly packumentCache corgi:https://registry.npmjs.org/wrap-ansi-cjs cache-miss
+606 http fetch GET 200 https://registry.npmjs.org/which 56ms (cache miss)
+607 silly packumentCache corgi:https://registry.npmjs.org/which set size:undefined disposed:false
+608 silly inflate node_modules/wrap-ansi-cjs/node_modules/ansi-regex
+609 silly packumentCache corgi:https://registry.npmjs.org/ansi-regex cache-hit
+610 silly inflate node_modules/wrap-ansi-cjs/node_modules/emoji-regex
+611 silly packumentCache corgi:https://registry.npmjs.org/emoji-regex cache-hit
+612 silly inflate node_modules/wrap-ansi-cjs/node_modules/string-width
+613 silly packumentCache corgi:https://registry.npmjs.org/string-width cache-miss
+614 http cache https://registry.npmjs.org/string-width 11ms (cache hit)
+615 silly packumentCache corgi:https://registry.npmjs.org/string-width set size:31752 disposed:false
+616 silly inflate node_modules/wrap-ansi-cjs/node_modules/strip-ansi
+617 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi cache-miss
+618 http fetch GET 200 https://registry.npmjs.org/strip-ansi-cjs 118ms (cache miss)
+619 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi-cjs set size:undefined disposed:false
+620 warn old lockfile Could not fetch metadata for strip-ansi-cjs@6.0.1 strip-ansi-cjs: No matching version found for strip-ansi-cjs@6.0.1.
+620 warn old lockfile     at module.exports (C:\Program Files\nodejs\node_modules\npm\node_modules\npm-pick-manifest\lib\index.js:215:23)
+620 warn old lockfile     at RegistryFetcher.manifest (C:\Program Files\nodejs\node_modules\npm\node_modules\pacote\lib\registry.js:130:54)
+620 warn old lockfile     at async C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\build-ideal-tree.js:715:24 {
+620 warn old lockfile   code: 'ETARGET',
+620 warn old lockfile   type: 'version',
+620 warn old lockfile   wanted: '6.0.1',
+620 warn old lockfile   versions: [ '1.0.0', '2.0.0', '8.0.0' ],
+620 warn old lockfile   distTags: { latest: '8.0.0' },
+620 warn old lockfile   defaultTag: 'latest'
+620 warn old lockfile }
+621 silly inflate node_modules/ws
+622 silly packumentCache corgi:https://registry.npmjs.org/ws cache-miss
+623 http fetch GET 200 https://registry.npmjs.org/webpack-bundle-analyzer 79ms (cache miss)
+624 silly packumentCache corgi:https://registry.npmjs.org/webpack-bundle-analyzer set size:undefined disposed:false
+625 silly inflate node_modules/yaml
+626 silly packumentCache corgi:https://registry.npmjs.org/yaml cache-miss
+627 http cache https://registry.npmjs.org/strip-ansi 14ms (cache hit)
+628 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi set size:19300 disposed:false
+629 http fetch GET 200 https://registry.npmjs.org/tiny-warning 114ms (cache miss)
+630 silly packumentCache corgi:https://registry.npmjs.org/tiny-warning set size:undefined disposed:false
+631 http fetch GET 200 https://registry.npmjs.org/wrap-ansi 66ms (cache miss)
+632 silly packumentCache corgi:https://registry.npmjs.org/wrap-ansi set size:undefined disposed:false
+633 http fetch GET 200 https://registry.npmjs.org/to-fast-properties 123ms (cache miss)
+634 silly packumentCache corgi:https://registry.npmjs.org/to-fast-properties set size:undefined disposed:false
+635 http fetch GET 200 https://registry.npmjs.org/wrap-ansi-cjs 58ms (cache miss)
+636 silly packumentCache corgi:https://registry.npmjs.org/wrap-ansi-cjs set size:undefined disposed:false
+637 warn old lockfile Could not fetch metadata for wrap-ansi-cjs@7.0.0 wrap-ansi-cjs: No matching version found for wrap-ansi-cjs@7.0.0.
+637 warn old lockfile     at module.exports (C:\Program Files\nodejs\node_modules\npm\node_modules\npm-pick-manifest\lib\index.js:215:23)
+637 warn old lockfile     at RegistryFetcher.manifest (C:\Program Files\nodejs\node_modules\npm\node_modules\pacote\lib\registry.js:130:54)
+637 warn old lockfile     at async C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\build-ideal-tree.js:715:24 {
+637 warn old lockfile   code: 'ETARGET',
+637 warn old lockfile   type: 'version',
+637 warn old lockfile   wanted: '7.0.0',
+637 warn old lockfile   versions: [ '1.0.0', '8.0.0' ],
+637 warn old lockfile   distTags: { latest: '8.0.0' },
+637 warn old lockfile   defaultTag: 'latest'
+637 warn old lockfile }
+638 http fetch GET 200 https://registry.npmjs.org/yaml 61ms (cache miss)
+639 silly packumentCache corgi:https://registry.npmjs.org/yaml set size:undefined disposed:false
+640 http fetch GET 200 https://registry.npmjs.org/ws 71ms (cache miss)
+641 silly packumentCache corgi:https://registry.npmjs.org/ws set size:undefined disposed:false
+642 silly idealTree buildDeps
+643 silly fetch manifest expo-image-manipulator@~14.0.8
+644 silly packumentCache full:https://registry.npmjs.org/expo-image-manipulator cache-miss
+645 http fetch GET 200 https://registry.npmjs.org/expo-image-manipulator 97ms (cache miss)
+646 silly packumentCache full:https://registry.npmjs.org/expo-image-manipulator set size:undefined disposed:false
+647 silly fetch manifest expo@*
+648 silly packumentCache full:https://registry.npmjs.org/expo cache-miss
+649 http fetch GET 200 https://registry.npmjs.org/expo 172ms (cache miss)
+650 silly packumentCache full:https://registry.npmjs.org/expo set size:undefined disposed:false
+651 silly fetch manifest @expo/metro-runtime@*
+652 silly packumentCache full:https://registry.npmjs.org/@expo%2fmetro-runtime cache-miss
+653 http fetch GET 200 https://registry.npmjs.org/@expo%2fmetro-runtime 103ms (cache miss)
+654 silly packumentCache full:https://registry.npmjs.org/@expo%2fmetro-runtime set size:undefined disposed:false
+655 silly fetch manifest react@*
+656 silly packumentCache full:https://registry.npmjs.org/react cache-miss
+657 http fetch GET 200 https://registry.npmjs.org/react 278ms (cache miss)
+658 silly packumentCache full:https://registry.npmjs.org/react set size:undefined disposed:false
+659 silly fetch manifest react-dom@*
+660 silly packumentCache full:https://registry.npmjs.org/react-dom cache-miss
+661 http fetch GET 200 https://registry.npmjs.org/react-dom 292ms (cache miss)
+662 silly packumentCache full:https://registry.npmjs.org/react-dom set size:undefined disposed:false
+663 silly fetch manifest react-native@*
+664 silly packumentCache full:https://registry.npmjs.org/react-native cache-miss
+665 http fetch GET 200 https://registry.npmjs.org/react-native 317ms (cache miss)
+666 silly packumentCache full:https://registry.npmjs.org/react-native set size:undefined disposed:false
+667 silly fetch manifest @react-native/jest-preset@0.86.0
+668 silly packumentCache full:https://registry.npmjs.org/@react-native%2fjest-preset cache-miss
+669 http fetch GET 200 https://registry.npmjs.org/@react-native%2fjest-preset 65ms (cache miss)
+670 silly packumentCache full:https://registry.npmjs.org/@react-native%2fjest-preset set size:undefined disposed:false
+671 silly fetch manifest @types/react@^19.1.1
+672 silly packumentCache full:https://registry.npmjs.org/@types%2freact cache-miss
+673 http fetch GET 200 https://registry.npmjs.org/@types%2freact 180ms (cache miss)
+674 silly packumentCache full:https://registry.npmjs.org/@types%2freact set size:undefined disposed:false
+675 silly fetch manifest react-native-web@*
+676 silly packumentCache full:https://registry.npmjs.org/react-native-web cache-miss
+677 http fetch GET 200 https://registry.npmjs.org/react-native-web 151ms (cache miss)
+678 silly packumentCache full:https://registry.npmjs.org/react-native-web set size:undefined disposed:false
+679 silly fetch manifest react-native-webview@*
+680 silly packumentCache full:https://registry.npmjs.org/react-native-webview cache-miss
+681 http fetch GET 200 https://registry.npmjs.org/react-native-webview 113ms (cache miss)
+682 silly packumentCache full:https://registry.npmjs.org/react-native-webview set size:undefined disposed:false
+683 verbose stack Error: could not resolve
+683 verbose stack     at PlaceDep.failPeerConflict (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\place-dep.js:503:25)
+683 verbose stack     at new PlaceDep (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\place-dep.js:157:21)
+683 verbose stack     at #buildDepStep (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\build-ideal-tree.js:920:18)
+683 verbose stack     at async Arborist.buildIdealTree (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\build-ideal-tree.js:181:7)
+683 verbose stack     at async Promise.all (index 1)
+683 verbose stack     at async Arborist.reify (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\reify.js:131:5)
+683 verbose stack     at async Install.exec (C:\Program Files\nodejs\node_modules\npm\lib\commands\install.js:150:5)
+683 verbose stack     at async Npm.exec (C:\Program Files\nodejs\node_modules\npm\lib\npm.js:207:9)
+683 verbose stack     at async module.exports (C:\Program Files\nodejs\node_modules\npm\lib\cli\entry.js:74:5)
+684 error code ERESOLVE
+685 error ERESOLVE could not resolve
+686 error
+687 error While resolving: undefined@undefined
+687 error Found: @types/react@17.0.24
+687 error node_modules/@types/react
+687 error   peerOptional @types/react@"^16.8.6 || ^17.0.0" from @mui/lab@5.0.0-alpha.48
+687 error   node_modules/@mui/lab
+687 error   peerOptional @types/react@"^16.8.6 || ^17.0.0" from @mui/icons-material@5.0.1
+687 error   node_modules/@mui/icons-material
+687 error   8 more (@mui/core, @mui/private-theming, @mui/types, ...)
+687 error
+687 error Could not resolve dependency:
+687 error expo-image-manipulator@"~14.0.8" from the root project
+687 error
+687 error Conflicting peer dependency: @types/react@19.2.17
+687 error node_modules/@types/react
+687 error   peerOptional @types/react@"^19.1.1" from react-native@0.86.0
+687 error   node_modules/react-native
+687 error     peer react-native@"*" from expo@56.0.12
+687 error     node_modules/expo
+687 error       peer expo@"*" from expo-image-manipulator@14.0.8
+687 error       node_modules/expo-image-manipulator
+687 error         expo-image-manipulator@"~14.0.8" from the root project
+687 error       1 more (@expo/metro-runtime)
+687 error     peer react-native@"*" from @expo/metro-runtime@56.0.15
+687 error     node_modules/@expo/metro-runtime
+687 error       peerOptional @expo/metro-runtime@"*" from expo@56.0.12
+687 error     1 more (react-native-webview)
+687 error
+687 error Fix the upstream dependency conflict, or retry
+687 error this command with --force or --legacy-peer-deps
+687 error to accept an incorrect (and potentially broken) dependency resolution.
+688 error
+688 error
+688 error For a full report see:
+688 error C:\Users\phalton\Documents\shindigapp\shindig\.npm-cache\_logs\2026-06-24T03_26_31_078Z-eresolve-report.txt
+689 silly unfinished npm timer reify 1782271592001
+690 silly unfinished npm timer reify:loadTrees 1782271592074
+691 silly unfinished npm timer idealTree:buildDeps 1782271594473
+692 silly unfinished npm timer idealTree:#root 1782271594473
+693 verbose cwd C:\Users\phalton\Documents\RRCloudWeb
+694 verbose os Windows_NT 10.0.26200
+695 verbose node v22.14.0
+696 verbose npm  v10.9.2
+697 notice
+697 notice New major version of npm available! 10.9.2 -> 11.17.0
+697 notice Changelog: https://github.com/npm/cli/releases/tag/v11.17.0
+697 notice To update run: npm install -g npm@11.17.0
+697 notice  { force: true, [Symbol(proc-log.meta)]: true }
+698 verbose exit 1
+699 verbose code 1
+700 error A complete log of this run can be found in: C:\Users\phalton\Documents\shindigapp\shindig\.npm-cache\_logs\2026-06-24T03_26_31_078Z-debug-0.log

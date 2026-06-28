@@ -1,0 +1,163 @@
+'Log files:
+C:\Users\phalton\Documents\shindigapp\shindig\.npm-cache\_logs\2026-06-24T03_26_31_078Z-debug-0.log
+
+# npm resolution error report
+
+While resolving: undefined@undefined
+Found: @types/react@17.0.24
+node_modules/@types/react
+  peerOptional @types/react@"^16.8.6 || ^17.0.0" from @mui/lab@5.0.0-alpha.48
+  node_modules/@mui/lab
+  peerOptional @types/react@"^16.8.6 || ^17.0.0" from @mui/icons-material@5.0.1
+  node_modules/@mui/icons-material
+  peerOptional @types/react@"^16.8.6 || ^17.0.0" from @mui/core@5.0.0-alpha.48
+  node_modules/@mui/core
+    @mui/core@"5.0.0-alpha.48" from @mui/lab@5.0.0-alpha.48
+    node_modules/@mui/lab
+    @mui/core@"5.0.0-alpha.48" from @mui/material@5.0.1
+    node_modules/@mui/material
+      peer @mui/material@"^5.0.0-rc.0" from @mui/lab@5.0.0-alpha.48
+      node_modules/@mui/lab
+      peer @mui/material@"^5.0.0-rc.0" from @mui/icons-material@5.0.1
+      node_modules/@mui/icons-material
+  peerOptional @types/react@"^16.8.6 || ^17.0.0" from @mui/private-theming@5.0.1
+  node_modules/@mui/private-theming
+    @mui/private-theming@"^5.0.1" from @mui/system@5.0.1
+    node_modules/@mui/system
+      @mui/system@"^5.0.1" from @mui/lab@5.0.0-alpha.48
+      node_modules/@mui/lab
+      @mui/system@"^5.0.1" from @mui/material@5.0.1
+      node_modules/@mui/material
+        peer @mui/material@"^5.0.0-rc.0" from @mui/lab@5.0.0-alpha.48
+        node_modules/@mui/lab
+        peer @mui/material@"^5.0.0-rc.0" from @mui/icons-material@5.0.1
+        node_modules/@mui/icons-material
+    @mui/private-theming@"^5.0.1" from @mui/styles@5.0.1
+    node_modules/@mui/styles
+  peerOptional @types/react@"*" from @mui/types@7.0.0
+  node_modules/@mui/types
+    @mui/types@"^7.0.0" from @mui/system@5.0.1
+    node_modules/@mui/system
+      @mui/system@"^5.0.1" from @mui/lab@5.0.0-alpha.48
+      node_modules/@mui/lab
+      @mui/system@"^5.0.1" from @mui/material@5.0.1
+      node_modules/@mui/material
+        peer @mui/material@"^5.0.0-rc.0" from @mui/lab@5.0.0-alpha.48
+        node_modules/@mui/lab
+        peer @mui/material@"^5.0.0-rc.0" from @mui/icons-material@5.0.1
+        node_modules/@mui/icons-material
+    @mui/types@"^7.0.0" from @mui/material@5.0.1
+    node_modules/@mui/material
+      peer @mui/material@"^5.0.0-rc.0" from @mui/lab@5.0.0-alpha.48
+      node_modules/@mui/lab
+      peer @mui/material@"^5.0.0-rc.0" from @mui/icons-material@5.0.1
+      node_modules/@mui/icons-material
+    @mui/types@"^7.0.0" from @mui/styles@5.0.1
+    node_modules/@mui/styles
+  peerOptional @types/react@"^16.8.6 || ^17.0.0" from @mui/system@5.0.1
+  node_modules/@mui/system
+    @mui/system@"^5.0.1" from @mui/lab@5.0.0-alpha.48
+    node_modules/@mui/lab
+    @mui/system@"^5.0.1" from @mui/material@5.0.1
+    node_modules/@mui/material
+      peer @mui/material@"^5.0.0-rc.0" from @mui/lab@5.0.0-alpha.48
+      node_modules/@mui/lab
+      peer @mui/material@"^5.0.0-rc.0" from @mui/icons-material@5.0.1
+      node_modules/@mui/icons-material
+  peerOptional @types/react@"^16.8.6 || ^17.0.0" from @mui/material@5.0.1
+  node_modules/@mui/material
+    peer @mui/material@"^5.0.0-rc.0" from @mui/lab@5.0.0-alpha.48
+    node_modules/@mui/lab
+    peer @mui/material@"^5.0.0-rc.0" from @mui/icons-material@5.0.1
+    node_modules/@mui/icons-material
+  @types/react@"*" from @types/react-is@17.0.2
+  node_modules/@types/react-is
+    @types/react-is@"^16.7.1 || ^17.0.0" from @mui/utils@5.0.1
+    node_modules/@mui/utils
+      @mui/utils@"^5.0.1" from @mui/lab@5.0.0-alpha.48
+      node_modules/@mui/lab
+      @mui/utils@"^5.0.1" from @mui/core@5.0.0-alpha.48
+      node_modules/@mui/core
+        @mui/core@"5.0.0-alpha.48" from @mui/lab@5.0.0-alpha.48
+        node_modules/@mui/lab
+        @mui/core@"5.0.0-alpha.48" from @mui/material@5.0.1
+        node_modules/@mui/material
+          peer @mui/material@"^5.0.0-rc.0" from @mui/lab@5.0.0-alpha.48
+          node_modules/@mui/lab
+          peer @mui/material@"^5.0.0-rc.0" from @mui/icons-material@5.0.1
+          node_modules/@mui/icons-material
+      @mui/utils@"^5.0.1" from @mui/private-theming@5.0.1
+      node_modules/@mui/private-theming
+        @mui/private-theming@"^5.0.1" from @mui/system@5.0.1
+        node_modules/@mui/system
+          @mui/system@"^5.0.1" from @mui/lab@5.0.0-alpha.48
+          node_modules/@mui/lab
+          @mui/system@"^5.0.1" from @mui/material@5.0.1
+          node_modules/@mui/material
+            peer @mui/material@"^5.0.0-rc.0" from @mui/lab@5.0.0-alpha.48
+            node_modules/@mui/lab
+            peer @mui/material@"^5.0.0-rc.0" from @mui/icons-material@5.0.1
+            node_modules/@mui/icons-material
+        @mui/private-theming@"^5.0.1" from @mui/styles@5.0.1
+        node_modules/@mui/styles
+      @mui/utils@"^5.0.1" from @mui/system@5.0.1
+      node_modules/@mui/system
+        @mui/system@"^5.0.1" from @mui/lab@5.0.0-alpha.48
+        node_modules/@mui/lab
+        @mui/system@"^5.0.1" from @mui/material@5.0.1
+        node_modules/@mui/material
+          peer @mui/material@"^5.0.0-rc.0" from @mui/lab@5.0.0-alpha.48
+          node_modules/@mui/lab
+          peer @mui/material@"^5.0.0-rc.0" from @mui/icons-material@5.0.1
+          node_modules/@mui/icons-material
+      @mui/utils@"^5.0.1" from @mui/material@5.0.1
+      node_modules/@mui/material
+        peer @mui/material@"^5.0.0-rc.0" from @mui/lab@5.0.0-alpha.48
+        node_modules/@mui/lab
+        peer @mui/material@"^5.0.0-rc.0" from @mui/icons-material@5.0.1
+        node_modules/@mui/icons-material
+      @mui/utils@"^5.0.1" from @mui/styles@5.0.1
+      node_modules/@mui/styles
+  @types/react@"*" from @types/react-transition-group@4.4.3
+  node_modules/@types/react-transition-group
+    @types/react-transition-group@"^4.4.3" from @mui/material@5.0.1
+    node_modules/@mui/material
+      peer @mui/material@"^5.0.0-rc.0" from @mui/lab@5.0.0-alpha.48
+      node_modules/@mui/lab
+      peer @mui/material@"^5.0.0-rc.0" from @mui/icons-material@5.0.1
+      node_modules/@mui/icons-material
+  peerOptional @types/react@"^16.8.6 || ^17.0.0" from @mui/styles@5.0.1
+  node_modules/@mui/styles
+
+Could not resolve dependency:
+expo-image-manipulator@"~14.0.8" from the root project
+
+Conflicting peer dependency: @types/react@19.2.17
+node_modules/@types/react
+  peerOptional @types/react@"^19.1.1" from react-native@0.86.0
+  node_modules/react-native
+    peer react-native@"*" from expo@56.0.12
+    node_modules/expo
+      peer expo@"*" from expo-image-manipulator@14.0.8
+      node_modules/expo-image-manipulator
+        expo-image-manipulator@"~14.0.8" from the root project
+      peer expo@"*" from @expo/metro-runtime@56.0.15
+      node_modules/@expo/metro-runtime
+        peerOptional @expo/metro-runtime@"*" from expo@56.0.12
+    peer react-native@"*" from @expo/metro-runtime@56.0.15
+    node_modules/@expo/metro-runtime
+      peerOptional @expo/metro-runtime@"*" from expo@56.0.12
+    peer react-native@"*" from react-native-webview@14.0.1
+    node_modules/react-native-webview
+      peerOptional react-native-webview@"*" from expo@56.0.12
+      node_modules/expo
+        peer expo@"*" from expo-image-manipulator@14.0.8
+        node_modules/expo-image-manipulator
+          expo-image-manipulator@"~14.0.8" from the root project
+        peer expo@"*" from @expo/metro-runtime@56.0.15
+        node_modules/@expo/metro-runtime
+          peerOptional @expo/metro-runtime@"*" from expo@56.0.12
+
+Fix the upstream dependency conflict, or retry
+this command with --force or --legacy-peer-deps
+to accept an incorrect (and potentially broken) dependency resolution.

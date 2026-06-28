@@ -47,7 +47,7 @@ export type FeedComment = {
   id: string;
 };
 
-export type ShindigState = 'active' | 'completed';
+export type ShindigState = 'active' | 'completed' | 'planned';
 
 export type SavedShindigStop = {
   id: string;
@@ -65,20 +65,43 @@ export type SavedShindigPhoto = {
   likeCount: number;
   likedByMe: boolean;
   photoUrl: string;
+  thumbnailUrl?: string | null;
   stopId: string;
 };
 
+export type ShindigBringItem = {
+  claimedAt?: string | null;
+  claimedBy?: FriendProfile;
+  createdAt: string;
+  isCustom?: boolean;
+  id: string;
+  label: string;
+};
+
+export type ShindigInviteParticipant = {
+  invitedAt?: string;
+  isOwner?: boolean;
+  profile: FriendProfile;
+  status: 'accepted' | 'maybe' | 'pending' | 'rejected';
+};
+
 export type SavedShindig = {
+  bringItems: ShindigBringItem[];
   comments: FeedComment[];
   coverPhotoUrl: string | null;
+  coverPhotoThumbnailUrl?: string | null;
   coverPhotoPhotoId?: string | null;
   createdAt: string;
   id: string;
   invitedBy?: FriendProfile;
+  inviteId?: string;
+  inviteParticipants: ShindigInviteParticipant[];
+  inviteStatus?: 'accepted' | 'maybe' | 'pending' | 'rejected';
   likeCount: number;
   likedByMe: boolean;
   ownerId: string;
   photoCount: number;
+  plannedFor?: string | null;
   state: ShindigState;
   stops: SavedShindigStop[];
   title: string;
@@ -93,13 +116,15 @@ export type AppNotification = {
   createdAt: string;
   id: string;
   inviteId?: string;
-  inviteStatus?: 'accepted' | 'pending' | 'rejected';
+  inviteStatus?: 'accepted' | 'maybe' | 'pending' | 'rejected';
   message: string;
   photoId?: string;
   requestId?: string;
   requestPhotoUrl?: string;
   requestStatus?: 'approved' | 'pending' | 'rejected';
   readAt?: string;
+  shindigPlannedFor?: string | null;
+  shindigState?: ShindigState;
   shindigId?: string;
   type:
     | 'friend_accept'
@@ -108,6 +133,7 @@ export type AppNotification = {
     | 'photo_add_request'
     | 'photo_comment'
     | 'photo_like'
+    | 'shindig_bring_item'
     | 'shindig_invite'
     | 'shindig_comment'
     | 'shindig_like';

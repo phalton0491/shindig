@@ -1,0 +1,32 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.9.2
+2 info using node@v22.14.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\phalton\Documents\RRCloudWeb\.npmrc
+5 silly config load:file:C:\Users\phalton\.npmrc
+6 silly config load:file:C:\Users\phalton\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install expo-image-manipulator@~14.0.8
+8 verbose argv "install" "expo-image-manipulator@~14.0.8" "--legacy-peer-deps" "--save"
+9 verbose logfile logs-max:10 dir:C:\Users\phalton\Documents\shindigapp\shindig\.npm-cache\_logs\2026-06-24T03_30_37_440Z-
+10 verbose logfile C:\Users\phalton\Documents\shindigapp\shindig\.npm-cache\_logs\2026-06-24T03_30_37_440Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+13 silly idealTree buildDeps
+14 silly fetch manifest expo-image-manipulator@~14.0.8
+15 silly packumentCache full:https://registry.npmjs.org/expo-image-manipulator cache-miss
+16 http cache https://registry.npmjs.org/expo-image-manipulator 27ms (cache hit)
+17 silly packumentCache full:https://registry.npmjs.org/expo-image-manipulator set size:829201 disposed:false
+18 silly placeDep ROOT expo-image-manipulator@14.0.8 REPLACE for:  want: ~14.0.8
+19 silly reify moves {}
+20 silly audit bulk request {
+20 silly audit   'expo-image-loader': [ '6.0.0' ],
+20 silly audit   'expo-image-manipulator': [ '14.0.8' ]
+20 silly audit }
+21 http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 334ms
+22 silly audit report {}
+23 verbose cwd C:\Users\phalton\Documents\RRCloudWeb
+24 verbose os Windows_NT 10.0.26200
+25 verbose node v22.14.0
+26 verbose npm  v10.9.2
+27 verbose exit 0
+28 info ok

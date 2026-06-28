@@ -28,6 +28,7 @@ module.exports = () => ({
           'Allow ShinDig to access your contacts so you can invite friends to your ShinDig.',
       },
     ],
+    '@react-native-community/datetimepicker',
     [
       'expo-notifications',
       {

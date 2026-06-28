@@ -82,7 +82,7 @@ export function ProgressiveImage({
         onError={() => setIsLoaded(true)}
         onLoadEnd={() => setIsLoaded(true)}
         resizeMode={resizeMode}
-        source={{ uri: sourceUri }}
+        source={{ cache: 'force-cache', uri: sourceUri }}
         style={[styles.image, imageStyle, !isLoaded && styles.imageHidden]}
       />
       {children}

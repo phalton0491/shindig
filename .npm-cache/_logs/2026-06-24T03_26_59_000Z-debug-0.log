@@ -1,0 +1,1408 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.9.2
+2 info using node@v22.14.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\phalton\Documents\RRCloudWeb\.npmrc
+5 silly config load:file:C:\Users\phalton\.npmrc
+6 silly config load:file:C:\Users\phalton\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install expo-image-manipulator@~14.0.8
+8 verbose argv "install" "expo-image-manipulator@~14.0.8" "--legacy-peer-deps"
+9 verbose logfile logs-max:10 dir:C:\Users\phalton\Documents\shindigapp\shindig\.npm-cache\_logs\2026-06-24T03_26_59_000Z-
+10 verbose logfile C:\Users\phalton\Documents\shindigapp\shindig\.npm-cache\_logs\2026-06-24T03_26_59_000Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+13 warn old lockfile
+13 warn old lockfile The package-lock.json file was created with an old version of npm,
+13 warn old lockfile so supplemental metadata must be fetched from the registry.
+13 warn old lockfile
+13 warn old lockfile This is a one-time fix-up, please be patient...
+13 warn old lockfile
+14 silly inflate node_modules/@babel/code-frame
+15 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fcode-frame cache-miss
+16 silly inflate node_modules/@babel/helper-module-imports
+17 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhelper-module-imports cache-miss
+18 silly inflate node_modules/@babel/helper-plugin-utils
+19 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhelper-plugin-utils cache-miss
+20 silly inflate node_modules/@babel/helper-validator-identifier
+21 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhelper-validator-identifier cache-miss
+22 silly inflate node_modules/@babel/highlight
+23 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhighlight cache-miss
+24 silly inflate node_modules/@babel/highlight/node_modules/ansi-styles
+25 silly packumentCache corgi:https://registry.npmjs.org/ansi-styles cache-miss
+26 silly inflate node_modules/@babel/highlight/node_modules/chalk
+27 silly packumentCache corgi:https://registry.npmjs.org/chalk cache-miss
+28 http cache https://registry.npmjs.org/@babel%2fcode-frame 72ms (cache hit)
+29 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fcode-frame set size:97305 disposed:false
+30 silly inflate node_modules/@babel/highlight/node_modules/color-convert
+31 silly packumentCache corgi:https://registry.npmjs.org/color-convert cache-miss
+32 http cache https://registry.npmjs.org/@babel%2fhelper-module-imports 91ms (cache hit)
+33 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhelper-module-imports set size:100848 disposed:false
+34 silly inflate node_modules/@babel/highlight/node_modules/color-name
+35 silly packumentCache corgi:https://registry.npmjs.org/color-name cache-miss
+36 http cache https://registry.npmjs.org/@babel%2fhelper-validator-identifier 94ms (cache hit)
+37 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhelper-validator-identifier set size:63069 disposed:false
+38 silly inflate node_modules/@babel/highlight/node_modules/escape-string-regexp
+39 silly packumentCache corgi:https://registry.npmjs.org/escape-string-regexp cache-miss
+40 http cache https://registry.npmjs.org/@babel%2fhelper-plugin-utils 96ms (cache hit)
+41 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhelper-plugin-utils set size:85166 disposed:false
+42 silly inflate node_modules/@babel/highlight/node_modules/has-flag
+43 silly packumentCache corgi:https://registry.npmjs.org/has-flag cache-miss
+44 http cache https://registry.npmjs.org/ansi-styles 110ms (cache hit)
+45 silly packumentCache corgi:https://registry.npmjs.org/ansi-styles set size:29858 disposed:false
+46 silly inflate node_modules/@babel/highlight/node_modules/supports-color
+47 silly packumentCache corgi:https://registry.npmjs.org/supports-color cache-miss
+48 http cache https://registry.npmjs.org/@babel%2fhighlight 115ms (cache hit)
+49 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fhighlight set size:82105 disposed:false
+50 silly inflate node_modules/@babel/plugin-syntax-jsx
+51 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fplugin-syntax-jsx cache-miss
+52 http cache https://registry.npmjs.org/chalk 117ms (cache hit)
+53 silly packumentCache corgi:https://registry.npmjs.org/chalk set size:47870 disposed:false
+54 silly inflate node_modules/@babel/runtime
+55 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fruntime cache-miss
+56 http cache https://registry.npmjs.org/color-convert 66ms (cache hit)
+57 silly packumentCache corgi:https://registry.npmjs.org/color-convert set size:26557 disposed:false
+58 silly inflate node_modules/@babel/types
+59 silly packumentCache corgi:https://registry.npmjs.org/@babel%2ftypes cache-miss
+60 http cache https://registry.npmjs.org/escape-string-regexp 47ms (cache hit)
+61 silly packumentCache corgi:https://registry.npmjs.org/escape-string-regexp set size:9856 disposed:false
+62 silly inflate node_modules/@date-io/core
+63 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fcore cache-miss
+64 http cache https://registry.npmjs.org/color-name 51ms (cache hit)
+65 silly packumentCache corgi:https://registry.npmjs.org/color-name set size:7908 disposed:false
+66 silly inflate node_modules/@date-io/date-fns
+67 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fdate-fns cache-miss
+68 http cache https://registry.npmjs.org/has-flag 48ms (cache hit)
+69 silly packumentCache corgi:https://registry.npmjs.org/has-flag set size:6334 disposed:false
+70 silly inflate node_modules/@date-io/dayjs
+71 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fdayjs cache-miss
+72 http cache https://registry.npmjs.org/supports-color 35ms (cache hit)
+73 silly packumentCache corgi:https://registry.npmjs.org/supports-color set size:54084 disposed:false
+74 silly inflate node_modules/@date-io/luxon
+75 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fluxon cache-miss
+76 http cache https://registry.npmjs.org/@babel%2fplugin-syntax-jsx 33ms (cache hit)
+77 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fplugin-syntax-jsx set size:98808 disposed:false
+78 silly inflate node_modules/@date-io/moment
+79 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fmoment cache-miss
+80 http cache https://registry.npmjs.org/@babel%2fruntime 34ms (cache hit)
+81 silly packumentCache corgi:https://registry.npmjs.org/@babel%2fruntime set size:225384 disposed:false
+82 silly inflate node_modules/@emotion/babel-plugin
+83 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fbabel-plugin cache-miss
+84 http cache https://registry.npmjs.org/@babel%2ftypes 29ms (cache hit)
+85 silly packumentCache corgi:https://registry.npmjs.org/@babel%2ftypes set size:253452 disposed:false
+86 silly inflate node_modules/@emotion/cache
+87 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fcache cache-miss
+88 http cache https://registry.npmjs.org/@date-io%2fluxon 26ms (cache hit)
+89 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fluxon set size:83731 disposed:false
+90 silly inflate node_modules/@emotion/hash
+91 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fhash cache-miss
+92 http cache https://registry.npmjs.org/@date-io%2fcore 32ms (cache hit)
+93 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fcore set size:64723 disposed:false
+94 silly inflate node_modules/@emotion/is-prop-valid
+95 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fis-prop-valid cache-miss
+96 http cache https://registry.npmjs.org/@date-io%2fdate-fns 33ms (cache hit)
+97 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fdate-fns set size:80866 disposed:false
+98 silly inflate node_modules/@emotion/memoize
+99 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fmemoize cache-miss
+100 http cache https://registry.npmjs.org/@date-io%2fdayjs 33ms (cache hit)
+101 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fdayjs set size:69578 disposed:false
+102 silly inflate node_modules/@emotion/react
+103 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2freact cache-miss
+104 http cache https://registry.npmjs.org/@date-io%2fmoment 31ms (cache hit)
+105 silly packumentCache corgi:https://registry.npmjs.org/@date-io%2fmoment set size:82599 disposed:false
+106 silly inflate node_modules/@emotion/serialize
+107 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fserialize cache-miss
+108 http cache https://registry.npmjs.org/@emotion%2fbabel-plugin 27ms (cache hit)
+109 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fbabel-plugin set size:44116 disposed:false
+110 silly inflate node_modules/@emotion/sheet
+111 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fsheet cache-miss
+112 http cache https://registry.npmjs.org/@emotion%2fcache 25ms (cache hit)
+113 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fcache set size:113035 disposed:false
+114 silly inflate node_modules/@emotion/styled
+115 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fstyled cache-miss
+116 http cache https://registry.npmjs.org/@emotion%2fis-prop-valid 31ms (cache hit)
+117 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fis-prop-valid set size:52220 disposed:false
+118 silly inflate node_modules/@emotion/unitless
+119 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2funitless cache-miss
+120 http cache https://registry.npmjs.org/@emotion%2fhash 35ms (cache hit)
+121 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fhash set size:23270 disposed:false
+122 silly inflate node_modules/@emotion/utils
+123 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2futils cache-miss
+124 http cache https://registry.npmjs.org/@emotion%2fmemoize 34ms (cache hit)
+125 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fmemoize set size:23538 disposed:false
+126 silly inflate node_modules/@emotion/weak-memoize
+127 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fweak-memoize cache-miss
+128 http cache https://registry.npmjs.org/@emotion%2freact 35ms (cache hit)
+129 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2freact set size:78830 disposed:false
+130 silly inflate node_modules/@fortawesome/fontawesome-pro
+131 silly packumentCache corgi:https://npm.fontawesome.com/@fortawesome%2ffontawesome-pro cache-miss
+132 http cache https://registry.npmjs.org/@emotion%2fsheet 33ms (cache hit)
+133 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fsheet set size:51227 disposed:false
+134 silly inflate node_modules/@isaacs/cliui
+135 silly packumentCache corgi:https://registry.npmjs.org/@isaacs%2fcliui cache-miss
+136 http cache https://registry.npmjs.org/@emotion%2fserialize 36ms (cache hit)
+137 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fserialize set size:94759 disposed:false
+138 silly inflate node_modules/@mui/core
+139 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fcore cache-miss
+140 http cache https://registry.npmjs.org/@emotion%2fstyled 35ms (cache hit)
+141 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fstyled set size:153334 disposed:false
+142 silly inflate node_modules/@mui/icons-material
+143 silly packumentCache corgi:https://registry.npmjs.org/@mui%2ficons-material cache-miss
+144 http cache https://registry.npmjs.org/@emotion%2funitless 28ms (cache hit)
+145 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2funitless set size:25074 disposed:false
+146 silly inflate node_modules/@mui/lab
+147 silly packumentCache corgi:https://registry.npmjs.org/@mui%2flab cache-miss
+148 http cache https://registry.npmjs.org/@emotion%2futils 28ms (cache hit)
+149 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2futils set size:42924 disposed:false
+150 silly inflate node_modules/@mui/material
+151 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fmaterial cache-miss
+152 http cache https://registry.npmjs.org/@emotion%2fweak-memoize 27ms (cache hit)
+153 silly packumentCache corgi:https://registry.npmjs.org/@emotion%2fweak-memoize set size:20744 disposed:false
+154 silly inflate node_modules/@mui/private-theming
+155 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fprivate-theming cache-miss
+156 http cache https://npm.fontawesome.com/@fortawesome%2ffontawesome-pro 26ms (cache hit)
+157 silly packumentCache corgi:https://npm.fontawesome.com/@fortawesome%2ffontawesome-pro set size:34626 disposed:false
+158 silly inflate node_modules/@mui/styled-engine
+159 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fstyled-engine cache-miss
+160 http cache https://registry.npmjs.org/@isaacs%2fcliui 26ms (cache hit)
+161 silly packumentCache corgi:https://registry.npmjs.org/@isaacs%2fcliui set size:2915 disposed:false
+162 silly inflate node_modules/@mui/styles
+163 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fstyles cache-miss
+164 http cache https://registry.npmjs.org/@mui%2fcore 27ms (cache hit)
+165 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fcore set size:12820 disposed:false
+166 silly inflate node_modules/@mui/system
+167 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fsystem cache-miss
+168 http cache https://registry.npmjs.org/@mui%2ficons-material 26ms (cache hit)
+169 silly packumentCache corgi:https://registry.npmjs.org/@mui%2ficons-material set size:200844 disposed:false
+170 silly inflate node_modules/@mui/types
+171 silly packumentCache corgi:https://registry.npmjs.org/@mui%2ftypes cache-miss
+172 http cache https://registry.npmjs.org/@mui%2flab 28ms (cache hit)
+173 silly packumentCache corgi:https://registry.npmjs.org/@mui%2flab set size:361198 disposed:false
+174 silly inflate node_modules/@mui/utils
+175 silly packumentCache corgi:https://registry.npmjs.org/@mui%2futils cache-miss
+176 http cache https://registry.npmjs.org/@mui%2fmaterial 32ms (cache hit)
+177 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fmaterial set size:419445 disposed:false
+178 silly inflate node_modules/@polka/url
+179 silly packumentCache corgi:https://registry.npmjs.org/@polka%2furl cache-miss
+180 http cache https://registry.npmjs.org/@mui%2fprivate-theming 37ms (cache hit)
+181 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fprivate-theming set size:191486 disposed:false
+182 silly inflate node_modules/@popperjs/core
+183 silly packumentCache corgi:https://registry.npmjs.org/@popperjs%2fcore cache-miss
+184 http cache https://registry.npmjs.org/@mui%2fstyled-engine 39ms (cache hit)
+185 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fstyled-engine set size:189492 disposed:false
+186 silly inflate node_modules/@types/parse-json
+187 silly packumentCache corgi:https://registry.npmjs.org/@types%2fparse-json cache-miss
+188 http cache https://registry.npmjs.org/@mui%2fstyles 41ms (cache hit)
+189 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fstyles set size:303428 disposed:false
+190 silly inflate node_modules/@types/prop-types
+191 silly packumentCache corgi:https://registry.npmjs.org/@types%2fprop-types cache-miss
+192 http cache https://registry.npmjs.org/@mui%2fsystem 42ms (cache hit)
+193 silly packumentCache corgi:https://registry.npmjs.org/@mui%2fsystem set size:330928 disposed:false
+194 silly inflate node_modules/@types/react
+195 silly packumentCache corgi:https://registry.npmjs.org/@types%2freact cache-miss
+196 http cache https://registry.npmjs.org/@mui%2ftypes 44ms (cache hit)
+197 silly packumentCache corgi:https://registry.npmjs.org/@mui%2ftypes set size:51297 disposed:false
+198 silly inflate node_modules/@types/react-is
+199 silly packumentCache corgi:https://registry.npmjs.org/@types%2freact-is cache-miss
+200 http cache https://registry.npmjs.org/@polka%2furl 35ms (cache hit)
+201 silly packumentCache corgi:https://registry.npmjs.org/@polka%2furl set size:22470 disposed:false
+202 silly inflate node_modules/@types/react-transition-group
+203 silly packumentCache corgi:https://registry.npmjs.org/@types%2freact-transition-group cache-miss
+204 http cache https://registry.npmjs.org/@popperjs%2fcore 33ms (cache hit)
+205 silly packumentCache corgi:https://registry.npmjs.org/@popperjs%2fcore set size:215444 disposed:false
+206 silly inflate node_modules/@types/scheduler
+207 silly packumentCache corgi:https://registry.npmjs.org/@types%2fscheduler cache-miss
+208 http cache https://registry.npmjs.org/@mui%2futils 47ms (cache hit)
+209 silly packumentCache corgi:https://registry.npmjs.org/@mui%2futils set size:190249 disposed:false
+210 silly inflate node_modules/acorn
+211 silly packumentCache corgi:https://registry.npmjs.org/acorn cache-miss
+212 http cache https://registry.npmjs.org/@types%2fparse-json 39ms (cache hit)
+213 silly packumentCache corgi:https://registry.npmjs.org/@types%2fparse-json set size:2955 disposed:false
+214 silly inflate node_modules/acorn-walk
+215 silly packumentCache corgi:https://registry.npmjs.org/acorn-walk cache-miss
+216 http cache https://registry.npmjs.org/@types%2fprop-types 37ms (cache hit)
+217 silly packumentCache corgi:https://registry.npmjs.org/@types%2fprop-types set size:26370 disposed:false
+218 silly inflate node_modules/ansi-regex
+219 silly packumentCache corgi:https://registry.npmjs.org/ansi-regex cache-miss
+220 http cache https://registry.npmjs.org/@types%2freact 35ms (cache hit)
+221 silly packumentCache corgi:https://registry.npmjs.org/@types%2freact set size:664653 disposed:false
+222 silly inflate node_modules/ansi-styles
+223 silly packumentCache corgi:https://registry.npmjs.org/ansi-styles cache-hit
+224 silly inflate node_modules/babel-plugin-macros
+225 silly packumentCache corgi:https://registry.npmjs.org/babel-plugin-macros cache-miss
+226 http cache https://registry.npmjs.org/@types%2freact-is 33ms (cache hit)
+227 silly packumentCache corgi:https://registry.npmjs.org/@types%2freact-is set size:25330 disposed:false
+228 silly inflate node_modules/balanced-match
+229 silly packumentCache corgi:https://registry.npmjs.org/balanced-match cache-miss
+230 http cache https://registry.npmjs.org/@types%2freact-transition-group 35ms (cache hit)
+231 silly packumentCache corgi:https://registry.npmjs.org/@types%2freact-transition-group set size:55599 disposed:false
+232 silly inflate node_modules/brace-expansion
+233 silly packumentCache corgi:https://registry.npmjs.org/brace-expansion cache-miss
+234 http cache https://registry.npmjs.org/@types%2fscheduler 33ms (cache hit)
+235 silly packumentCache corgi:https://registry.npmjs.org/@types%2fscheduler set size:14555 disposed:false
+236 silly inflate node_modules/callsites
+237 silly packumentCache corgi:https://registry.npmjs.org/callsites cache-miss
+238 http cache https://registry.npmjs.org/acorn-walk 26ms (cache hit)
+239 silly packumentCache corgi:https://registry.npmjs.org/acorn-walk set size:25276 disposed:false
+240 silly inflate node_modules/chalk
+241 silly packumentCache corgi:https://registry.npmjs.org/chalk cache-hit
+242 silly inflate node_modules/clsx
+243 silly packumentCache corgi:https://registry.npmjs.org/clsx cache-miss
+244 http cache https://registry.npmjs.org/acorn 33ms (cache hit)
+245 silly packumentCache corgi:https://registry.npmjs.org/acorn set size:138695 disposed:false
+246 silly inflate node_modules/color-convert
+247 silly packumentCache corgi:https://registry.npmjs.org/color-convert cache-hit
+248 silly inflate node_modules/color-name
+249 silly packumentCache corgi:https://registry.npmjs.org/color-name cache-hit
+250 silly inflate node_modules/commander
+251 silly packumentCache corgi:https://registry.npmjs.org/commander cache-miss
+252 http cache https://registry.npmjs.org/ansi-regex 29ms (cache hit)
+253 silly packumentCache corgi:https://registry.npmjs.org/ansi-regex set size:19268 disposed:false
+254 silly inflate node_modules/convert-source-map
+255 silly packumentCache corgi:https://registry.npmjs.org/convert-source-map cache-miss
+256 http cache https://registry.npmjs.org/babel-plugin-macros 25ms (cache hit)
+257 silly packumentCache corgi:https://registry.npmjs.org/babel-plugin-macros set size:48216 disposed:false
+258 silly inflate node_modules/cosmiconfig
+259 silly packumentCache corgi:https://registry.npmjs.org/cosmiconfig cache-miss
+260 http cache https://registry.npmjs.org/balanced-match 25ms (cache hit)
+261 silly packumentCache corgi:https://registry.npmjs.org/balanced-match set size:13513 disposed:false
+262 silly inflate node_modules/cross-spawn
+263 silly packumentCache corgi:https://registry.npmjs.org/cross-spawn cache-miss
+264 http cache https://registry.npmjs.org/callsites 22ms (cache hit)
+265 silly packumentCache corgi:https://registry.npmjs.org/callsites set size:8680 disposed:false
+266 silly inflate node_modules/css-vendor
+267 silly packumentCache corgi:https://registry.npmjs.org/css-vendor cache-miss
+268 http cache https://registry.npmjs.org/clsx 22ms (cache hit)
+269 silly packumentCache corgi:https://registry.npmjs.org/clsx set size:18307 disposed:false
+270 silly inflate node_modules/csstype
+271 silly packumentCache corgi:https://registry.npmjs.org/csstype cache-miss
+272 http cache https://registry.npmjs.org/brace-expansion 25ms (cache hit)
+273 silly packumentCache corgi:https://registry.npmjs.org/brace-expansion set size:24623 disposed:false
+274 silly inflate node_modules/dom-helpers
+275 silly packumentCache corgi:https://registry.npmjs.org/dom-helpers cache-miss
+276 http cache https://registry.npmjs.org/commander 22ms (cache hit)
+277 silly packumentCache corgi:https://registry.npmjs.org/commander set size:137357 disposed:false
+278 silly inflate node_modules/duplexer
+279 silly packumentCache corgi:https://registry.npmjs.org/duplexer cache-miss
+280 http cache https://registry.npmjs.org/convert-source-map 23ms (cache hit)
+281 silly packumentCache corgi:https://registry.npmjs.org/convert-source-map set size:25370 disposed:false
+282 silly inflate node_modules/eastasianwidth
+283 silly packumentCache corgi:https://registry.npmjs.org/eastasianwidth cache-miss
+284 http cache https://registry.npmjs.org/cosmiconfig 23ms (cache hit)
+285 silly packumentCache corgi:https://registry.npmjs.org/cosmiconfig set size:86096 disposed:false
+286 silly inflate node_modules/emoji-regex
+287 silly packumentCache corgi:https://registry.npmjs.org/emoji-regex cache-miss
+288 http cache https://registry.npmjs.org/cross-spawn 26ms (cache hit)
+289 silly packumentCache corgi:https://registry.npmjs.org/cross-spawn set size:44626 disposed:false
+290 silly inflate node_modules/error-ex
+291 silly packumentCache corgi:https://registry.npmjs.org/error-ex cache-miss
+292 http cache https://registry.npmjs.org/css-vendor 25ms (cache hit)
+293 silly packumentCache corgi:https://registry.npmjs.org/css-vendor set size:55187 disposed:false
+294 silly inflate node_modules/escape-string-regexp
+295 silly packumentCache corgi:https://registry.npmjs.org/escape-string-regexp cache-hit
+296 silly inflate node_modules/find-root
+297 silly packumentCache corgi:https://registry.npmjs.org/find-root cache-miss
+298 http cache https://registry.npmjs.org/csstype 27ms (cache hit)
+299 silly packumentCache corgi:https://registry.npmjs.org/csstype set size:143970 disposed:false
+300 silly inflate node_modules/foreground-child
+301 silly packumentCache corgi:https://registry.npmjs.org/foreground-child cache-miss
+302 http cache https://registry.npmjs.org/duplexer 26ms (cache hit)
+303 silly packumentCache corgi:https://registry.npmjs.org/duplexer set size:4633 disposed:false
+304 silly inflate node_modules/function-bind
+305 silly packumentCache corgi:https://registry.npmjs.org/function-bind cache-miss
+306 http cache https://registry.npmjs.org/dom-helpers 29ms (cache hit)
+307 silly packumentCache corgi:https://registry.npmjs.org/dom-helpers set size:35093 disposed:false
+308 silly inflate node_modules/glob
+309 silly packumentCache corgi:https://registry.npmjs.org/glob cache-miss
+310 http cache https://registry.npmjs.org/eastasianwidth 30ms (cache hit)
+311 silly packumentCache corgi:https://registry.npmjs.org/eastasianwidth set size:2726 disposed:false
+312 silly inflate node_modules/gzip-size
+313 silly packumentCache corgi:https://registry.npmjs.org/gzip-size cache-miss
+314 http cache https://registry.npmjs.org/emoji-regex 28ms (cache hit)
+315 silly packumentCache corgi:https://registry.npmjs.org/emoji-regex set size:40047 disposed:false
+316 silly inflate node_modules/has
+317 silly packumentCache corgi:https://registry.npmjs.org/has cache-miss
+318 http cache https://registry.npmjs.org/error-ex 26ms (cache hit)
+319 silly packumentCache corgi:https://registry.npmjs.org/error-ex set size:11543 disposed:false
+320 silly inflate node_modules/has-flag
+321 silly packumentCache corgi:https://registry.npmjs.org/has-flag cache-hit
+322 silly inflate node_modules/hoist-non-react-statics
+323 silly packumentCache corgi:https://registry.npmjs.org/hoist-non-react-statics cache-miss
+324 http cache https://registry.npmjs.org/foreground-child 23ms (cache hit)
+325 silly packumentCache corgi:https://registry.npmjs.org/foreground-child set size:24617 disposed:false
+326 silly inflate node_modules/hoist-non-react-statics/node_modules/react-is
+327 silly packumentCache corgi:https://registry.npmjs.org/react-is cache-miss
+328 http cache https://registry.npmjs.org/find-root 28ms (cache hit)
+329 silly packumentCache corgi:https://registry.npmjs.org/find-root set size:2843 disposed:false
+330 silly inflate node_modules/hyphenate-style-name
+331 silly packumentCache corgi:https://registry.npmjs.org/hyphenate-style-name cache-miss
+332 http cache https://registry.npmjs.org/function-bind 25ms (cache hit)
+333 silly packumentCache corgi:https://registry.npmjs.org/function-bind set size:3724 disposed:false
+334 silly inflate node_modules/import-fresh
+335 silly packumentCache corgi:https://registry.npmjs.org/import-fresh cache-miss
+336 http cache https://registry.npmjs.org/glob 25ms (cache hit)
+337 silly packumentCache corgi:https://registry.npmjs.org/glob set size:199194 disposed:false
+338 silly inflate node_modules/is-arrayish
+339 silly packumentCache corgi:https://registry.npmjs.org/is-arrayish cache-miss
+340 http cache https://registry.npmjs.org/gzip-size 23ms (cache hit)
+341 silly packumentCache corgi:https://registry.npmjs.org/gzip-size set size:16065 disposed:false
+342 silly inflate node_modules/is-core-module
+343 silly packumentCache corgi:https://registry.npmjs.org/is-core-module cache-miss
+344 http cache https://registry.npmjs.org/has 24ms (cache hit)
+345 silly packumentCache corgi:https://registry.npmjs.org/has set size:5617 disposed:false
+346 silly inflate node_modules/is-fullwidth-code-point
+347 silly packumentCache corgi:https://registry.npmjs.org/is-fullwidth-code-point cache-miss
+348 http cache https://registry.npmjs.org/hoist-non-react-statics 24ms (cache hit)
+349 silly packumentCache corgi:https://registry.npmjs.org/hoist-non-react-statics set size:46273 disposed:false
+350 silly inflate node_modules/is-in-browser
+351 silly packumentCache corgi:https://registry.npmjs.org/is-in-browser cache-miss
+352 http cache https://registry.npmjs.org/react-is 29ms (cache hit)
+353 silly packumentCache corgi:https://registry.npmjs.org/react-is set size:2586477 disposed:false
+354 silly inflate node_modules/isexe
+355 silly packumentCache corgi:https://registry.npmjs.org/isexe cache-miss
+356 http cache https://registry.npmjs.org/hyphenate-style-name 39ms (cache hit)
+357 silly packumentCache corgi:https://registry.npmjs.org/hyphenate-style-name set size:6982 disposed:false
+358 silly inflate node_modules/jackspeak
+359 silly packumentCache corgi:https://registry.npmjs.org/jackspeak cache-miss
+360 http cache https://registry.npmjs.org/import-fresh 40ms (cache hit)
+361 silly packumentCache corgi:https://registry.npmjs.org/import-fresh set size:11857 disposed:false
+362 silly inflate node_modules/js-tokens
+363 silly packumentCache corgi:https://registry.npmjs.org/js-tokens cache-miss
+364 http cache https://registry.npmjs.org/is-arrayish 37ms (cache hit)
+365 silly packumentCache corgi:https://registry.npmjs.org/is-arrayish set size:6137 disposed:false
+366 silly inflate node_modules/json-parse-even-better-errors
+367 silly packumentCache corgi:https://registry.npmjs.org/json-parse-even-better-errors cache-miss
+368 http cache https://registry.npmjs.org/is-core-module 41ms (cache hit)
+369 silly packumentCache corgi:https://registry.npmjs.org/is-core-module set size:32118 disposed:false
+370 silly inflate node_modules/jss
+371 silly packumentCache corgi:https://registry.npmjs.org/jss cache-miss
+372 http cache https://registry.npmjs.org/is-fullwidth-code-point 42ms (cache hit)
+373 silly packumentCache corgi:https://registry.npmjs.org/is-fullwidth-code-point set size:5986 disposed:false
+374 silly inflate node_modules/jss-plugin-camel-case
+375 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-camel-case cache-miss
+376 http cache https://registry.npmjs.org/is-in-browser 45ms (cache hit)
+377 silly packumentCache corgi:https://registry.npmjs.org/is-in-browser set size:7543 disposed:false
+378 silly inflate node_modules/jss-plugin-default-unit
+379 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-default-unit cache-miss
+380 http cache https://registry.npmjs.org/isexe 32ms (cache hit)
+381 silly packumentCache corgi:https://registry.npmjs.org/isexe set size:9025 disposed:false
+382 silly inflate node_modules/jss-plugin-global
+383 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-global cache-miss
+384 http cache https://registry.npmjs.org/jackspeak 31ms (cache hit)
+385 silly packumentCache corgi:https://registry.npmjs.org/jackspeak set size:80272 disposed:false
+386 silly inflate node_modules/jss-plugin-nested
+387 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-nested cache-miss
+388 http cache https://registry.npmjs.org/js-tokens 31ms (cache hit)
+389 silly packumentCache corgi:https://registry.npmjs.org/js-tokens set size:18314 disposed:false
+390 silly inflate node_modules/jss-plugin-props-sort
+391 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-props-sort cache-miss
+392 http cache https://registry.npmjs.org/json-parse-even-better-errors 28ms (cache hit)
+393 silly packumentCache corgi:https://registry.npmjs.org/json-parse-even-better-errors set size:15333 disposed:false
+394 silly inflate node_modules/jss-plugin-rule-value-function
+395 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-rule-value-function cache-miss
+396 http cache https://registry.npmjs.org/jss-plugin-camel-case 24ms (cache hit)
+397 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-camel-case set size:83180 disposed:false
+398 silly inflate node_modules/jss-plugin-vendor-prefixer
+399 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-vendor-prefixer cache-miss
+400 http cache https://registry.npmjs.org/jss 27ms (cache hit)
+401 silly packumentCache corgi:https://registry.npmjs.org/jss set size:264150 disposed:false
+402 silly inflate node_modules/lines-and-columns
+403 silly packumentCache corgi:https://registry.npmjs.org/lines-and-columns cache-miss
+404 http cache https://registry.npmjs.org/jss-plugin-default-unit 26ms (cache hit)
+405 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-default-unit set size:84496 disposed:false
+406 silly inflate node_modules/lodash
+407 silly packumentCache corgi:https://registry.npmjs.org/lodash cache-miss
+408 http cache https://registry.npmjs.org/jss-plugin-global 25ms (cache hit)
+409 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-global set size:77000 disposed:false
+410 silly inflate node_modules/loose-envify
+411 silly packumentCache corgi:https://registry.npmjs.org/loose-envify cache-miss
+412 http cache https://registry.npmjs.org/jss-plugin-nested 28ms (cache hit)
+413 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-nested set size:79049 disposed:false
+414 silly inflate node_modules/lru-cache
+415 silly packumentCache corgi:https://registry.npmjs.org/lru-cache cache-miss
+416 http cache https://registry.npmjs.org/jss-plugin-rule-value-function 27ms (cache hit)
+417 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-rule-value-function set size:76824 disposed:false
+418 silly inflate node_modules/mime
+419 silly packumentCache corgi:https://registry.npmjs.org/mime cache-miss
+420 http cache https://registry.npmjs.org/lines-and-columns 24ms (cache hit)
+421 silly packumentCache corgi:https://registry.npmjs.org/lines-and-columns set size:36815 disposed:false
+422 silly inflate node_modules/minimatch
+423 silly packumentCache corgi:https://registry.npmjs.org/minimatch cache-miss
+424 http cache https://registry.npmjs.org/jss-plugin-props-sort 33ms (cache hit)
+425 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-props-sort set size:74997 disposed:false
+426 silly inflate node_modules/minipass
+427 silly packumentCache corgi:https://registry.npmjs.org/minipass cache-miss
+428 http cache https://registry.npmjs.org/jss-plugin-vendor-prefixer 31ms (cache hit)
+429 silly packumentCache corgi:https://registry.npmjs.org/jss-plugin-vendor-prefixer set size:81797 disposed:false
+430 silly inflate node_modules/object-assign
+431 silly packumentCache corgi:https://registry.npmjs.org/object-assign cache-miss
+432 http cache https://registry.npmjs.org/lodash 23ms (cache hit)
+433 silly packumentCache corgi:https://registry.npmjs.org/lodash set size:69555 disposed:false
+434 silly inflate node_modules/opener
+435 silly packumentCache corgi:https://registry.npmjs.org/opener cache-miss
+436 http cache https://registry.npmjs.org/loose-envify 24ms (cache hit)
+437 silly packumentCache corgi:https://registry.npmjs.org/loose-envify set size:4759 disposed:false
+438 silly inflate node_modules/package-json-from-dist
+439 silly packumentCache corgi:https://registry.npmjs.org/package-json-from-dist cache-miss
+440 http cache https://registry.npmjs.org/lru-cache 23ms (cache hit)
+441 silly packumentCache corgi:https://registry.npmjs.org/lru-cache set size:194682 disposed:false
+442 silly inflate node_modules/parent-module
+443 silly packumentCache corgi:https://registry.npmjs.org/parent-module cache-miss
+444 http cache https://registry.npmjs.org/mime 24ms (cache hit)
+445 silly packumentCache corgi:https://registry.npmjs.org/mime set size:48115 disposed:false
+446 silly inflate node_modules/parse-json
+447 silly packumentCache corgi:https://registry.npmjs.org/parse-json cache-miss
+448 http cache https://registry.npmjs.org/minimatch 22ms (cache hit)
+449 silly packumentCache corgi:https://registry.npmjs.org/minimatch set size:168441 disposed:false
+450 silly inflate node_modules/path-key
+451 silly packumentCache corgi:https://registry.npmjs.org/path-key cache-miss
+452 http cache https://registry.npmjs.org/minipass 24ms (cache hit)
+453 silly packumentCache corgi:https://registry.npmjs.org/minipass set size:116492 disposed:false
+454 silly inflate node_modules/path-parse
+455 silly packumentCache corgi:https://registry.npmjs.org/path-parse cache-miss
+456 http cache https://registry.npmjs.org/object-assign 23ms (cache hit)
+457 silly packumentCache corgi:https://registry.npmjs.org/object-assign set size:9572 disposed:false
+458 silly inflate node_modules/path-scurry
+459 silly packumentCache corgi:https://registry.npmjs.org/path-scurry cache-miss
+460 http cache https://registry.npmjs.org/opener 24ms (cache hit)
+461 silly packumentCache corgi:https://registry.npmjs.org/opener set size:9332 disposed:false
+462 silly inflate node_modules/path-type
+463 silly packumentCache corgi:https://registry.npmjs.org/path-type cache-miss
+464 http cache https://registry.npmjs.org/package-json-from-dist 25ms (cache hit)
+465 silly packumentCache corgi:https://registry.npmjs.org/package-json-from-dist set size:1491 disposed:false
+466 silly inflate node_modules/prop-types
+467 silly packumentCache corgi:https://registry.npmjs.org/prop-types cache-miss
+468 http cache https://registry.npmjs.org/parent-module 23ms (cache hit)
+469 silly packumentCache corgi:https://registry.npmjs.org/parent-module set size:8563 disposed:false
+470 silly inflate node_modules/prop-types/node_modules/react-is
+471 silly packumentCache corgi:https://registry.npmjs.org/react-is cache-miss
+472 http cache https://registry.npmjs.org/parse-json 23ms (cache hit)
+473 silly packumentCache corgi:https://registry.npmjs.org/parse-json set size:22516 disposed:false
+474 silly inflate node_modules/react-is
+475 silly packumentCache corgi:https://registry.npmjs.org/react-is cache-miss
+476 http cache https://registry.npmjs.org/path-key 22ms (cache hit)
+477 silly packumentCache corgi:https://registry.npmjs.org/path-key set size:7889 disposed:false
+478 silly inflate node_modules/react-transition-group
+479 silly packumentCache corgi:https://registry.npmjs.org/react-transition-group cache-miss
+480 http cache https://registry.npmjs.org/path-parse 44ms (cache hit)
+481 silly packumentCache corgi:https://registry.npmjs.org/path-parse set size:5796 disposed:false
+482 silly inflate node_modules/regenerator-runtime
+483 silly packumentCache corgi:https://registry.npmjs.org/regenerator-runtime cache-miss
+484 http cache https://registry.npmjs.org/path-scurry 45ms (cache hit)
+485 silly packumentCache corgi:https://registry.npmjs.org/path-scurry set size:42512 disposed:false
+486 silly inflate node_modules/resolve
+487 silly packumentCache corgi:https://registry.npmjs.org/resolve cache-miss
+488 http cache https://registry.npmjs.org/path-type 42ms (cache hit)
+489 silly packumentCache corgi:https://registry.npmjs.org/path-type set size:6264 disposed:false
+490 silly inflate node_modules/resolve-from
+491 silly packumentCache corgi:https://registry.npmjs.org/resolve-from cache-miss
+492 http cache https://registry.npmjs.org/prop-types 40ms (cache hit)
+493 silly packumentCache corgi:https://registry.npmjs.org/prop-types set size:24415 disposed:false
+494 silly inflate node_modules/rifm
+495 silly packumentCache corgi:https://registry.npmjs.org/rifm cache-miss
+496 http cache https://registry.npmjs.org/react-is 45ms (cache hit)
+497 silly packumentCache corgi:https://registry.npmjs.org/react-is set size:2586477 disposed:false
+498 silly inflate node_modules/rimraf
+499 silly packumentCache corgi:https://registry.npmjs.org/rimraf cache-miss
+500 http cache https://registry.npmjs.org/react-is 62ms (cache hit)
+501 silly packumentCache corgi:https://registry.npmjs.org/react-is set size:2586477 disposed:false
+502 silly inflate node_modules/safe-buffer
+503 silly packumentCache corgi:https://registry.npmjs.org/safe-buffer cache-miss
+504 http cache https://registry.npmjs.org/react-transition-group 75ms (cache hit)
+505 silly packumentCache corgi:https://registry.npmjs.org/react-transition-group set size:56614 disposed:false
+506 silly inflate node_modules/shebang-command
+507 silly packumentCache corgi:https://registry.npmjs.org/shebang-command cache-miss
+508 http cache https://registry.npmjs.org/regenerator-runtime 56ms (cache hit)
+509 silly packumentCache corgi:https://registry.npmjs.org/regenerator-runtime set size:29215 disposed:false
+510 silly inflate node_modules/shebang-regex
+511 silly packumentCache corgi:https://registry.npmjs.org/shebang-regex cache-miss
+512 http cache https://registry.npmjs.org/resolve 61ms (cache hit)
+513 silly packumentCache corgi:https://registry.npmjs.org/resolve set size:105902 disposed:false
+514 silly inflate node_modules/signal-exit
+515 silly packumentCache corgi:https://registry.npmjs.org/signal-exit cache-miss
+516 http cache https://registry.npmjs.org/resolve-from 66ms (cache hit)
+517 silly packumentCache corgi:https://registry.npmjs.org/resolve-from set size:4357 disposed:false
+518 silly inflate node_modules/sirv
+519 silly packumentCache corgi:https://registry.npmjs.org/sirv cache-miss
+520 http cache https://registry.npmjs.org/safe-buffer 33ms (cache hit)
+521 silly packumentCache corgi:https://registry.npmjs.org/safe-buffer set size:9110 disposed:false
+522 silly inflate node_modules/source-map
+523 silly packumentCache corgi:https://registry.npmjs.org/source-map cache-miss
+524 http cache https://registry.npmjs.org/rifm 70ms (cache hit)
+525 silly packumentCache corgi:https://registry.npmjs.org/rifm set size:55158 disposed:false
+526 silly inflate node_modules/string-width
+527 silly packumentCache corgi:https://registry.npmjs.org/string-width cache-miss
+528 http cache https://registry.npmjs.org/shebang-command 33ms (cache hit)
+529 silly packumentCache corgi:https://registry.npmjs.org/shebang-command set size:3464 disposed:false
+530 silly inflate node_modules/string-width-cjs
+531 silly packumentCache corgi:https://registry.npmjs.org/string-width-cjs cache-miss
+532 http cache https://registry.npmjs.org/rimraf 55ms (cache hit)
+533 silly packumentCache corgi:https://registry.npmjs.org/rimraf set size:87794 disposed:false
+534 silly inflate node_modules/string-width-cjs/node_modules/ansi-regex
+535 silly packumentCache corgi:https://registry.npmjs.org/ansi-regex cache-hit
+536 silly inflate node_modules/string-width-cjs/node_modules/emoji-regex
+537 silly packumentCache corgi:https://registry.npmjs.org/emoji-regex cache-hit
+538 silly inflate node_modules/string-width-cjs/node_modules/strip-ansi
+539 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi cache-miss
+540 http cache https://registry.npmjs.org/shebang-regex 31ms (cache hit)
+541 silly packumentCache corgi:https://registry.npmjs.org/shebang-regex set size:4332 disposed:false
+542 silly inflate node_modules/strip-ansi
+543 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi cache-miss
+544 http cache https://registry.npmjs.org/signal-exit 28ms (cache hit)
+545 silly packumentCache corgi:https://registry.npmjs.org/signal-exit set size:21300 disposed:false
+546 silly inflate node_modules/strip-ansi-cjs
+547 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi-cjs cache-miss
+548 http cache https://registry.npmjs.org/sirv 21ms (cache hit)
+549 silly packumentCache corgi:https://registry.npmjs.org/sirv set size:69249 disposed:false
+550 silly inflate node_modules/strip-ansi-cjs/node_modules/ansi-regex
+551 silly packumentCache corgi:https://registry.npmjs.org/ansi-regex cache-hit
+552 silly inflate node_modules/stylis
+553 silly packumentCache corgi:https://registry.npmjs.org/stylis cache-miss
+554 http cache https://registry.npmjs.org/source-map 21ms (cache hit)
+555 silly packumentCache corgi:https://registry.npmjs.org/source-map set size:45593 disposed:false
+556 silly inflate node_modules/supports-color
+557 silly packumentCache corgi:https://registry.npmjs.org/supports-color cache-hit
+558 silly inflate node_modules/tiny-warning
+559 silly packumentCache corgi:https://registry.npmjs.org/tiny-warning cache-miss
+560 http cache https://registry.npmjs.org/string-width 22ms (cache hit)
+561 silly packumentCache corgi:https://registry.npmjs.org/string-width set size:31752 disposed:false
+562 silly inflate node_modules/to-fast-properties
+563 silly packumentCache corgi:https://registry.npmjs.org/to-fast-properties cache-miss
+564 http cache https://registry.npmjs.org/string-width-cjs 22ms (cache hit)
+565 silly packumentCache corgi:https://registry.npmjs.org/string-width-cjs set size:1161 disposed:false
+566 warn old lockfile Could not fetch metadata for string-width-cjs@4.2.3 string-width-cjs: No matching version found for string-width-cjs@4.2.3.
+566 warn old lockfile     at module.exports (C:\Program Files\nodejs\node_modules\npm\node_modules\npm-pick-manifest\lib\index.js:215:23)
+566 warn old lockfile     at RegistryFetcher.manifest (C:\Program Files\nodejs\node_modules\npm\node_modules\pacote\lib\registry.js:130:54)
+566 warn old lockfile     at async C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\build-ideal-tree.js:715:24 {
+566 warn old lockfile   code: 'ETARGET',
+566 warn old lockfile   type: 'version',
+566 warn old lockfile   wanted: '4.2.3',
+566 warn old lockfile   versions: [ '1.0.0', '5.1.1' ],
+566 warn old lockfile   distTags: { latest: '5.1.1' },
+566 warn old lockfile   defaultTag: 'latest'
+566 warn old lockfile }
+567 silly inflate node_modules/totalist
+568 silly packumentCache corgi:https://registry.npmjs.org/totalist cache-miss
+569 http cache https://registry.npmjs.org/strip-ansi 22ms (cache hit)
+570 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi set size:19300 disposed:false
+571 silly inflate node_modules/webpack-bundle-analyzer
+572 silly packumentCache corgi:https://registry.npmjs.org/webpack-bundle-analyzer cache-miss
+573 http cache https://registry.npmjs.org/strip-ansi 27ms (cache hit)
+574 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi set size:19300 disposed:false
+575 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi dispose
+576 silly inflate node_modules/which
+577 silly packumentCache corgi:https://registry.npmjs.org/which cache-miss
+578 http cache https://registry.npmjs.org/strip-ansi-cjs 27ms (cache hit)
+579 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi-cjs set size:1667 disposed:false
+580 warn old lockfile Could not fetch metadata for strip-ansi-cjs@6.0.1 strip-ansi-cjs: No matching version found for strip-ansi-cjs@6.0.1.
+580 warn old lockfile     at module.exports (C:\Program Files\nodejs\node_modules\npm\node_modules\npm-pick-manifest\lib\index.js:215:23)
+580 warn old lockfile     at RegistryFetcher.manifest (C:\Program Files\nodejs\node_modules\npm\node_modules\pacote\lib\registry.js:130:54)
+580 warn old lockfile     at async C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\build-ideal-tree.js:715:24 {
+580 warn old lockfile   code: 'ETARGET',
+580 warn old lockfile   type: 'version',
+580 warn old lockfile   wanted: '6.0.1',
+580 warn old lockfile   versions: [ '1.0.0', '2.0.0', '8.0.0' ],
+580 warn old lockfile   distTags: { latest: '8.0.0' },
+580 warn old lockfile   defaultTag: 'latest'
+580 warn old lockfile }
+581 silly inflate node_modules/wrap-ansi
+582 silly packumentCache corgi:https://registry.npmjs.org/wrap-ansi cache-miss
+583 http cache https://registry.npmjs.org/stylis 29ms (cache hit)
+584 silly packumentCache corgi:https://registry.npmjs.org/stylis set size:110891 disposed:false
+585 silly inflate node_modules/wrap-ansi/node_modules/ansi-styles
+586 silly packumentCache corgi:https://registry.npmjs.org/ansi-styles cache-hit
+587 silly inflate node_modules/wrap-ansi-cjs
+588 silly packumentCache corgi:https://registry.npmjs.org/wrap-ansi-cjs cache-miss
+589 http cache https://registry.npmjs.org/tiny-warning 29ms (cache hit)
+590 silly packumentCache corgi:https://registry.npmjs.org/tiny-warning set size:12578 disposed:false
+591 silly inflate node_modules/wrap-ansi-cjs/node_modules/ansi-regex
+592 silly packumentCache corgi:https://registry.npmjs.org/ansi-regex cache-hit
+593 silly inflate node_modules/wrap-ansi-cjs/node_modules/emoji-regex
+594 silly packumentCache corgi:https://registry.npmjs.org/emoji-regex cache-hit
+595 silly inflate node_modules/wrap-ansi-cjs/node_modules/string-width
+596 silly packumentCache corgi:https://registry.npmjs.org/string-width cache-hit
+597 silly inflate node_modules/wrap-ansi-cjs/node_modules/strip-ansi
+598 silly packumentCache corgi:https://registry.npmjs.org/strip-ansi cache-hit
+599 silly inflate node_modules/ws
+600 silly packumentCache corgi:https://registry.npmjs.org/ws cache-miss
+601 http cache https://registry.npmjs.org/to-fast-properties 30ms (cache hit)
+602 silly packumentCache corgi:https://registry.npmjs.org/to-fast-properties set size:7592 disposed:false
+603 silly inflate node_modules/yaml
+604 silly packumentCache corgi:https://registry.npmjs.org/yaml cache-miss
+605 http cache https://registry.npmjs.org/totalist 28ms (cache hit)
+606 silly packumentCache corgi:https://registry.npmjs.org/totalist set size:10831 disposed:false
+607 http cache https://registry.npmjs.org/webpack-bundle-analyzer 29ms (cache hit)
+608 silly packumentCache corgi:https://registry.npmjs.org/webpack-bundle-analyzer set size:192733 disposed:false
+609 http cache https://registry.npmjs.org/which 27ms (cache hit)
+610 silly packumentCache corgi:https://registry.npmjs.org/which set size:29002 disposed:false
+611 http cache https://registry.npmjs.org/wrap-ansi 24ms (cache hit)
+612 silly packumentCache corgi:https://registry.npmjs.org/wrap-ansi set size:25576 disposed:false
+613 http cache https://registry.npmjs.org/wrap-ansi-cjs 20ms (cache hit)
+614 silly packumentCache corgi:https://registry.npmjs.org/wrap-ansi-cjs set size:1140 disposed:false
+615 warn old lockfile Could not fetch metadata for wrap-ansi-cjs@7.0.0 wrap-ansi-cjs: No matching version found for wrap-ansi-cjs@7.0.0.
+615 warn old lockfile     at module.exports (C:\Program Files\nodejs\node_modules\npm\node_modules\npm-pick-manifest\lib\index.js:215:23)
+615 warn old lockfile     at RegistryFetcher.manifest (C:\Program Files\nodejs\node_modules\npm\node_modules\pacote\lib\registry.js:130:54)
+615 warn old lockfile     at async C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\build-ideal-tree.js:715:24 {
+615 warn old lockfile   code: 'ETARGET',
+615 warn old lockfile   type: 'version',
+615 warn old lockfile   wanted: '7.0.0',
+615 warn old lockfile   versions: [ '1.0.0', '8.0.0' ],
+615 warn old lockfile   distTags: { latest: '8.0.0' },
+615 warn old lockfile   defaultTag: 'latest'
+615 warn old lockfile }
+616 http cache https://registry.npmjs.org/yaml 17ms (cache hit)
+617 silly packumentCache corgi:https://registry.npmjs.org/yaml set size:163878 disposed:false
+618 http cache https://registry.npmjs.org/ws 22ms (cache hit)
+619 silly packumentCache corgi:https://registry.npmjs.org/ws set size:199711 disposed:false
+620 silly idealTree buildDeps
+621 silly fetch manifest expo-image-manipulator@~14.0.8
+622 silly packumentCache full:https://registry.npmjs.org/expo-image-manipulator cache-miss
+623 http cache https://registry.npmjs.org/expo-image-manipulator 8ms (cache hit)
+624 silly packumentCache full:https://registry.npmjs.org/expo-image-manipulator set size:829201 disposed:false
+625 silly placeDep ROOT expo-image-manipulator@14.0.8 OK for:  want: ~14.0.8
+626 silly fetch manifest expo-image-loader@~6.0.0
+627 silly packumentCache full:https://registry.npmjs.org/expo-image-loader cache-miss
+628 http fetch GET 200 https://registry.npmjs.org/expo-image-loader 239ms (cache miss)
+629 silly packumentCache full:https://registry.npmjs.org/expo-image-loader set size:undefined disposed:false
+630 silly placeDep ROOT expo-image-loader@6.0.0 OK for: expo-image-manipulator@14.0.8 want: ~6.0.0
+631 silly reify mark retired [
+631 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\acorn',
+631 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\acorn',
+631 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\acorn.cmd',
+631 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\acorn.ps1'
+631 silly reify ]
+632 silly reify mark retired [
+632 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\acorn-walk'
+632 silly reify ]
+633 silly reify mark retired [
+633 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\ansi-regex'
+633 silly reify ]
+634 silly reify mark retired [
+634 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\ansi-styles'
+634 silly reify ]
+635 silly reify mark retired [
+635 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\balanced-match'
+635 silly reify ]
+636 silly reify mark retired [
+636 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\babel-plugin-macros'
+636 silly reify ]
+637 silly reify mark retired [
+637 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\callsites'
+637 silly reify ]
+638 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\chalk' ]
+639 silly reify mark retired [
+639 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\brace-expansion'
+639 silly reify ]
+640 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\clsx' ]
+641 silly reify mark retired [
+641 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\color-convert'
+641 silly reify ]
+642 silly reify mark retired [
+642 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\color-name'
+642 silly reify ]
+643 silly reify mark retired [
+643 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\commander'
+643 silly reify ]
+644 silly reify mark retired [
+644 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\convert-source-map'
+644 silly reify ]
+645 silly reify mark retired [
+645 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\cosmiconfig'
+645 silly reify ]
+646 silly reify mark retired [
+646 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\cross-spawn'
+646 silly reify ]
+647 silly reify mark retired [
+647 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\css-vendor'
+647 silly reify ]
+648 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\csstype' ]
+649 silly reify mark retired [
+649 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\dom-helpers'
+649 silly reify ]
+650 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\duplexer' ]
+651 silly reify mark retired [
+651 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\eastasianwidth'
+651 silly reify ]
+652 silly reify mark retired [
+652 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\emoji-regex'
+652 silly reify ]
+653 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\error-ex' ]
+654 silly reify mark retired [
+654 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\escape-string-regexp'
+654 silly reify ]
+655 silly reify mark retired [
+655 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\find-root'
+655 silly reify ]
+656 silly reify mark retired [
+656 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\glob',
+656 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\glob',
+656 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\glob.cmd',
+656 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\glob.ps1'
+656 silly reify ]
+657 silly reify mark retired [
+657 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\foreground-child'
+657 silly reify ]
+658 silly reify mark retired [
+658 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\function-bind'
+658 silly reify ]
+659 silly reify mark retired [
+659 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\gzip-size'
+659 silly reify ]
+660 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\has' ]
+661 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\has-flag' ]
+662 silly reify mark retired [
+662 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\hoist-non-react-statics'
+662 silly reify ]
+663 silly reify mark retired [
+663 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\hyphenate-style-name'
+663 silly reify ]
+664 silly reify mark retired [
+664 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\import-fresh'
+664 silly reify ]
+665 silly reify mark retired [
+665 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\is-arrayish'
+665 silly reify ]
+666 silly reify mark retired [
+666 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\is-core-module'
+666 silly reify ]
+667 silly reify mark retired [
+667 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\is-fullwidth-code-point'
+667 silly reify ]
+668 silly reify mark retired [
+668 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\is-in-browser'
+668 silly reify ]
+669 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\isexe' ]
+670 silly reify mark retired [
+670 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jackspeak'
+670 silly reify ]
+671 silly reify mark retired [
+671 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\js-tokens'
+671 silly reify ]
+672 silly reify mark retired [
+672 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\json-parse-even-better-errors'
+672 silly reify ]
+673 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss' ]
+674 silly reify mark retired [
+674 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-camel-case'
+674 silly reify ]
+675 silly reify mark retired [
+675 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-default-unit'
+675 silly reify ]
+676 silly reify mark retired [
+676 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-global'
+676 silly reify ]
+677 silly reify mark retired [
+677 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-nested'
+677 silly reify ]
+678 silly reify mark retired [
+678 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-props-sort'
+678 silly reify ]
+679 silly reify mark retired [
+679 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-rule-value-function'
+679 silly reify ]
+680 silly reify mark retired [
+680 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-vendor-prefixer'
+680 silly reify ]
+681 silly reify mark retired [
+681 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\lines-and-columns'
+681 silly reify ]
+682 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\lodash' ]
+683 silly reify mark retired [
+683 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\loose-envify',
+683 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\loose-envify',
+683 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\loose-envify.cmd',
+683 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\loose-envify.ps1'
+683 silly reify ]
+684 silly reify mark retired [
+684 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\lru-cache'
+684 silly reify ]
+685 silly reify mark retired [
+685 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\mime',
+685 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\mime',
+685 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\mime.cmd',
+685 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\mime.ps1'
+685 silly reify ]
+686 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\minipass' ]
+687 silly reify mark retired [
+687 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\minimatch'
+687 silly reify ]
+688 silly reify mark retired [
+688 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\object-assign'
+688 silly reify ]
+689 silly reify mark retired [
+689 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\opener',
+689 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\opener',
+689 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\opener.cmd',
+689 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\opener.ps1'
+689 silly reify ]
+690 silly reify mark retired [
+690 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\package-json-from-dist'
+690 silly reify ]
+691 silly reify mark retired [
+691 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\parent-module'
+691 silly reify ]
+692 silly reify mark retired [
+692 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\parse-json'
+692 silly reify ]
+693 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\path-key' ]
+694 silly reify mark retired [
+694 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\path-parse'
+694 silly reify ]
+695 silly reify mark retired [
+695 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\path-scurry'
+695 silly reify ]
+696 silly reify mark retired [
+696 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\path-type'
+696 silly reify ]
+697 silly reify mark retired [
+697 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\prop-types'
+697 silly reify ]
+698 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\react-is' ]
+699 silly reify mark retired [
+699 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\react-transition-group'
+699 silly reify ]
+700 silly reify mark retired [
+700 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\regenerator-runtime'
+700 silly reify ]
+701 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\resolve' ]
+702 silly reify mark retired [
+702 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\resolve-from'
+702 silly reify ]
+703 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\rifm' ]
+704 silly reify mark retired [
+704 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\rimraf',
+704 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\rimraf',
+704 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\rimraf.cmd',
+704 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\rimraf.ps1'
+704 silly reify ]
+705 silly reify mark retired [
+705 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\safe-buffer'
+705 silly reify ]
+706 silly reify mark retired [
+706 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\shebang-command'
+706 silly reify ]
+707 silly reify mark retired [
+707 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\shebang-regex'
+707 silly reify ]
+708 silly reify mark retired [
+708 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\signal-exit'
+708 silly reify ]
+709 silly reify mark retired [
+709 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\source-map'
+709 silly reify ]
+710 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\sirv' ]
+711 silly reify mark retired [
+711 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\string-width'
+711 silly reify ]
+712 silly reify mark retired [
+712 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\strip-ansi'
+712 silly reify ]
+713 silly reify mark retired [
+713 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\string-width-cjs'
+713 silly reify ]
+714 silly reify mark retired [
+714 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\strip-ansi-cjs'
+714 silly reify ]
+715 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\stylis' ]
+716 silly reify mark retired [
+716 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\supports-color'
+716 silly reify ]
+717 silly reify mark retired [
+717 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\tiny-warning'
+717 silly reify ]
+718 silly reify mark retired [
+718 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\to-fast-properties'
+718 silly reify ]
+719 silly reify mark retired [
+719 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\webpack-bundle-analyzer',
+719 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\webpack-bundle-analyzer',
+719 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\webpack-bundle-analyzer.cmd',
+719 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\webpack-bundle-analyzer.ps1'
+719 silly reify ]
+720 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\totalist' ]
+721 silly reify mark retired [
+721 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\wrap-ansi-cjs'
+721 silly reify ]
+722 silly reify mark retired [
+722 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\which',
+722 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\node-which',
+722 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\node-which.cmd',
+722 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\node-which.ps1'
+722 silly reify ]
+723 silly reify mark retired [
+723 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\wrap-ansi'
+723 silly reify ]
+724 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\ws' ]
+725 silly reify mark retired [ 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\yaml' ]
+726 silly reify mark retired [
+726 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\code-frame'
+726 silly reify ]
+727 silly reify mark retired [
+727 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\helper-module-imports'
+727 silly reify ]
+728 silly reify mark retired [
+728 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\helper-validator-identifier'
+728 silly reify ]
+729 silly reify mark retired [
+729 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\highlight'
+729 silly reify ]
+730 silly reify mark retired [
+730 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\helper-plugin-utils'
+730 silly reify ]
+731 silly reify mark retired [
+731 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\runtime'
+731 silly reify ]
+732 silly reify mark retired [
+732 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\plugin-syntax-jsx'
+732 silly reify ]
+733 silly reify mark retired [
+733 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\types'
+733 silly reify ]
+734 silly reify mark retired [
+734 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\core'
+734 silly reify ]
+735 silly reify mark retired [
+735 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\date-fns'
+735 silly reify ]
+736 silly reify mark retired [
+736 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\dayjs'
+736 silly reify ]
+737 silly reify mark retired [
+737 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\moment'
+737 silly reify ]
+738 silly reify mark retired [
+738 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\luxon'
+738 silly reify ]
+739 silly reify mark retired [
+739 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\babel-plugin'
+739 silly reify ]
+740 silly reify mark retired [
+740 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\cache'
+740 silly reify ]
+741 silly reify mark retired [
+741 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\is-prop-valid'
+741 silly reify ]
+742 silly reify mark retired [
+742 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\hash'
+742 silly reify ]
+743 silly reify mark retired [
+743 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\memoize'
+743 silly reify ]
+744 silly reify mark retired [
+744 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\react'
+744 silly reify ]
+745 silly reify mark retired [
+745 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\serialize'
+745 silly reify ]
+746 silly reify mark retired [
+746 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\sheet'
+746 silly reify ]
+747 silly reify mark retired [
+747 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\styled'
+747 silly reify ]
+748 silly reify mark retired [
+748 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\unitless'
+748 silly reify ]
+749 silly reify mark retired [
+749 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\utils'
+749 silly reify ]
+750 silly reify mark retired [
+750 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\weak-memoize'
+750 silly reify ]
+751 silly reify mark retired [
+751 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@fortawesome\\fontawesome-pro'
+751 silly reify ]
+752 silly reify mark retired [
+752 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@isaacs\\cliui'
+752 silly reify ]
+753 silly reify mark retired [
+753 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\core'
+753 silly reify ]
+754 silly reify mark retired [
+754 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\icons-material'
+754 silly reify ]
+755 silly reify mark retired [
+755 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\material'
+755 silly reify ]
+756 silly reify mark retired [
+756 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\lab'
+756 silly reify ]
+757 silly reify mark retired [
+757 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\private-theming'
+757 silly reify ]
+758 silly reify mark retired [
+758 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\styled-engine'
+758 silly reify ]
+759 silly reify mark retired [
+759 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\styles'
+759 silly reify ]
+760 silly reify mark retired [
+760 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\system'
+760 silly reify ]
+761 silly reify mark retired [
+761 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\types'
+761 silly reify ]
+762 silly reify mark retired [
+762 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\utils'
+762 silly reify ]
+763 silly reify mark retired [
+763 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@polka\\url'
+763 silly reify ]
+764 silly reify mark retired [
+764 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@popperjs\\core'
+764 silly reify ]
+765 silly reify mark retired [
+765 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\parse-json'
+765 silly reify ]
+766 silly reify mark retired [
+766 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\prop-types'
+766 silly reify ]
+767 silly reify mark retired [
+767 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\react'
+767 silly reify ]
+768 silly reify mark retired [
+768 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\react-is'
+768 silly reify ]
+769 silly reify mark retired [
+769 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\react-transition-group'
+769 silly reify ]
+770 silly reify mark retired [
+770 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\scheduler'
+770 silly reify ]
+771 silly reify moves {
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\acorn': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.acorn-LzcLptQV',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\acorn': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.acorn-7xZLE7SH',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\acorn.cmd': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.acorn.cmd-LSw2w6gp',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\acorn.ps1': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.acorn.ps1-KYErcF3h',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\acorn-walk': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.acorn-walk-JRL0VmkS',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\ansi-regex': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.ansi-regex-pikyGacR',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\ansi-styles': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.ansi-styles-MEBEGdUW',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\balanced-match': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.balanced-match-iY7iRTDu',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\babel-plugin-macros': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.babel-plugin-macros-M0pTRvSo',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\callsites': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.callsites-O9A3pbKO',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\chalk': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.chalk-69X8MTB3',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\brace-expansion': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.brace-expansion-0S6E1ZE2',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\clsx': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.clsx-14K0b68g',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\color-convert': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.color-convert-AFeIRLc9',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\color-name': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.color-name-K48MBVVr',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\commander': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.commander-6RDvGN6u',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\convert-source-map': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.convert-source-map-uUfJ1JgM',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\cosmiconfig': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.cosmiconfig-3U4ZtCGz',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\cross-spawn': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.cross-spawn-32FeyNFR',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\css-vendor': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.css-vendor-vPYY7Fz1',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\csstype': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.csstype-ypamzGc3',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\dom-helpers': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.dom-helpers-nfGTKsAQ',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\duplexer': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.duplexer-DL3QibV5',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\eastasianwidth': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.eastasianwidth-h6oKYmRc',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\emoji-regex': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.emoji-regex-dLBOdQW8',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\error-ex': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.error-ex-9AUeMeaM',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\escape-string-regexp': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.escape-string-regexp-P0K1ze8O',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\find-root': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.find-root-qSytYAuQ',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\glob': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.glob-ZhxBFWsV',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\glob': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.glob-DSzYPTRV',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\glob.cmd': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.glob.cmd-N3941ZP0',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\glob.ps1': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.glob.ps1-ORhvkjBD',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\foreground-child': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.foreground-child-hUkYdPxV',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\function-bind': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.function-bind-YyHHE2S2',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\gzip-size': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.gzip-size-fGfYq0aJ',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\has': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.has-AEOJH6d6',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\has-flag': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.has-flag-TH1PvOdG',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\hoist-non-react-statics': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.hoist-non-react-statics-FVzrDklF',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\hyphenate-style-name': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.hyphenate-style-name-VAXb10pI',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\import-fresh': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.import-fresh-mr7Kemyr',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\is-arrayish': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.is-arrayish-BJzy25fA',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\is-core-module': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.is-core-module-2otsxHZm',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\is-fullwidth-code-point': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.is-fullwidth-code-point-5K9hWvBi',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\is-in-browser': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.is-in-browser-4E8C3p0L',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\isexe': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.isexe-HWet6rHu',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jackspeak': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.jackspeak-3W0NBYRB',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\js-tokens': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.js-tokens-qxYvJ9oq',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\json-parse-even-better-errors': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.json-parse-even-better-errors-5uPDeX5N',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.jss-kRdYxVjk',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-camel-case': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.jss-plugin-camel-case-8zIjLSKJ',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-default-unit': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.jss-plugin-default-unit-izVhzUjz',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-global': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.jss-plugin-global-X0QjDVcN',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-nested': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.jss-plugin-nested-W3IAxPh9',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-props-sort': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.jss-plugin-props-sort-mTPkCB8s',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-rule-value-function': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.jss-plugin-rule-value-function-3byN9ude',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\jss-plugin-vendor-prefixer': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.jss-plugin-vendor-prefixer-tuWZ6gBn',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\lines-and-columns': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.lines-and-columns-ZdcGhqIs',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\lodash': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.lodash-1XF4TmjC',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\loose-envify': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.loose-envify-UQIwWviL',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\loose-envify': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.loose-envify-tE5AZMhj',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\loose-envify.cmd': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.loose-envify.cmd-sYZGan6e',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\loose-envify.ps1': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.loose-envify.ps1-NnUfnoWp',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\lru-cache': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.lru-cache-tcQMJOTT',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\mime': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.mime-Uw9k4xUc',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\mime': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.mime-x1IBNHeS',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\mime.cmd': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.mime.cmd-sKkl9Jof',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\mime.ps1': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.mime.ps1-aU7TN1lm',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\minipass': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.minipass-2wtwLEJa',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\minimatch': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.minimatch-xVsbBxBI',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\object-assign': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.object-assign-rJbBJ6i2',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\opener': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.opener-nrZ0TMxV',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\opener': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.opener-WnimYh93',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\opener.cmd': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.opener.cmd-ib9RPAcv',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\opener.ps1': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.opener.ps1-NHLHNxft',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\package-json-from-dist': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.package-json-from-dist-YSb9WQz0',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\parent-module': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.parent-module-9MEgYFhp',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\parse-json': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.parse-json-8z4aR9iG',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\path-key': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.path-key-oMLM1v6i',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\path-parse': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.path-parse-Wv8uuPwX',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\path-scurry': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.path-scurry-I8cgJT7v',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\path-type': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.path-type-0lc1vK9A',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\prop-types': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.prop-types-DI8vVzYo',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\react-is': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.react-is-7MRzFevO',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\react-transition-group': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.react-transition-group-tznxAsN9',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\regenerator-runtime': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.regenerator-runtime-7VRa2IdE',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\resolve': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.resolve-laO8hKPM',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\resolve-from': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.resolve-from-LBB0QcAl',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\rifm': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.rifm-Zitsojvb',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\rimraf': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.rimraf-x4Gvw7Y1',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\rimraf': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.rimraf-skHdR0Bd',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\rimraf.cmd': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.rimraf.cmd-WuOdhajF',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\rimraf.ps1': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.rimraf.ps1-k0lrZOR3',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\safe-buffer': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.safe-buffer-0fsaTpZX',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\shebang-command': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.shebang-command-s56HBQED',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\shebang-regex': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.shebang-regex-0BEu8hO2',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\signal-exit': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.signal-exit-NoZBYiyN',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\source-map': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.source-map-kPaEUMat',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\sirv': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.sirv-69ZrWsAF',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\string-width': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.string-width-gAmdSkMy',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\strip-ansi': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.strip-ansi-wjd4iGMV',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\string-width-cjs': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.string-width-cjs-NMweTXu0',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\strip-ansi-cjs': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.strip-ansi-cjs-BxavgF9N',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\stylis': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.stylis-UIZ6H92r',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\supports-color': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.supports-color-ynVw2RpT',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\tiny-warning': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.tiny-warning-1nD8tIYm',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\to-fast-properties': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.to-fast-properties-D5OYtVHG',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\webpack-bundle-analyzer': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.webpack-bundle-analyzer-kkzMQ3jl',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\webpack-bundle-analyzer': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.webpack-bundle-analyzer-03Ka5hiI',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\webpack-bundle-analyzer.cmd': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.webpack-bundle-analyzer.cmd-bPDScjsh',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\webpack-bundle-analyzer.ps1': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.webpack-bundle-analyzer.ps1-YcbHwCmw',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\totalist': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.totalist-rNRHy0a2',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\wrap-ansi-cjs': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.wrap-ansi-cjs-28OSMKZD',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\which': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.which-qLBaEg7C',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\node-which': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.node-which-igfBfp4P',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\node-which.cmd': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.node-which.cmd-bbv2gQSn',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\node-which.ps1': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.bin\\.node-which.ps1-uV2PjZRB',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\wrap-ansi': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.wrap-ansi-f9e0gyPU',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\ws': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.ws-78tNpPiH',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\yaml': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\.yaml-5p5ubutr',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\code-frame': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\.code-frame-InHnNN2H',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\helper-module-imports': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\.helper-module-imports-jBI89Q1c',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\helper-validator-identifier': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\.helper-validator-identifier-NAxN2cFw',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\highlight': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\.highlight-fRYzrfcb',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\helper-plugin-utils': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\.helper-plugin-utils-fQh1mxse',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\runtime': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\.runtime-Zqv0srcY',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\plugin-syntax-jsx': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\.plugin-syntax-jsx-V09QBe1j',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\types': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@babel\\.types-5hdgWPQe',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\core': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\.core-0MniIIUW',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\date-fns': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\.date-fns-VxcJQxkI',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\dayjs': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\.dayjs-VggEQAJw',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\moment': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\.moment-T7EPGvyX',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\luxon': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@date-io\\.luxon-boup2pFC',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\babel-plugin': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\.babel-plugin-o8qwduTh',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\cache': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\.cache-jOY5xIGH',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\is-prop-valid': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\.is-prop-valid-3IgmEmgv',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\hash': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\.hash-XCzZB2dq',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\memoize': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\.memoize-pdeUX5mN',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\react': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\.react-3c5MmCYh',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\serialize': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\.serialize-dulk6vGs',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\sheet': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\.sheet-4mP5iGKB',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\styled': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\.styled-RIBSQtXS',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\unitless': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\.unitless-zHExUhDB',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\utils': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\.utils-yMksF1bd',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\weak-memoize': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@emotion\\.weak-memoize-MTe1HM1x',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@fortawesome\\fontawesome-pro': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@fortawesome\\.fontawesome-pro-yFMEy1hf',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@isaacs\\cliui': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@isaacs\\.cliui-PlDS3Crt',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\core': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\.core-LASwtFb6',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\icons-material': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\.icons-material-3Fwm25GK',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\material': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\.material-JT0I7Gih',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\lab': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\.lab-Pf5T6iIr',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\private-theming': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\.private-theming-LIGQq52c',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\styled-engine': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\.styled-engine-BFDq6VGJ',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\styles': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\.styles-57e2UdWE',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\system': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\.system-bsnC8Bzp',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\types': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\.types-86FaTQe8',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\utils': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@mui\\.utils-NPTYQE0S',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@polka\\url': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@polka\\.url-UjCjDRc2',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@popperjs\\core': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@popperjs\\.core-67nOYAqV',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\parse-json': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\.parse-json-VCZEjDEt',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\prop-types': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\.prop-types-lafkxsn2',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\react': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\.react-88oggTod',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\react-is': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\.react-is-1fmys1D5',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\react-transition-group': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\.react-transition-group-FgOEpLNJ',
+771 silly reify   'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\scheduler': 'C:\\Users\\phalton\\Documents\\RRCloudWeb\\node_modules\\@types\\.scheduler-ith9DxkW'
+771 silly reify }
+772 http cache expo-image-manipulator@https://registry.npmjs.org/expo-image-manipulator/-/expo-image-manipulator-14.0.8.tgz 0ms (cache hit)
+773 http cache expo-image-loader@https://registry.npmjs.org/expo-image-loader/-/expo-image-loader-6.0.0.tgz 0ms (cache hit)
+774 silly tarball no local data for expo-image-manipulator@https://registry.npmjs.org/expo-image-manipulator/-/expo-image-manipulator-14.0.8.tgz. Extracting by manifest.
+775 silly tarball no local data for expo-image-loader@https://registry.npmjs.org/expo-image-loader/-/expo-image-loader-6.0.0.tgz. Extracting by manifest.
+776 http fetch GET 200 https://registry.npmjs.org/expo-image-manipulator/-/expo-image-manipulator-14.0.8.tgz 202ms (cache miss)
+777 http fetch GET 200 https://registry.npmjs.org/expo-image-loader/-/expo-image-loader-6.0.0.tgz 216ms (cache miss)
+778 silly ADD node_modules/expo-image-loader
+779 silly ADD node_modules/expo-image-manipulator
+780 silly REMOVE node_modules/@types/scheduler
+781 silly REMOVE node_modules/@types/react-transition-group
+782 silly REMOVE node_modules/@types/react-is
+783 silly REMOVE node_modules/@types/react
+784 silly REMOVE node_modules/@types/prop-types
+785 silly REMOVE node_modules/@types/parse-json
+786 silly REMOVE node_modules/@popperjs/core
+787 silly REMOVE node_modules/@polka/url
+788 silly REMOVE node_modules/@mui/utils
+789 silly REMOVE node_modules/@mui/types
+790 silly REMOVE node_modules/@mui/system
+791 silly REMOVE node_modules/@mui/styles
+792 silly REMOVE node_modules/@mui/styled-engine
+793 silly REMOVE node_modules/@mui/private-theming
+794 silly REMOVE node_modules/@mui/lab
+795 silly REMOVE node_modules/@mui/material
+796 silly REMOVE node_modules/@mui/icons-material
+797 silly REMOVE node_modules/@mui/core
+798 silly REMOVE node_modules/@isaacs/cliui
+799 silly REMOVE node_modules/@fortawesome/fontawesome-pro
+800 silly REMOVE node_modules/@emotion/weak-memoize
+801 silly REMOVE node_modules/@emotion/utils
+802 silly REMOVE node_modules/@emotion/unitless
+803 silly REMOVE node_modules/@emotion/styled
+804 silly REMOVE node_modules/@emotion/sheet
+805 silly REMOVE node_modules/@emotion/serialize
+806 silly REMOVE node_modules/@emotion/react
+807 silly REMOVE node_modules/@emotion/memoize
+808 silly REMOVE node_modules/@emotion/hash
+809 silly REMOVE node_modules/@emotion/is-prop-valid
+810 silly REMOVE node_modules/@emotion/cache
+811 silly REMOVE node_modules/@emotion/babel-plugin
+812 silly REMOVE node_modules/@date-io/luxon
+813 silly REMOVE node_modules/@date-io/moment
+814 silly REMOVE node_modules/@date-io/dayjs
+815 silly REMOVE node_modules/@date-io/date-fns
+816 silly REMOVE node_modules/@date-io/core
+817 silly REMOVE node_modules/@babel/types
+818 silly REMOVE node_modules/@babel/plugin-syntax-jsx
+819 silly REMOVE node_modules/@babel/runtime
+820 silly REMOVE node_modules/@babel/helper-plugin-utils
+821 silly REMOVE node_modules/@babel/highlight
+822 silly REMOVE node_modules/@babel/highlight/node_modules/has-flag
+823 silly REMOVE node_modules/@babel/highlight/node_modules/escape-string-regexp
+824 silly REMOVE node_modules/@babel/highlight/node_modules/color-name
+825 silly REMOVE node_modules/@babel/highlight/node_modules/supports-color
+826 silly REMOVE node_modules/@babel/highlight/node_modules/color-convert
+827 silly REMOVE node_modules/@babel/highlight/node_modules/chalk
+828 silly REMOVE node_modules/@babel/highlight/node_modules/ansi-styles
+829 silly REMOVE node_modules/@babel/helper-validator-identifier
+830 silly REMOVE node_modules/@babel/helper-module-imports
+831 silly REMOVE node_modules/@babel/code-frame
+832 silly REMOVE node_modules/yaml
+833 silly REMOVE node_modules/ws
+834 silly REMOVE node_modules/wrap-ansi
+835 silly REMOVE node_modules/wrap-ansi/node_modules/ansi-styles
+836 silly REMOVE node_modules/which
+837 silly REMOVE node_modules/wrap-ansi-cjs
+838 silly REMOVE node_modules/wrap-ansi-cjs/node_modules/strip-ansi
+839 silly REMOVE node_modules/wrap-ansi-cjs/node_modules/string-width
+840 silly REMOVE node_modules/wrap-ansi-cjs/node_modules/emoji-regex
+841 silly REMOVE node_modules/wrap-ansi-cjs/node_modules/ansi-regex
+842 silly REMOVE node_modules/totalist
+843 silly REMOVE node_modules/webpack-bundle-analyzer
+844 silly REMOVE node_modules/to-fast-properties
+845 silly REMOVE node_modules/tiny-warning
+846 silly REMOVE node_modules/supports-color
+847 silly REMOVE node_modules/stylis
+848 silly REMOVE node_modules/strip-ansi-cjs
+849 silly REMOVE node_modules/strip-ansi-cjs/node_modules/ansi-regex
+850 silly REMOVE node_modules/string-width-cjs
+851 silly REMOVE node_modules/string-width-cjs/node_modules/strip-ansi
+852 silly REMOVE node_modules/string-width-cjs/node_modules/emoji-regex
+853 silly REMOVE node_modules/string-width-cjs/node_modules/ansi-regex
+854 silly REMOVE node_modules/strip-ansi
+855 silly REMOVE node_modules/string-width
+856 silly REMOVE node_modules/sirv
+857 silly REMOVE node_modules/source-map
+858 silly REMOVE node_modules/signal-exit
+859 silly REMOVE node_modules/shebang-regex
+860 silly REMOVE node_modules/shebang-command
+861 silly REMOVE node_modules/safe-buffer
+862 silly REMOVE node_modules/rimraf
+863 silly REMOVE node_modules/rifm
+864 silly REMOVE node_modules/resolve-from
+865 silly REMOVE node_modules/resolve
+866 silly REMOVE node_modules/regenerator-runtime
+867 silly REMOVE node_modules/react-transition-group
+868 silly REMOVE node_modules/react-is
+869 silly REMOVE node_modules/prop-types
+870 silly REMOVE node_modules/prop-types/node_modules/react-is
+871 silly REMOVE node_modules/path-type
+872 silly REMOVE node_modules/path-scurry
+873 silly REMOVE node_modules/path-parse
+874 silly REMOVE node_modules/path-key
+875 silly REMOVE node_modules/parse-json
+876 silly REMOVE node_modules/parent-module
+877 silly REMOVE node_modules/package-json-from-dist
+878 silly REMOVE node_modules/opener
+879 silly REMOVE node_modules/object-assign
+880 silly REMOVE node_modules/minimatch
+881 silly REMOVE node_modules/minipass
+882 silly REMOVE node_modules/mime
+883 silly REMOVE node_modules/lru-cache
+884 silly REMOVE node_modules/loose-envify
+885 silly REMOVE node_modules/lodash
+886 silly REMOVE node_modules/lines-and-columns
+887 silly REMOVE node_modules/jss-plugin-vendor-prefixer
+888 silly REMOVE node_modules/jss-plugin-rule-value-function
+889 silly REMOVE node_modules/jss-plugin-props-sort
+890 silly REMOVE node_modules/jss-plugin-nested
+891 silly REMOVE node_modules/jss-plugin-global
+892 silly REMOVE node_modules/jss-plugin-default-unit
+893 silly REMOVE node_modules/jss-plugin-camel-case
+894 silly REMOVE node_modules/jss
+895 silly REMOVE node_modules/json-parse-even-better-errors
+896 silly REMOVE node_modules/js-tokens
+897 silly REMOVE node_modules/jackspeak
+898 silly REMOVE node_modules/isexe
+899 silly REMOVE node_modules/is-in-browser
+900 silly REMOVE node_modules/is-fullwidth-code-point
+901 silly REMOVE node_modules/is-core-module
+902 silly REMOVE node_modules/is-arrayish
+903 silly REMOVE node_modules/import-fresh
+904 silly REMOVE node_modules/hyphenate-style-name
+905 silly REMOVE node_modules/hoist-non-react-statics
+906 silly REMOVE node_modules/hoist-non-react-statics/node_modules/react-is
+907 silly REMOVE node_modules/has-flag
+908 silly REMOVE node_modules/has
+909 silly REMOVE node_modules/gzip-size
+910 silly REMOVE node_modules/function-bind
+911 silly REMOVE node_modules/foreground-child
+912 silly REMOVE node_modules/glob
+913 silly REMOVE node_modules/find-root
+914 silly REMOVE node_modules/escape-string-regexp
+915 silly REMOVE node_modules/error-ex
+916 silly REMOVE node_modules/emoji-regex
+917 silly REMOVE node_modules/eastasianwidth
+918 silly REMOVE node_modules/duplexer
+919 silly REMOVE node_modules/dom-helpers
+920 silly REMOVE node_modules/csstype
+921 silly REMOVE node_modules/css-vendor
+922 silly REMOVE node_modules/cross-spawn
+923 silly REMOVE node_modules/cosmiconfig
+924 silly REMOVE node_modules/convert-source-map
+925 silly REMOVE node_modules/commander
+926 silly REMOVE node_modules/color-name
+927 silly REMOVE node_modules/color-convert
+928 silly REMOVE node_modules/clsx
+929 silly REMOVE node_modules/brace-expansion
+930 silly REMOVE node_modules/chalk
+931 silly REMOVE node_modules/callsites
+932 silly REMOVE node_modules/babel-plugin-macros
+933 silly REMOVE node_modules/balanced-match
+934 silly REMOVE node_modules/ansi-styles
+935 silly REMOVE node_modules/ansi-regex
+936 silly REMOVE node_modules/acorn-walk
+937 silly REMOVE node_modules/acorn
+938 verbose cwd C:\Users\phalton\Documents\RRCloudWeb
+939 verbose os Windows_NT 10.0.26200
+940 verbose node v22.14.0
+941 verbose npm  v10.9.2
+942 verbose exit 0
+943 info ok
