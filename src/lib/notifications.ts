@@ -54,6 +54,32 @@ function isMissingNotificationSchema(error: unknown) {
   );
 }
 
+function notificationPushTitle(type: AppNotification['type']) {
+  switch (type) {
+    case 'shindig_chat_message':
+      return 'New ShinDig Message';
+    case 'shindig_invite':
+      return 'ShinDig Invite';
+    case 'shindig_bring_item':
+      return 'ShinDig Bring List';
+    case 'photo_add_request':
+      return 'Photo Request';
+    case 'photo_comment':
+    case 'photo_like':
+      return 'ShinDig Photo Update';
+    case 'shindig_comment':
+    case 'shindig_like':
+      return 'ShinDig Update';
+    case 'friend_request':
+      return 'Friend Request';
+    case 'friend_accept':
+    case 'friend_reject':
+      return 'Friend Update';
+    default:
+      return 'ShinDig';
+  }
+}
+
 export async function createNotification(args: {
   actorUserId: string;
   inviteId?: string;
@@ -111,6 +137,7 @@ export async function createNotification(args: {
   await sendPushNotification({
     body: args.message,
     data: {
+      actorUserId: args.actorUserId,
       inviteId: args.inviteId || null,
       photoId: args.photoId || null,
       requestId: args.requestId || null,
@@ -118,6 +145,7 @@ export async function createNotification(args: {
       type: args.type,
     },
     recipientUserId: args.recipientUserId,
+    title: notificationPushTitle(args.type),
   });
 }
 

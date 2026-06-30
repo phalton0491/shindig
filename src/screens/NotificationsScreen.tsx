@@ -141,6 +141,31 @@ export function NotificationsScreen({
     return notification.message;
   }
 
+  function renderNotificationMessage(notification: AppNotification) {
+    const message = notificationMessage(notification);
+
+    if (notification.type !== 'shindig_invite') {
+      return <Text style={styles.message}>{message}</Text>;
+    }
+
+    const inviteMessageMarker = ' Message: ';
+    const markerIndex = message.indexOf(inviteMessageMarker);
+    if (markerIndex === -1) {
+      return <Text style={styles.message}>{message}</Text>;
+    }
+
+    const leadingMessage = message.slice(0, markerIndex);
+    const emphasizedMessage = message.slice(markerIndex + 1);
+
+    return (
+      <Text style={styles.message}>
+        {leadingMessage}
+        {'\n'}
+        <Text style={styles.inviteMessageHighlight}>{emphasizedMessage}</Text>
+      </Text>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -171,7 +196,7 @@ export function NotificationsScreen({
                 >
                   <Image source={{ uri: notification.actor.avatar }} style={styles.avatar} />
                   <View style={styles.copy}>
-                    <Text style={styles.message}>{notificationMessage(notification)}</Text>
+                    {renderNotificationMessage(notification)}
                     <Text style={styles.time}>
                       {new Date(notification.createdAt).toLocaleString('en-US', {
                         day: 'numeric',
@@ -403,6 +428,12 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     fontSize: 14,
     lineHeight: 21,
+  },
+  inviteMessageHighlight: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 22,
   },
   time: {
     color: theme.colors.textMuted,

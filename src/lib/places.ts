@@ -68,7 +68,7 @@ type PhotonResponse = {
   features: PhotonFeature[];
 };
 
-const SEARCH_LIMIT = 8;
+const SEARCH_LIMIT = 3;
 const MAX_NEARBY_DISTANCE_MILES = 12;
 const SEARCH_TIMEOUT_MS = 1200;
 
@@ -135,6 +135,16 @@ function formatAddressParts(parts: Array<string | undefined>) {
     .map((part) => part?.trim())
     .filter((part): part is string => Boolean(part))
     .join(', ');
+}
+
+function isUnitedStatesCountry(value?: string) {
+  const normalized = value?.trim().toLowerCase();
+  return (
+    normalized === 'united states' ||
+    normalized === 'united states of america' ||
+    normalized === 'usa' ||
+    normalized === 'us'
+  );
 }
 
 function formatNominatimAddress(result: NominatimPlace) {
@@ -268,6 +278,7 @@ async function searchFallbackGeocoder(args: {
   url.searchParams.set('format', 'jsonv2');
   url.searchParams.set('limit', String(SEARCH_LIMIT));
   url.searchParams.set('addressdetails', '1');
+  url.searchParams.set('countrycodes', 'us');
   url.searchParams.set('dedupe', '1');
   url.searchParams.set(
     'q',
@@ -366,6 +377,7 @@ async function searchPhoton(args: {
 
   const json = (await response.json()) as PhotonResponse;
   return json.features
+    .filter((feature) => isUnitedStatesCountry(feature.properties.country))
     .map((feature) => mapPhotonFeature(feature, args.near))
     .filter(
       (place) =>
@@ -411,10 +423,6 @@ export async function searchPlaces(args: {
     } catch {
       googleFunctionUnavailable = true;
     }
-  }
-
-  if (args.mode === 'instant') {
-    return [];
   }
 
   try {

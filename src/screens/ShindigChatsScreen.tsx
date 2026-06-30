@@ -22,6 +22,7 @@ import { AppNotification, SavedShindig, ShindigChatMessage, ShindigChatPreview }
 
 type ShindigChatsScreenProps = {
   headerActions?: React.ReactNode;
+  initialShindigId?: string | null;
   notifications: AppNotification[];
   onBack: () => void;
   shindigs: SavedShindig[];
@@ -46,6 +47,7 @@ function formatChatPreviewTime(value: string) {
 
 export function ShindigChatsScreen({
   headerActions,
+  initialShindigId = null,
   notifications,
   onBack,
   shindigs,
@@ -73,6 +75,14 @@ export function ShindigChatsScreen({
   const activeShindig =
     chatEligibleShindigs.find((shindig) => shindig.id === activeShindigId) || null;
   const chatEligibleIdsKey = chatEligibleShindigs.map((shindig) => shindig.id).join(',');
+
+  useEffect(() => {
+    if (!initialShindigId) {
+      return;
+    }
+
+    setActiveShindigId(initialShindigId);
+  }, [initialShindigId]);
   const unreadChatNotificationCountByShindigId = useMemo(() => {
     const counts = new Map<string, number>();
     notifications

@@ -138,6 +138,7 @@ Deno.serve(async (request) => {
 
   const autocompleteBody: Record<string, unknown> = {
     includeQueryPredictions: false,
+    includedRegionCodes: ['US'],
     input: body.localityHint ? `${query} ${body.localityHint}` : query,
     regionCode: 'us',
   };

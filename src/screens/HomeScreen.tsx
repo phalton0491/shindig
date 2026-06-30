@@ -1,9 +1,8 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Contacts from 'expo-contacts';
 import * as FileSystem from 'expo-file-system/legacy';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import * as SMS from 'expo-sms';
@@ -30,6 +29,7 @@ import {
 
 import { PageHeader } from '../components/PageHeader';
 import { ProgressiveImage } from '../components/ProgressiveImage';
+import { listShindigChatMessages, sendShindigChatMessage } from '../lib/chats';
 import { generateShindigCover } from '../lib/ai';
 import { searchPlaces } from '../lib/places';
 import { createNotification } from '../lib/notifications';
@@ -57,6 +57,7 @@ import {
   FriendProfile,
   SavedShindig,
   ShindigBringItem,
+  ShindigChatMessage,
   ShindigInviteParticipant,
   SavedShindigPhoto,
   ShindigState,
@@ -70,13 +71,16 @@ type HomeScreenProps = {
   onBackFromFeed?: () => void;
   initialFeedShindig?: SavedShindig | null;
   initialHighlightedPhotoId?: string | null;
+  initialPlannedFeedViewMode?: 'feed' | 'overview' | null;
   initialStep?: 'create' | 'welcome' | null;
   onAcceptUpcomingInvite?: (inviteId: string) => Promise<void>;
   onFlowStepChange?: (step: FlowStep) => void;
   onConsumeInitialFeedShindig?: () => void;
   onConsumeInitialHighlightedPhotoId?: () => void;
+  onConsumeInitialPlannedFeedViewMode?: () => void;
   onConsumeInitialStep?: () => void;
   onMaybeUpcomingInvite?: (inviteId: string) => Promise<void>;
+  onOpenShindigChat?: (shindigId: string) => void;
   onRejectUpcomingInvite?: (inviteId: string) => Promise<void>;
   onShindigSaved: (args: {
     plannedFor?: string | null;
@@ -102,6 +106,11 @@ type HomeScreenProps = {
     shindigId: string;
     state: ShindigState;
   }) => Promise<SavedShindig>;
+  onViewStateChange?: (state: {
+    activeFeedShindig: SavedShindig | null;
+    plannedFeedViewMode: 'feed' | 'overview';
+    step: FlowStep;
+  }) => void;
   profile: UserProfile;
   shindigs: SavedShindig[];
   userId: string;
@@ -205,6 +214,20 @@ function formatRelativeTimestamp(value: string) {
     day: 'numeric',
     month: 'short',
   });
+}
+
+function buildShareInviteMessage(args: {
+  inviteMessage?: string;
+  inviteUrl: string;
+  inviterName: string;
+  plannedFor: string;
+  title: string;
+}) {
+  const optionalMessage = args.inviteMessage?.trim();
+
+  return `${args.inviterName} invited you to the planned ShinDig "${args.title}" on ${formatPlannedDateLabel(
+    args.plannedFor
+  )}.${optionalMessage ? ` Message: ${optionalMessage}` : ''} If you are new, sign up first. If you already have ShinDig, open this link to review the invite: ${args.inviteUrl}`;
 }
 
 function fileExtensionFromUri(uri: string) {
@@ -475,19 +498,23 @@ export function HomeScreen({
   onBackFromFeed,
   initialFeedShindig,
   initialHighlightedPhotoId,
+  initialPlannedFeedViewMode,
   initialStep,
   onAcceptUpcomingInvite,
   onFlowStepChange,
   onConsumeInitialFeedShindig,
   onConsumeInitialHighlightedPhotoId,
+  onConsumeInitialPlannedFeedViewMode,
   onConsumeInitialStep,
   onMaybeUpcomingInvite,
+  onOpenShindigChat,
   onRejectUpcomingInvite,
   onShindigSaved,
   onShindigDeleted,
   onShindigCoverPhotoChanged,
   onShindigPhotoDeleted,
   onShindigStateChanged,
+  onViewStateChange,
   profile,
   shindigs,
   userId,
@@ -516,6 +543,7 @@ export function HomeScreen({
   const [selectedInviteUsersById, setSelectedInviteUsersById] = useState<
     Record<string, FriendProfile>
   >({});
+  const [inviteMessageDraft, setInviteMessageDraft] = useState('');
   const [selectedContactsById, setSelectedContactsById] = useState<Record<string, InviteContact>>(
     {}
   );
@@ -523,12 +551,7 @@ export function HomeScreen({
   const [isInvitePickerOpen, setIsInvitePickerOpen] = useState(false);
   const [isSearchingInviteUsers, setIsSearchingInviteUsers] = useState(false);
   const [activeFeedShindig, setActiveFeedShindig] = useState<SavedShindig | null>(null);
-  const [currentLocation, setCurrentLocation] = useState<Location.LocationObjectCoords | null>(
-    null
-  );
-  const [locationHint, setLocationHint] = useState('');
   const [error, setError] = useState('');
-  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isSearchingLocations, setIsSearchingLocations] = useState(false);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [isSavingShindig, setIsSavingShindig] = useState(false);
@@ -543,17 +566,29 @@ export function HomeScreen({
   const [feedBackMode, setFeedBackMode] = useState<'external' | 'welcome'>('welcome');
   const [expandedPhoto, setExpandedPhoto] = useState<SavedShindigPhoto | null>(null);
   const [actingUpcomingInviteId, setActingUpcomingInviteId] = useState('');
+  const [initialBringItemDraft, setInitialBringItemDraft] = useState('');
+  const [initialBringItems, setInitialBringItems] = useState<string[]>([]);
   const [bringItemDraft, setBringItemDraft] = useState('');
   const [customBringItemDraft, setCustomBringItemDraft] = useState('');
   const [actingBringItemId, setActingBringItemId] = useState('');
   const [showAllUpcomingBringItems, setShowAllUpcomingBringItems] = useState(false);
   const [plannedFeedViewMode, setPlannedFeedViewMode] = useState<'feed' | 'overview'>('overview');
+  const [activeUpcomingOverviewTab, setActiveUpcomingOverviewTab] = useState<
+    'overview' | 'chat' | 'items' | 'photos' | 'invite'
+  >('overview');
+  const [upcomingChatMessages, setUpcomingChatMessages] = useState<ShindigChatMessage[]>([]);
+  const [inviteFlowMode, setInviteFlowMode] = useState<'create' | 'existing'>('create');
+  const [showCreateInviteContacts, setShowCreateInviteContacts] = useState(false);
+  const [expandedWelcomeSection, setExpandedWelcomeSection] = useState<
+    'active' | 'completed' | 'upcoming' | null
+  >(null);
   const [isLikeSheetVisible, setIsLikeSheetVisible] = useState(false);
   const [isLoadingLikeSheet, setIsLoadingLikeSheet] = useState(false);
   const [likeSheetProfiles, setLikeSheetProfiles] = useState<FriendProfile[]>([]);
   const [likeSheetTitle, setLikeSheetTitle] = useState('Liked by');
-  const deferredLocationQuery = useDeferredValue(locationQuery);
+  const [actingInviteActionKey, setActingInviteActionKey] = useState('');
   const feedScrollRef = useRef<ScrollView | null>(null);
+  const createFlowScrollRef = useRef<ScrollView | null>(null);
   const photoOffsetsRef = useRef<Record<string, number>>({});
   const sectionOffsetsRef = useRef<Record<string, number>>({});
   const activeFeedRefreshIdRef = useRef(0);
@@ -598,6 +633,12 @@ export function HomeScreen({
   const selectedInviteUsers = useMemo(
     () => Object.values(selectedInviteUsersById),
     [selectedInviteUsersById]
+  );
+  const selectedAppInviteCount = selectedFriends.length + selectedInviteUsers.length;
+  const selectedInviteTotal = selectedContacts.length + selectedAppInviteCount;
+  const unselectedFriends = useMemo(
+    () => filteredFriends.filter((friend) => !selectedFriendIds.includes(friend.id)),
+    [filteredFriends, selectedFriendIds]
   );
   const activeShindigs = useMemo(
     () => shindigs.filter((shindig) => shindig.state === 'active'),
@@ -695,10 +736,27 @@ export function HomeScreen({
         : [],
     [activeFeedOwner?.name, activeFeedShindig]
   );
+  const acceptedInviteeIds = useMemo(
+    () =>
+      new Set(
+        activeFeedShindig?.inviteParticipants
+          .filter((participant) => participant.status === 'accepted')
+          .map((participant) => participant.profile.id) || []
+      ),
+    [activeFeedShindig]
+  );
 
   useEffect(() => {
     onFlowStepChange?.(step);
   }, [onFlowStepChange, step]);
+
+  useEffect(() => {
+    onViewStateChange?.({
+      activeFeedShindig,
+      plannedFeedViewMode,
+      step,
+    });
+  }, [activeFeedShindig, onViewStateChange, plannedFeedViewMode, step]);
 
   useEffect(() => {
     if (!initialFeedShindig) {
@@ -706,12 +764,18 @@ export function HomeScreen({
     }
 
     setError('');
-    setPlannedFeedViewMode('overview');
+    setPlannedFeedViewMode(initialPlannedFeedViewMode || 'overview');
     setActiveFeedShindig(initialFeedShindig);
     setFeedBackMode('external');
     setStep('feed');
     onConsumeInitialFeedShindig?.();
-  }, [initialFeedShindig, onConsumeInitialFeedShindig]);
+    onConsumeInitialPlannedFeedViewMode?.();
+  }, [
+    initialFeedShindig,
+    initialPlannedFeedViewMode,
+    onConsumeInitialFeedShindig,
+    onConsumeInitialPlannedFeedViewMode,
+  ]);
 
   useEffect(() => {
     if (!initialStep) {
@@ -813,60 +877,7 @@ export function HomeScreen({
 
   useEffect(() => {
     let isMounted = true;
-
-    async function loadCurrentLocation() {
-      setIsLoadingLocation(true);
-      try {
-        const permission = await Location.requestForegroundPermissionsAsync();
-        if (!isMounted || permission.status !== 'granted') {
-          return;
-        }
-
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-
-        if (isMounted) {
-          setCurrentLocation(location.coords);
-        }
-
-        const reverseGeocode = await Location.reverseGeocodeAsync({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-        const firstResult = reverseGeocode[0];
-        const hint = [firstResult?.city || firstResult?.district, firstResult?.region]
-          .filter(Boolean)
-          .join(', ');
-
-        if (isMounted) {
-          setLocationHint(hint);
-        }
-      } catch (nextError) {
-        if (isMounted) {
-          setError(
-            nextError instanceof Error
-              ? nextError.message
-              : 'Unable to determine your location right now.'
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingLocation(false);
-        }
-      }
-    }
-
-    loadCurrentLocation();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-    const searchQuery = deferredLocationQuery.trim();
+    const searchQuery = locationQuery.trim();
 
     async function runLocationSearch() {
       if (searchQuery.length < 2) {
@@ -877,14 +888,7 @@ export function HomeScreen({
       setIsSearchingLocations(true);
       try {
         const results = await searchPlaces({
-          localityHint: locationHint || undefined,
           mode: 'instant',
-          near: currentLocation
-            ? {
-                latitude: currentLocation.latitude,
-                longitude: currentLocation.longitude,
-              }
-            : undefined,
           query: searchQuery,
         });
 
@@ -911,7 +915,7 @@ export function HomeScreen({
     return () => {
       isMounted = false;
     };
-  }, [currentLocation, deferredLocationQuery, locationHint]);
+  }, [locationQuery]);
 
   async function handlePickFromLibrary() {
     setError('');
@@ -1141,7 +1145,7 @@ export function HomeScreen({
 
   function selectLocation(place: TimelinePlace) {
     setSelectedLocation(place);
-    setLocationQuery(place.title);
+    setLocationQuery(place.address || place.title);
     setLocationResults([]);
   }
 
@@ -1166,17 +1170,32 @@ export function HomeScreen({
     setSelectedFriendIds([]);
     setSelectedInviteUsersById({});
     setSelectedContactsById({});
+    setInviteMessageDraft('');
     setInviteSearch('');
     setInviteSearchResults([]);
+    setShowCreateInviteContacts(false);
+    setInitialBringItemDraft('');
+    setInitialBringItems([]);
     setBringItemDraft('');
     setCustomBringItemDraft('');
     setShowAllUpcomingBringItems(false);
     setPlannedFeedViewMode('overview');
+    setActiveUpcomingOverviewTab('overview');
+    setExpandedWelcomeSection(null);
     setIsInvitePickerOpen(false);
     setContacts([]);
     setActiveFeedShindig(null);
     setFeedBackMode('welcome');
     setStep('create');
+    createFlowScrollRef.current?.scrollTo({ animated: false, x: 0, y: 0 });
+  }
+
+  function scrollCreateFlowToTop() {
+    createFlowScrollRef.current?.scrollTo({
+      animated: true,
+      x: 0,
+      y: 0,
+    });
   }
 
   function openPastShindig(shindig: SavedShindig) {
@@ -1185,9 +1204,31 @@ export function HomeScreen({
     setCustomBringItemDraft('');
     setShowAllUpcomingBringItems(false);
     setPlannedFeedViewMode('overview');
+    setActiveUpcomingOverviewTab('overview');
+    setExpandedWelcomeSection(null);
     setActiveFeedShindig(shindig);
     setFeedBackMode('welcome');
     setStep('feed');
+  }
+
+  function handleAddInitialBringItem() {
+    const nextLabel = initialBringItemDraft.trim();
+    if (!nextLabel) {
+      return;
+    }
+
+    setInitialBringItems((current) =>
+      current.includes(nextLabel) ? current : [...current, nextLabel]
+    );
+    setInitialBringItemDraft('');
+  }
+
+  function handleRemoveInitialBringItem(label: string) {
+    setInitialBringItems((current) => current.filter((item) => item !== label));
+  }
+
+  function handleAddSuggestedBringItem(label: string) {
+    setInitialBringItems((current) => (current.includes(label) ? current : [...current, label]));
   }
 
   async function refreshActiveFeed(shindigId: string) {
@@ -1219,6 +1260,20 @@ export function HomeScreen({
       if (refreshId === activeFeedRefreshIdRef.current) {
         setIsRefreshingFeed(false);
       }
+    }
+  }
+
+  async function refreshUpcomingChatMessages(shindigId: string) {
+    try {
+      const nextMessages = await listShindigChatMessages({
+        shindigId,
+        userId,
+      });
+      setUpcomingChatMessages(nextMessages);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Could not load this ShinDig chat.'
+      );
     }
   }
 
@@ -1300,6 +1355,42 @@ export function HomeScreen({
 
   useEffect(() => {
     if (step !== 'feed' || !activeFeedShindig || activeFeedShindig.state !== 'planned') {
+      setUpcomingChatMessages([]);
+      return;
+    }
+
+    void refreshUpcomingChatMessages(activeFeedShindig.id);
+  }, [activeFeedShindig?.id, activeFeedShindig?.state, step, userId]);
+
+  useEffect(() => {
+    if (!supabase || step !== 'feed' || !activeFeedShindig || activeFeedShindig.state !== 'planned') {
+      return;
+    }
+
+    const client = supabase;
+    const channel = client
+      .channel(`planned-shindig-chat-preview:${activeFeedShindig.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          filter: `shindig_id=eq.${activeFeedShindig.id}`,
+          schema: 'public',
+          table: 'shindig_chat_messages',
+        },
+        () => {
+          void refreshUpcomingChatMessages(activeFeedShindig.id);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, [activeFeedShindig?.id, activeFeedShindig?.state, step, userId]);
+
+  useEffect(() => {
+    if (step !== 'feed' || !activeFeedShindig || activeFeedShindig.state !== 'planned') {
       return;
     }
 
@@ -1316,66 +1407,43 @@ export function HomeScreen({
   async function continueToInvite() {
     if (!shindigName.trim()) {
       setError('Name your shindig before continuing.');
+      scrollCreateFlowToTop();
       return;
     }
 
     if (photos.length === 0) {
       setError('Add at least one photo before continuing.');
+      scrollCreateFlowToTop();
       return;
     }
 
     if (photos.length > 1) {
       setError('Upcoming ShinDigs can only start with one cover photo.');
+      scrollCreateFlowToTop();
       return;
     }
 
-    if (!selectedLocation && !locationQuery.trim()) {
+    if (!locationQuery.trim()) {
       setError('Choose a starting location before continuing.');
+      scrollCreateFlowToTop();
       return;
     }
 
     if (plannedFor.getTime() <= Date.now()) {
       setError('Pick a future date and time for this planned ShinDig.');
+      scrollCreateFlowToTop();
       return;
     }
 
     setError('');
 
-    if (!selectedLocation && locationQuery.trim()) {
-      setIsSearchingLocations(true);
-      try {
-        const results = await searchPlaces({
-          localityHint: locationHint || undefined,
-          mode: 'submit',
-          near: currentLocation
-            ? {
-                latitude: currentLocation.latitude,
-                longitude: currentLocation.longitude,
-              }
-            : undefined,
-          query: locationQuery.trim(),
-        });
-
-        if (results.length > 0) {
-          setSelectedLocation(results[0]);
-          setLocationQuery(results[0].title);
-        } else {
-          setSelectedLocation(buildManualPlace(locationQuery));
-        }
-      } catch (nextError) {
-        setSelectedLocation(buildManualPlace(locationQuery));
-        if (nextError instanceof Error) {
-          setError(`${nextError.message} Continuing with your typed location instead.`);
-        }
-      } finally {
-        setIsSearchingLocations(false);
-      }
-    }
-
     setInviteSearch('');
-    setIsInvitePickerOpen(false);
+    setIsInvitePickerOpen(true);
     setContacts([]);
+    setShowCreateInviteContacts(false);
+    setInviteFlowMode('create');
     setStep('invite');
+    await loadDeviceContacts({ reset: true });
   }
 
   async function openInvitePicker() {
@@ -1386,15 +1454,48 @@ export function HomeScreen({
     await loadDeviceContacts({ reset: true });
   }
 
+  function resetInviteSelections() {
+    setInviteMessageDraft('');
+    setSelectedContactsById({});
+    setSelectedFriendIds([]);
+    setSelectedInviteUsersById({});
+    setInviteSearch('');
+    setInviteSearchResults([]);
+    setShowCreateInviteContacts(false);
+  }
+
+  async function startInviteMorePeopleFlow() {
+    if (!activeFeedShindig || activeFeedShindig.ownerId !== userId) {
+      return;
+    }
+
+    setError('');
+    resetInviteSelections();
+    setContacts([]);
+    setInviteFlowMode('existing');
+    setStep('invite');
+    setIsInvitePickerOpen(true);
+    await loadDeviceContacts({ reset: true });
+  }
+
   function closeInvitePicker() {
     contactsRequestIdRef.current += 1;
     setIsLoadingContacts(false);
     setInviteSearch('');
     setInviteSearchResults([]);
     setIsInvitePickerOpen(false);
+
+    if (inviteFlowMode === 'existing') {
+      setStep('feed');
+    }
   }
 
   function skipInvites() {
+    if (inviteFlowMode === 'existing') {
+      closeInvitePicker();
+      return;
+    }
+
     contactsRequestIdRef.current += 1;
     setIsInvitePickerOpen(false);
     void saveShindigAndOpenFeed();
@@ -1436,6 +1537,7 @@ export function HomeScreen({
       if (permission.status !== 'granted') {
         setContacts([]);
         setError('Contacts access is required to invite people by text.');
+        scrollCreateFlowToTop();
         return;
       }
 
@@ -1456,6 +1558,7 @@ export function HomeScreen({
     } catch (nextError) {
       if (requestId === contactsRequestIdRef.current) {
         setError(nextError instanceof Error ? nextError.message : 'Could not load contacts.');
+        scrollCreateFlowToTop();
       }
     } finally {
       if (requestId === contactsRequestIdRef.current) {
@@ -1548,11 +1651,12 @@ export function HomeScreen({
     }
   }
 
-  async function saveShindigAndOpenFeed() {
-    const startingPlace = selectedLocation || (locationQuery.trim() ? buildManualPlace(locationQuery) : null);
+  async function saveShindigAndOpenFeed(options?: { shareAfterSave?: boolean }) {
+      const startingPlace = selectedLocation || (locationQuery.trim() ? buildManualPlace(locationQuery) : null);
 
     if (!startingPlace) {
       setError('Choose a starting location first.');
+      scrollCreateFlowToTop();
       return;
     }
 
@@ -1589,6 +1693,18 @@ export function HomeScreen({
         }
       }
 
+      if (initialBringItems.length > 0) {
+        await Promise.all(
+          initialBringItems.map((label) =>
+            addBringItem({
+              label,
+              shindigId: savedShindigWithCover.id,
+              userId,
+            })
+          )
+        );
+      }
+
       const inviteIssues: string[] = [];
       const selectedAppInvitees = [
         ...selectedFriends,
@@ -1596,6 +1712,15 @@ export function HomeScreen({
           (candidate) => !selectedFriendIds.includes(candidate.id)
         ),
       ];
+      const inviteMessage = inviteMessageDraft.trim();
+
+      if (inviteMessage) {
+        await sendShindigChatMessage({
+          body: inviteMessage,
+          shindigId: savedShindigWithCover.id,
+          userId,
+        });
+      }
 
       if (selectedAppInvitees.length > 0) {
         try {
@@ -1613,11 +1738,9 @@ export function HomeScreen({
                   actorUserId: userId,
                   inviteId: invite.id,
                   message:
-                    shindigTiming === 'planned'
-                      ? `${profile.name} invited you to the planned ShinDig "${savedShindigWithCover.title}" on ${formatPlannedDateLabel(
-                          plannedFor.toISOString()
-                        )}.`
-                      : `${profile.name} added you to the ShinDig "${savedShindigWithCover.title}".`,
+                    `${profile.name} invited you to the planned ShinDig "${savedShindigWithCover.title}" on ${formatPlannedDateLabel(
+                      plannedFor.toISOString()
+                    )}.${inviteMessage ? ` Message: ${inviteMessage}` : ''}`,
                   recipientUserId: invite.invitee_user_id!,
                   shindigId: savedShindigWithCover.id,
                   type: 'shindig_invite',
@@ -1653,11 +1776,13 @@ export function HomeScreen({
 
           await SMS.sendSMSAsync(
             selectedContacts.map((contact) => contact.phoneNumber),
-            shindigTiming === 'planned'
-              ? `${profile.name} invited you to the planned ShinDig "${savedShindigWithCover.title}" on ${formatPlannedDateLabel(
-                  plannedFor.toISOString()
-                )}. If you are new, sign up first. If you already have ShinDig, open this link to review the invite: ${inviteUrl}`
-              : `${profile.name} invited you to join the ShinDig "${savedShindigWithCover.title}". If you are new, sign up first. If you already have ShinDig, open this link to review the invite: ${inviteUrl}`
+            buildShareInviteMessage({
+              inviteMessage,
+              inviteUrl,
+              inviterName: profile.name,
+              plannedFor: plannedFor.toISOString(),
+              title: savedShindigWithCover.title,
+            })
           );
         } catch (nextError) {
           inviteIssues.push(
@@ -1668,17 +1793,288 @@ export function HomeScreen({
         }
       }
 
+      if (options?.shareAfterSave) {
+        try {
+          const invite = await createPhoneShindigInvite({
+            inviterUserId: userId,
+            shindigId: savedShindigWithCover.id,
+          });
+          if (!invite.invite_token) {
+            throw new Error('The share invite link could not be created.');
+          }
+
+          const inviteUrl = `${INVITE_LINK_BASE}?invite=${encodeURIComponent(
+            invite.invite_token
+          )}`;
+
+          await Share.share({
+            message: buildShareInviteMessage({
+              inviteMessage,
+              inviteUrl,
+              inviterName: profile.name,
+              plannedFor: plannedFor.toISOString(),
+              title: savedShindigWithCover.title,
+            }),
+            title: savedShindigWithCover.title,
+          });
+        } catch (nextError) {
+          inviteIssues.push(
+            nextError instanceof Error ? nextError.message : 'The invite could not be shared.'
+          );
+        }
+      }
+
       setActiveFeedShindig(savedShindigWithCover);
       setStep('feed');
       if (inviteIssues.length > 0) {
         setError(inviteIssues.join(' '));
+        scrollCreateFlowToTop();
       }
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : 'Failed to start this ShinDig.'
       );
+      scrollCreateFlowToTop();
     } finally {
       setIsSavingShindig(false);
+    }
+  }
+
+  async function handleInviteMorePeople() {
+    if (!activeFeedShindig || activeFeedShindig.ownerId !== userId) {
+      return;
+    }
+
+    const targetShindig = activeFeedShindig;
+    const selectedAppInvitees = [
+      ...selectedFriends,
+      ...selectedInviteUsers.filter((candidate) => !selectedFriendIds.includes(candidate.id)),
+    ];
+
+    if (selectedAppInvitees.length + selectedContacts.length === 0) {
+      setError('Select at least one person to invite.');
+      return;
+    }
+
+    setIsSavingShindig(true);
+    setError('');
+
+    try {
+      const inviteIssues: string[] = [];
+
+      if (selectedAppInvitees.length > 0) {
+        try {
+          const invites = await createAppFriendShindigInvites({
+            friendIds: selectedAppInvitees.map((friend) => friend.id),
+            inviterUserId: userId,
+            shindigId: targetShindig.id,
+          });
+
+          await Promise.all(
+            invites
+              .filter((invite) => invite.status === 'pending' && invite.invitee_user_id)
+              .map((invite) =>
+                createNotification({
+                  actorUserId: userId,
+                  inviteId: invite.id,
+                  message:
+                    `${profile.name} invited you to the planned ShinDig "${targetShindig.title}" on ${formatPlannedDateLabel(
+                      targetShindig.plannedFor || new Date().toISOString()
+                    )}.`,
+                  recipientUserId: invite.invitee_user_id!,
+                  shindigId: targetShindig.id,
+                  type: 'shindig_invite',
+                })
+              )
+          );
+        } catch (nextError) {
+          inviteIssues.push(
+            nextError instanceof Error
+              ? nextError.message
+              : 'Some in-app friend invites could not be sent.'
+          );
+        }
+      }
+
+      if (selectedContacts.length > 0) {
+        try {
+          const smsAvailable = await SMS.isAvailableAsync();
+          if (!smsAvailable) {
+            throw new Error('Text-message invites are only available on your phone.');
+          }
+
+          const invite = await createPhoneShindigInvite({
+            inviterUserId: userId,
+            shindigId: targetShindig.id,
+          });
+          if (!invite.invite_token) {
+            throw new Error('The text-message invite link could not be created.');
+          }
+          const inviteUrl = `${INVITE_LINK_BASE}?invite=${encodeURIComponent(
+            invite.invite_token
+          )}`;
+
+          await SMS.sendSMSAsync(
+            selectedContacts.map((contact) => contact.phoneNumber),
+            `${profile.name} invited you to the planned ShinDig "${targetShindig.title}" on ${formatPlannedDateLabel(
+              targetShindig.plannedFor || new Date().toISOString()
+            )}. If you are new, sign up first. If you already have ShinDig, open this link to review the invite: ${inviteUrl}`
+          );
+        } catch (nextError) {
+          inviteIssues.push(
+            nextError instanceof Error
+              ? nextError.message
+              : 'The text-message invites could not be sent.'
+          );
+        }
+      }
+
+      await refreshActiveFeed(targetShindig.id);
+      resetInviteSelections();
+      setContacts([]);
+      setInviteFlowMode('create');
+      setIsInvitePickerOpen(false);
+      setStep('feed');
+
+      if (inviteIssues.length > 0) {
+        setError(inviteIssues.join(' '));
+      }
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to send these invites.'
+      );
+    } finally {
+      setIsSavingShindig(false);
+    }
+  }
+
+  async function handleImmediateInvite(args: {
+    actionKey: string;
+    contacts?: InviteContact[];
+    inviteUsers?: FriendProfile[];
+  }) {
+    if (!activeFeedShindig || activeFeedShindig.ownerId !== userId) {
+      return;
+    }
+
+    const targetShindig = activeFeedShindig;
+    const inviteUsers = args.inviteUsers || [];
+    const contactsToInvite = args.contacts || [];
+
+    if (inviteUsers.length + contactsToInvite.length === 0) {
+      return;
+    }
+
+    setActingInviteActionKey(args.actionKey);
+    setError('');
+
+    try {
+      const inviteIssues: string[] = [];
+
+      if (inviteUsers.length > 0) {
+        try {
+          const invites = await createAppFriendShindigInvites({
+            friendIds: inviteUsers.map((friend) => friend.id),
+            inviterUserId: userId,
+            shindigId: targetShindig.id,
+          });
+
+          await Promise.all(
+            invites
+              .filter((invite) => invite.status === 'pending' && invite.invitee_user_id)
+              .map((invite) =>
+                createNotification({
+                  actorUserId: userId,
+                  inviteId: invite.id,
+                  message:
+                    `${profile.name} invited you to the planned ShinDig "${targetShindig.title}" on ${formatPlannedDateLabel(
+                      targetShindig.plannedFor || new Date().toISOString()
+                    )}.`,
+                  recipientUserId: invite.invitee_user_id!,
+                  shindigId: targetShindig.id,
+                  type: 'shindig_invite',
+                })
+              )
+          );
+
+          setSelectedFriendIds((current) =>
+            Array.from(
+              new Set([
+                ...current,
+                ...inviteUsers
+                  .filter((candidate) => friends.some((friend) => friend.id === candidate.id))
+                  .map((candidate) => candidate.id),
+              ])
+            )
+          );
+          setSelectedInviteUsersById((current) => ({
+            ...current,
+            ...Object.fromEntries(
+              inviteUsers
+                .filter((candidate) => !friends.some((friend) => friend.id === candidate.id))
+                .map((candidate) => [candidate.id, candidate])
+            ),
+          }));
+        } catch (nextError) {
+          inviteIssues.push(
+            nextError instanceof Error
+              ? nextError.message
+              : 'Some in-app friend invites could not be sent.'
+          );
+        }
+      }
+
+      if (contactsToInvite.length > 0) {
+        try {
+          const smsAvailable = await SMS.isAvailableAsync();
+          if (!smsAvailable) {
+            throw new Error('Text-message invites are only available on your phone.');
+          }
+
+          const invite = await createPhoneShindigInvite({
+            inviterUserId: userId,
+            shindigId: targetShindig.id,
+          });
+          if (!invite.invite_token) {
+            throw new Error('The text-message invite link could not be created.');
+          }
+          const inviteUrl = `${INVITE_LINK_BASE}?invite=${encodeURIComponent(
+            invite.invite_token
+          )}`;
+
+          await SMS.sendSMSAsync(
+            contactsToInvite.map((contact) => contact.phoneNumber),
+            `${profile.name} invited you to the planned ShinDig "${targetShindig.title}" on ${formatPlannedDateLabel(
+              targetShindig.plannedFor || new Date().toISOString()
+            )}. If you are new, sign up first. If you already have ShinDig, open this link to review the invite: ${inviteUrl}`
+          );
+
+          setSelectedContactsById((current) => ({
+            ...current,
+            ...Object.fromEntries(contactsToInvite.map((contact) => [contact.id, contact])),
+          }));
+        } catch (nextError) {
+          inviteIssues.push(
+            nextError instanceof Error
+              ? nextError.message
+              : 'The text-message invites could not be sent.'
+          );
+        }
+      }
+
+      await refreshActiveFeed(targetShindig.id);
+
+      if (inviteIssues.length > 0) {
+        setError(inviteIssues.join(' '));
+        scrollCreateFlowToTop();
+      }
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to send this invite.'
+      );
+      scrollCreateFlowToTop();
+    } finally {
+      setActingInviteActionKey('');
     }
   }
 
@@ -1958,6 +2354,65 @@ export function HomeScreen({
     }
   }
 
+  async function handleSendUpcomingChatMessage() {
+    if (!activeFeedShindig || !shindigCommentDraft.trim()) {
+      return;
+    }
+
+    const targetShindig = activeFeedShindig;
+    const nextBody = shindigCommentDraft.trim();
+    const optimisticMessage = {
+      author: buildCurrentUserProfile(profile, userId),
+      body: nextBody,
+      createdAt: new Date().toISOString(),
+      id: `local-shindig-chat-${Date.now()}`,
+      shindigId: targetShindig.id,
+    } satisfies ShindigChatMessage;
+
+    setUpcomingChatMessages((current) => [...current, optimisticMessage]);
+    setShindigCommentDraft('');
+
+    try {
+      await sendShindigChatMessage({
+        body: nextBody,
+        shindigId: targetShindig.id,
+        userId,
+      });
+      const recipientIds = Array.from(
+        new Set([
+          targetShindig.ownerId,
+          ...targetShindig.inviteParticipants
+            .filter((participant) => participant.status === 'accepted')
+            .map((participant) => participant.profile.id),
+        ])
+      ).filter((recipientUserId) => recipientUserId !== userId);
+
+      if (recipientIds.length > 0) {
+        await Promise.all(
+          recipientIds.map((recipientUserId) =>
+            createNotification({
+              actorUserId: userId,
+              message: `New chat message in "${targetShindig.title}".`,
+              recipientUserId,
+              shindigId: targetShindig.id,
+              type: 'shindig_chat_message',
+            })
+          )
+        );
+      }
+
+      await refreshUpcomingChatMessages(targetShindig.id);
+    } catch (nextError) {
+      setUpcomingChatMessages((current) =>
+        current.filter((message) => message.id !== optimisticMessage.id)
+      );
+      setShindigCommentDraft(nextBody);
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to send that chat message.'
+      );
+    }
+  }
+
   async function handleTogglePhotoLike(photoId: string) {
     if (!activeFeedShindig) {
       return;
@@ -2179,7 +2634,7 @@ export function HomeScreen({
   }
 
   function handleInviteMorePeopleFromMenu() {
-    void handleShareUpcomingShindig();
+    void startInviteMorePeopleFlow();
   }
 
   function openShindigOwnerMenu() {
@@ -2400,6 +2855,85 @@ export function HomeScreen({
     }
   }
 
+  async function openNavigationAddressPrompt(address: string) {
+    const trimmedAddress = address.trim();
+    if (!trimmedAddress) {
+      return;
+    }
+
+    const encodedAddress = encodeURIComponent(trimmedAddress);
+    const appleMapsUrl = `http://maps.apple.com/?q=${encodedAddress}`;
+    const googleMapsAppUrl = `comgooglemaps://?q=${encodedAddress}`;
+    const googleMapsWebUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+
+    const shareAddress = () => {
+      void Share.share({
+        message: trimmedAddress,
+        title: 'Address',
+      });
+    };
+
+    const openAppleMaps = () => {
+      void Linking.openURL(appleMapsUrl);
+    };
+
+    const openGoogleMaps = async () => {
+      const canOpenGoogleMapsApp = await Linking.canOpenURL(googleMapsAppUrl);
+      await Linking.openURL(canOpenGoogleMapsApp ? googleMapsAppUrl : googleMapsWebUrl);
+    };
+
+    if (Platform.OS === 'ios') {
+      const canOpenGoogleMapsApp = await Linking.canOpenURL(googleMapsAppUrl);
+      const options = [
+        'Copy Address',
+        'Open in Apple Maps',
+        ...(canOpenGoogleMapsApp ? ['Open in Google Maps'] : []),
+        'Cancel',
+      ];
+
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          cancelButtonIndex: options.length - 1,
+          options,
+          title: trimmedAddress,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) {
+            shareAddress();
+          }
+          if (buttonIndex === 1) {
+            openAppleMaps();
+          }
+          if (canOpenGoogleMapsApp && buttonIndex === 2) {
+            void openGoogleMaps();
+          }
+        }
+      );
+      return;
+    }
+
+    Alert.alert(trimmedAddress, 'Choose what you want to do with this address.', [
+      {
+        onPress: shareAddress,
+        text: 'Copy Address',
+      },
+      {
+        onPress: openAppleMaps,
+        text: 'Open in Maps',
+      },
+      {
+        onPress: () => {
+          void openGoogleMaps();
+        },
+        text: 'Open in Google Maps',
+      },
+      {
+        style: 'cancel',
+        text: 'Cancel',
+      },
+    ]);
+  }
+
   async function handleDeletePhotoFromFeed(photo: SavedShindigPhoto) {
     if (!activeFeedShindig) {
       return;
@@ -2428,8 +2962,12 @@ export function HomeScreen({
     }
   }
 
-  function scrollToUpcomingSection(key: 'activity' | 'bring' | 'memories') {
-    const y = sectionOffsetsRef.current[key];
+  function scrollToUpcomingSection(key: 'activity' | 'bring' | 'memories' | 'chat' | 'photos') {
+    const normalizedKey = key === 'photos' ? 'memories' : key;
+    setActiveUpcomingOverviewTab(
+      key === 'bring' ? 'items' : key === 'photos' ? 'photos' : key === 'chat' ? 'chat' : 'overview'
+    );
+    const y = sectionOffsetsRef.current[normalizedKey];
     if (typeof y !== 'number') {
       return;
     }
@@ -2437,6 +2975,14 @@ export function HomeScreen({
     feedScrollRef.current?.scrollTo({
       animated: true,
       y: Math.max(y - 120, 0),
+    });
+  }
+
+  function scrollUpcomingOverviewToTop() {
+    setActiveUpcomingOverviewTab('overview');
+    feedScrollRef.current?.scrollTo({
+      animated: true,
+      y: 0,
     });
   }
 
@@ -2653,166 +3199,222 @@ export function HomeScreen({
   }
 
   if (step === 'welcome') {
+    const displayedUpcomingShindigs =
+      expandedWelcomeSection === 'upcoming' ? plannedShindigs : plannedShindigs.slice(0, 1);
+    const displayedActiveShindigs =
+      expandedWelcomeSection === 'active' ? activeShindigs : activeShindigs.slice(0, 1);
+    const displayedCompletedShindigs =
+      expandedWelcomeSection === 'completed'
+        ? completedShindigs
+        : completedShindigs.slice(0, 1);
+
     return (
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <PageHeader right={headerActions} title="ShinDigs" />
+        <ScrollView contentContainerStyle={styles.shindigsWelcomeContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.shindigsWelcomeHeader}>
+            <View style={styles.shindigsWelcomeCopy}>
+              <Text style={styles.shindigsWelcomeTitle}>Hey {profile.name.split(' ')[0]} {'\u{1F44B}'}</Text>
+              <Text style={styles.shindigsWelcomeSubtitle}>
+                What shindig are we creating today?
+              </Text>
+            </View>
+            <View style={styles.shindigsWelcomeActions}>{headerActions}</View>
+          </View>
 
-          <Pressable onPress={goToCreate} style={styles.ctaButton}>
-            <Text style={styles.ctaButtonText}>Start a Shindig</Text>
+          <Pressable onPress={goToCreate} style={styles.shindigsWelcomePrimaryCta}>
+            <Ionicons color="#FFFFFF" name="add-circle-outline" size={28} />
+            <Text style={styles.shindigsWelcomePrimaryCtaText}>Start a Shindig</Text>
           </Pressable>
 
-          {plannedShindigs.length === 0 && activeShindigs.length === 0 && completedShindigs.length === 0 ? (
-            <Text style={styles.emptyText}>
-              Start your first ShinDig to build a shared photo feed and archive it here.
-            </Text>
+          <View style={styles.shindigsWelcomeSectionHeader}>
+            <View style={styles.shindigsWelcomeSectionTitleWrap}>
+              <Ionicons color={theme.colors.accentPink} name="calendar-outline" size={22} />
+              <Text style={styles.shindigsWelcomeSectionTitle}>Upcoming Shindigs</Text>
+            </View>
+            <Pressable
+              onPress={() =>
+                setExpandedWelcomeSection((current) => (current === 'upcoming' ? null : 'upcoming'))
+              }
+              style={styles.shindigsWelcomeSeeAll}
+            >
+              <Text style={styles.shindigsWelcomeSeeAllText}>See all</Text>
+              <Ionicons color={theme.colors.accentPink} name="chevron-forward" size={18} />
+            </Pressable>
+          </View>
+          {plannedShindigs.length > 0 ? (
+            <View style={styles.shindigsWelcomeCardList}>
+              {displayedUpcomingShindigs.map((shindig) => (
+                <Pressable
+                  key={shindig.id}
+                  onPress={() => openPastShindig(shindig)}
+                  style={styles.shindigsWelcomeUpcomingCard}
+                >
+                  <Image
+                    source={{
+                      uri:
+                        shindig.coverPhotoThumbnailUrl ||
+                        shindig.coverPhotoUrl ||
+                        'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
+                    }}
+                    style={styles.shindigsWelcomeUpcomingImage}
+                  />
+                  <View style={styles.shindigsWelcomeUpcomingCopy}>
+                    <View style={styles.shindigsWelcomeMetaRow}>
+                      <Ionicons color={theme.colors.accentPink} name="calendar-outline" size={17} />
+                      <Text style={styles.shindigsWelcomeMetaText}>
+                        {shindig.plannedFor
+                          ? formatPlannedDateLabel(shindig.plannedFor)
+                          : formatDateLabel(shindig.createdAt)}
+                      </Text>
+                    </View>
+                    <Text style={styles.shindigsWelcomeUpcomingTitle}>{shindig.title}</Text>
+                    <View style={styles.shindigsWelcomeMetaRow}>
+                      <Ionicons color={theme.colors.accentPink} name="location-outline" size={17} />
+                      <Text style={styles.shindigsWelcomeMetaText}>
+                        {shindig.stops[0]?.place.address ||
+                          shindig.stops[0]?.place.title ||
+                          'Location coming soon'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons color={theme.colors.accentPink} name="chevron-forward" size={28} />
+                </Pressable>
+              ))}
+            </View>
           ) : (
-            <>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Upcoming Shindigs</Text>
+            <View style={styles.shindigsWelcomeEmptyCard}>
+              <View style={styles.shindigsWelcomeEmptyIconWrap}>
+                <Ionicons color="#9D7CFF" name="sparkles-outline" size={38} />
               </View>
-
-              {plannedShindigs.length > 0 ? (
-                <View style={styles.pastList}>
-                  {plannedShindigs.map((shindig) => (
-                    <Pressable
-                      key={shindig.id}
-                      onPress={() => openPastShindig(shindig)}
-                      style={styles.pastCard}
-                    >
-                      <Image
-                        source={{
-                          uri:
-                            shindig.coverPhotoThumbnailUrl ||
-                            shindig.coverPhotoUrl ||
-                            'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
-                        }}
-                        style={styles.pastCardImage}
-                      />
-                      <View style={styles.pastCardCopy}>
-                        <Text style={styles.pastCardTitle}>{shindig.title}</Text>
-                        <Text style={styles.pastCardMeta}>
-                          {shindig.plannedFor
-                            ? `Upcoming ${formatPlannedDateLabel(shindig.plannedFor)}`
-                            : formatDateLabel(shindig.createdAt)}
-                        </Text>
-                        {shindig.invitedBy ? (
-                          <Text style={styles.invitedByTag}>via {shindig.invitedBy.handle}</Text>
-                        ) : null}
-                        {shindig.invitedBy && shindig.inviteId ? (
-                          <View style={styles.upcomingInviteActions}>
-                            <Pressable
-                              disabled={actingUpcomingInviteId === shindig.inviteId}
-                              onPress={() => void handleUpcomingInviteResponse(shindig, 'accepted')}
-                              style={[
-                                styles.upcomingInviteButton,
-                                shindig.inviteStatus === 'accepted' && styles.upcomingInviteButtonActive,
-                              ]}
-                            >
-                              <Text style={styles.upcomingInviteButtonText}>
-                                {actingUpcomingInviteId === shindig.inviteId ? '...' : 'Accept'}
-                              </Text>
-                            </Pressable>
-                            <Pressable
-                              disabled={actingUpcomingInviteId === shindig.inviteId}
-                              onPress={() => void handleUpcomingInviteResponse(shindig, 'maybe')}
-                              style={[
-                                styles.upcomingInviteButtonSecondary,
-                                shindig.inviteStatus === 'maybe' && styles.upcomingInviteButtonActive,
-                              ]}
-                            >
-                              <Text style={styles.upcomingInviteButtonText}>Maybe</Text>
-                            </Pressable>
-                            <Pressable
-                              disabled={actingUpcomingInviteId === shindig.inviteId}
-                              onPress={() => void handleUpcomingInviteResponse(shindig, 'rejected')}
-                              style={[
-                                styles.upcomingInviteButtonSecondary,
-                                shindig.inviteStatus === 'rejected' && styles.upcomingInviteRejectActive,
-                              ]}
-                            >
-                              <Text style={styles.upcomingInviteButtonText}>Reject</Text>
-                            </Pressable>
-                          </View>
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.emptyText}>No upcoming ShinDigs right now.</Text>
-              )}
-
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Active Shindigs</Text>
+              <View style={styles.shindigsWelcomeEmptyCopy}>
+                <Text style={styles.shindigsWelcomeEmptyTitle}>No upcoming Shindigs</Text>
+                <Text style={styles.shindigsWelcomeEmptyText}>
+                  Your upcoming shindigs will appear here.
+                </Text>
               </View>
+            </View>
+          )}
 
-              {activeShindigs.length > 0 ? (
-                <View style={styles.pastList}>
-                  {activeShindigs.map((shindig) => (
-                    <Pressable
-                      key={shindig.id}
-                      onPress={() => openPastShindig(shindig)}
-                      style={styles.pastCard}
-                    >
-                      <Image
-                        source={{
-                          uri:
-                            shindig.coverPhotoThumbnailUrl ||
-                            shindig.coverPhotoUrl ||
-                            'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
-                        }}
-                        style={styles.pastCardImage}
-                      />
-                      <View style={styles.pastCardCopy}>
-                        <Text style={styles.pastCardTitle}>{shindig.title}</Text>
-                        <Text style={styles.pastCardMeta}>{formatDateLabel(shindig.createdAt)}</Text>
-                        {shindig.invitedBy ? (
-                          <Text style={styles.invitedByTag}>via {shindig.invitedBy.handle}</Text>
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.emptyText}>No active ShinDigs right now.</Text>
-              )}
-
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Completed Shindigs</Text>
+          <View style={styles.shindigsWelcomeSectionHeader}>
+            <View style={styles.shindigsWelcomeSectionTitleWrap}>
+              <Ionicons color={theme.colors.accentPink} name="sparkles-outline" size={22} />
+              <Text style={styles.shindigsWelcomeSectionTitle}>Active Shindigs</Text>
+            </View>
+            <Pressable
+              onPress={() =>
+                setExpandedWelcomeSection((current) => (current === 'active' ? null : 'active'))
+              }
+              style={styles.shindigsWelcomeSeeAll}
+            >
+              <Text style={styles.shindigsWelcomeSeeAllText}>See all</Text>
+              <Ionicons color={theme.colors.accentPink} name="chevron-forward" size={18} />
+            </Pressable>
+          </View>
+          {activeShindigs.length > 0 ? (
+            <View style={styles.shindigsWelcomeCardList}>
+              {displayedActiveShindigs.map((shindig) => (
+                <Pressable
+                  key={shindig.id}
+                  onPress={() => openPastShindig(shindig)}
+                  style={styles.shindigsWelcomeUpcomingCard}
+                >
+                  <Image
+                    source={{
+                      uri:
+                        shindig.coverPhotoThumbnailUrl ||
+                        shindig.coverPhotoUrl ||
+                        'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
+                    }}
+                    style={styles.shindigsWelcomeUpcomingImage}
+                  />
+                  <View style={styles.shindigsWelcomeUpcomingCopy}>
+                    <Text style={styles.shindigsWelcomeUpcomingTitle}>{shindig.title}</Text>
+                    <View style={styles.shindigsWelcomeMetaRow}>
+                      <Ionicons color={theme.colors.accentPink} name="location-outline" size={17} />
+                      <Text style={styles.shindigsWelcomeMetaText}>
+                        {shindig.stops[0]?.place.address ||
+                          shindig.stops[0]?.place.title ||
+                          'Location coming soon'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons color={theme.colors.accentPink} name="chevron-forward" size={28} />
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.shindigsWelcomeEmptyCard}>
+              <View style={styles.shindigsWelcomeEmptyIconWrap}>
+                <Ionicons color="#9D7CFF" name="sparkles-outline" size={38} />
               </View>
+              <View style={styles.shindigsWelcomeEmptyCopy}>
+                <Text style={styles.shindigsWelcomeEmptyTitle}>No active Shindigs</Text>
+                <Text style={styles.shindigsWelcomeEmptyText}>
+                  Once your shindig starts, it will show up here.
+                </Text>
+              </View>
+            </View>
+          )}
 
-              {completedShindigs.length > 0 ? (
-                <View style={styles.pastList}>
-                  {completedShindigs.map((shindig) => (
-                    <Pressable
-                      key={shindig.id}
-                      onPress={() => openPastShindig(shindig)}
-                      style={styles.pastCard}
-                    >
-                      <Image
-                        source={{
-                          uri:
-                            shindig.coverPhotoThumbnailUrl ||
-                            shindig.coverPhotoUrl ||
-                            'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
-                        }}
-                        style={styles.pastCardImage}
-                      />
-                      <View style={styles.pastCardCopy}>
-                        <Text style={styles.pastCardTitle}>{shindig.title}</Text>
-                        <Text style={styles.pastCardMeta}>{formatDateLabel(shindig.createdAt)}</Text>
-                        {shindig.invitedBy ? (
-                          <Text style={styles.invitedByTag}>via {shindig.invitedBy.handle}</Text>
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.emptyText}>No completed ShinDigs yet.</Text>
-              )}
-            </>
+          <View style={styles.shindigsWelcomeSectionHeader}>
+            <View style={styles.shindigsWelcomeSectionTitleWrap}>
+              <Ionicons color={theme.colors.accentPink} name="checkmark-circle" size={22} />
+              <Text style={styles.shindigsWelcomeSectionTitle}>Completed Shindigs</Text>
+            </View>
+            <Pressable
+              onPress={() =>
+                setExpandedWelcomeSection((current) =>
+                  current === 'completed' ? null : 'completed'
+                )
+              }
+              style={styles.shindigsWelcomeSeeAll}
+            >
+              <Text style={styles.shindigsWelcomeSeeAllText}>See all</Text>
+              <Ionicons color={theme.colors.accentPink} name="chevron-forward" size={18} />
+            </Pressable>
+          </View>
+          {completedShindigs.length > 0 ? (
+            <View style={styles.shindigsWelcomeCardList}>
+              {displayedCompletedShindigs.map((shindig) => (
+                <Pressable
+                  key={shindig.id}
+                  onPress={() => openPastShindig(shindig)}
+                  style={styles.shindigsWelcomeUpcomingCard}
+                >
+                  <Image
+                    source={{
+                      uri:
+                        shindig.coverPhotoThumbnailUrl ||
+                        shindig.coverPhotoUrl ||
+                        'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
+                    }}
+                    style={styles.shindigsWelcomeUpcomingImage}
+                  />
+                  <View style={styles.shindigsWelcomeUpcomingCopy}>
+                    <Text style={styles.shindigsWelcomeUpcomingTitle}>{shindig.title}</Text>
+                    <View style={styles.shindigsWelcomeMetaRow}>
+                      <Ionicons color={theme.colors.accentPink} name="trophy-outline" size={17} />
+                      <Text style={styles.shindigsWelcomeMetaText}>
+                        Completed {formatDateLabel(shindig.createdAt)}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons color={theme.colors.accentPink} name="chevron-forward" size={28} />
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.shindigsWelcomeEmptyCard}>
+              <View style={styles.shindigsWelcomeEmptyIconWrap}>
+                <Ionicons color="#9D7CFF" name="trophy-outline" size={38} />
+              </View>
+              <View style={styles.shindigsWelcomeEmptyCopy}>
+                <Text style={styles.shindigsWelcomeEmptyTitle}>No completed Shindigs</Text>
+                <Text style={styles.shindigsWelcomeEmptyText}>
+                  Your past shindigs will appear here.
+                </Text>
+              </View>
+            </View>
           )}
         </ScrollView>
       </SafeAreaView>
@@ -2831,6 +3433,11 @@ export function HomeScreen({
     const claimedByMeCount = activeFeedShindig.bringItems.filter(
       (item) => item.claimedBy?.id === userId
     ).length;
+    const upcomingChatPreview = [...upcomingChatMessages].slice(-2).reverse();
+    const upcomingItemsBadgeCount = activeFeedShindig.bringItems.filter(
+      (item) => !item.claimedBy
+    ).length;
+    const upcomingChatBadgeCount = upcomingChatMessages.length;
 
     if (activeFeedShindig.state === 'planned' && plannedFeedViewMode === 'overview') {
       return (
@@ -2869,146 +3476,209 @@ export function HomeScreen({
               </View>
             </Modal>
             <ScrollView
-              contentContainerStyle={styles.upcomingScreenContent}
+              contentContainerStyle={styles.upcomingMockContent}
               keyboardShouldPersistTaps="handled"
               ref={feedScrollRef}
               showsVerticalScrollIndicator={false}
             >
-              <PageHeader
-                onBack={handleBackFromFeedScreen}
-                right={headerActions}
-                title="Upcoming ShinDig"
-              />
-
-              <View style={styles.upcomingHeroCard}>
-                <Image source={{ uri: coverPhotoUri }} style={styles.upcomingHeroImage} />
-                <View style={styles.upcomingHeroOverlay} />
-                <View style={styles.upcomingHeroContent}>
-                  <View style={styles.upcomingBadge}>
-                    <Text style={styles.upcomingBadgeText}>UPCOMING</Text>
-                  </View>
-                  <Text style={styles.upcomingHeroTitle}>{activeFeedShindig.title}</Text>
-                  <View style={styles.upcomingHeroMetaRow}>
-                    <Text style={styles.upcomingHeroMetaText}>
-                      {activeFeedShindig.plannedFor
-                        ? formatPlannedDateLabel(activeFeedShindig.plannedFor)
-                        : 'Date coming soon'}
+              <View style={styles.upcomingMockHeaderRow}>
+                <View style={styles.upcomingMockHeaderTopBar}>
+                  <Pressable
+                    onPress={handleBackFromFeedScreen}
+                    style={styles.upcomingMockBackButton}
+                  >
+                    <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={26} />
+                  </Pressable>
+                  <View style={styles.upcomingMockHeaderActions}>{headerActions}</View>
+                </View>
+                <View style={styles.upcomingMockHeaderMain}>
+                  <Image source={{ uri: coverPhotoUri }} style={styles.upcomingMockThumb} />
+                  <View style={styles.upcomingMockHeaderCopy}>
+                    <Text numberOfLines={1} style={styles.upcomingMockTitle}>
+                      {activeFeedShindig.title}
                     </Text>
-                    <Text style={styles.upcomingHeroMetaDot}>•</Text>
-                    <Text style={styles.upcomingHeroMetaText}>{activeFeedCreatorLabel}</Text>
-                  </View>
-                  <View style={styles.upcomingHeroStatsRow}>
-                    <View style={styles.upcomingHeroStat}>
-                      <Ionicons color={theme.colors.accentPink} name="people" size={14} />
-                      <Text style={styles.upcomingHeroStatText}>
-                        {upcomingAttendeeGroups.accepted.length} Going
+                    <View style={styles.upcomingMockMetaLine}>
+                      <Ionicons color={theme.colors.textMuted} name="calendar-outline" size={15} />
+                      <Text numberOfLines={2} style={styles.upcomingMockMetaText}>
+                        {activeFeedShindig.plannedFor
+                          ? formatPlannedDateLabel(activeFeedShindig.plannedFor)
+                          : 'Date coming soon'}
                       </Text>
                     </View>
-                    <View style={styles.upcomingHeroStat}>
-                      <Ionicons color={theme.colors.textPrimary} name="chatbubble-outline" size={14} />
-                      <Text style={styles.upcomingHeroStatText}>
-                        {activeFeedShindig.comments.length} Comments
-                      </Text>
-                    </View>
-                    <View style={styles.upcomingHeroStat}>
-                      <Ionicons color={theme.colors.textPrimary} name="images-outline" size={14} />
-                      <Text style={styles.upcomingHeroStatText}>
-                        {feedPhotos.length} Photos
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.upcomingHeroActionRow}>
                     <Pressable
-                      onPress={() => void handleShareUpcomingShindig()}
-                      style={styles.upcomingPillButtonSecondary}
+                      onPress={() =>
+                        void openNavigationAddressPrompt(
+                          activeFeedShindig.stops[0]?.place.address ||
+                            activeFeedShindig.stops[0]?.place.title ||
+                            ''
+                        )
+                      }
+                      style={styles.upcomingMockMetaLine}
                     >
-                      <Ionicons color={theme.colors.textPrimary} name="share-outline" size={15} />
-                      <Text style={styles.upcomingPillButtonSecondaryText}>Share</Text>
+                      <Ionicons color={theme.colors.textMuted} name="location-outline" size={15} />
+                      <Text numberOfLines={2} style={styles.upcomingMockMetaText}>
+                        {activeFeedShindig.stops[0]?.place.address ||
+                          activeFeedShindig.stops[0]?.place.title ||
+                          'Location coming soon'}
+                      </Text>
                     </Pressable>
-                    <Pressable
-                      onPress={() => void handleUpcomingPrimaryPhotoAction()}
-                      style={styles.upcomingPillButtonSecondary}
-                    >
-                      <Ionicons color={theme.colors.textPrimary} name="camera-outline" size={15} />
-                      <Text style={styles.upcomingPillButtonSecondaryText}>Add Photo</Text>
-                    </Pressable>
-                    {activeFeedShindig.ownerId === userId ? (
-                      <Pressable
-                        onPress={openShindigOwnerMenu}
-                        style={styles.upcomingPillButtonSecondary}
-                      >
-                        <Ionicons
-                          color={theme.colors.textPrimary}
-                          name="ellipsis-horizontal"
-                          size={15}
-                        />
-                        <Text style={styles.upcomingPillButtonSecondaryText}>More</Text>
-                      </Pressable>
-                    ) : null}
-                    {activeFeedShindig.ownerId !== userId && activeFeedShindig.inviteId ? (
-                      <Pressable
-                        disabled={actingUpcomingInviteId === activeFeedShindig.inviteId}
-                        onPress={() => void handleUpcomingRsvpButton()}
-                        style={styles.upcomingPillButtonPrimary}
-                      >
-                        <Text style={styles.upcomingPillButtonPrimaryText}>
-                          {actingUpcomingInviteId === activeFeedShindig.inviteId
-                            ? 'Saving...'
-                            : activeFeedShindig.inviteStatus === 'accepted'
-                              ? 'Going'
-                              : activeFeedShindig.inviteStatus === 'maybe'
-                                ? 'Maybe'
-                                : 'RSVP'}
-                        </Text>
-                        <Ionicons color="#FFFFFF" name="chevron-down" size={14} />
-                      </Pressable>
-                    ) : (
-                      <View style={styles.upcomingHostPill}>
-                        <Text style={styles.upcomingHostPillText}>
-                          {activeFeedShindig.ownerId === userId ? 'Hosting' : 'Invited'}
-                        </Text>
-                      </View>
-                    )}
                   </View>
                 </View>
               </View>
 
-              <View style={styles.upcomingQuickActionsRow}>
+              <View style={styles.upcomingMockTabs}>
+                <Pressable
+                  onPress={scrollUpcomingOverviewToTop}
+                  style={[
+                    styles.upcomingMockTab,
+                    activeUpcomingOverviewTab === 'overview' && styles.upcomingMockTabActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.upcomingMockTabText,
+                      activeUpcomingOverviewTab === 'overview' && styles.upcomingMockTabActiveText,
+                    ]}
+                  >
+                    Overview
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => scrollToUpcomingSection('chat')}
+                  style={[
+                    styles.upcomingMockTab,
+                    activeUpcomingOverviewTab === 'chat' && styles.upcomingMockTabActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.upcomingMockTabText,
+                      activeUpcomingOverviewTab === 'chat' && styles.upcomingMockTabActiveText,
+                    ]}
+                  >
+                    Chat
+                  </Text>
+                  {upcomingChatBadgeCount > 0 ? (
+                    <View style={styles.upcomingMockCountBadge}>
+                      <Text style={styles.upcomingMockCountBadgeText}>{upcomingChatBadgeCount}</Text>
+                    </View>
+                  ) : null}
+                </Pressable>
                 <Pressable
                   onPress={() => scrollToUpcomingSection('bring')}
-                  style={styles.upcomingQuickAction}
+                  style={[
+                    styles.upcomingMockTab,
+                    activeUpcomingOverviewTab === 'items' && styles.upcomingMockTabActive,
+                  ]}
                 >
-                  <View style={[styles.upcomingQuickActionIconWrap, styles.upcomingQuickActionPink]}>
-                    <Ionicons color="#FFFFFF" name="gift-outline" size={18} />
+                  <Text
+                    style={[
+                      styles.upcomingMockTabText,
+                      activeUpcomingOverviewTab === 'items' && styles.upcomingMockTabActiveText,
+                    ]}
+                  >
+                    Items
+                  </Text>
+                  {upcomingItemsBadgeCount > 0 ? (
+                    <View style={styles.upcomingMockCountBadge}>
+                      <Text style={styles.upcomingMockCountBadgeText}>{upcomingItemsBadgeCount}</Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+                <Pressable
+                  onPress={() => scrollToUpcomingSection('photos')}
+                  style={[
+                    styles.upcomingMockTab,
+                    activeUpcomingOverviewTab === 'photos' && styles.upcomingMockTabActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.upcomingMockTabText,
+                      activeUpcomingOverviewTab === 'photos' && styles.upcomingMockTabActiveText,
+                    ]}
+                  >
+                    Photos
+                  </Text>
+                </Pressable>
+                {activeFeedShindig.ownerId === userId ? (
+                  <Pressable
+                    onPress={() => {
+                      setActiveUpcomingOverviewTab('invite');
+                      handleInviteMorePeopleFromMenu();
+                    }}
+                    style={[
+                      styles.upcomingMockTab,
+                      activeUpcomingOverviewTab === 'invite' && styles.upcomingMockTabActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.upcomingMockTabText,
+                        activeUpcomingOverviewTab === 'invite' && styles.upcomingMockTabActiveText,
+                      ]}
+                    >
+                      Invite
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              <View style={styles.upcomingMockActionRow}>
+                <Pressable
+                  onPress={() => scrollToUpcomingSection('chat')}
+                  style={[styles.upcomingMockActionTile, styles.upcomingMockActionTilePink]}
+                >
+                  <View style={styles.upcomingMockActionIconPink}>
+                    <Ionicons color="#FFFFFF" name="chatbubble-ellipses" size={19} />
                   </View>
-                  <Text style={styles.upcomingQuickActionText}>Bring{'\n'}Something</Text>
+                  <Text style={styles.upcomingMockActionText}>Chat</Text>
+                  {upcomingChatBadgeCount > 0 ? (
+                    <View style={styles.upcomingMockActionBadge}>
+                      <Text style={styles.upcomingMockActionBadgeText}>{upcomingChatBadgeCount}</Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+                <Pressable
+                  onPress={() => scrollToUpcomingSection('bring')}
+                  style={styles.upcomingMockActionTile}
+                >
+                  <View style={styles.upcomingMockActionIconPurple}>
+                    <Ionicons color="#FFFFFF" name="gift-outline" size={19} />
+                  </View>
+                  <Text style={styles.upcomingMockActionText}>
+                    {activeFeedShindig.ownerId === userId ? 'Add Item' : 'View Items'}
+                  </Text>
                 </Pressable>
                 <Pressable
                   onPress={() => void handleUpcomingPrimaryPhotoAction()}
-                  style={styles.upcomingQuickAction}
+                  style={styles.upcomingMockActionTile}
                 >
-                  <View
-                    style={[styles.upcomingQuickActionIconWrap, styles.upcomingQuickActionPurple]}
-                  >
-                    <Ionicons color="#FFFFFF" name="camera-outline" size={18} />
+                  <View style={styles.upcomingMockActionIconPurple}>
+                    <Ionicons color="#FFFFFF" name="camera-outline" size={19} />
                   </View>
-                  <Text style={styles.upcomingQuickActionText}>Upload{'\n'}Photo</Text>
+                  <Text style={styles.upcomingMockActionText}>Upload Photo</Text>
                 </Pressable>
               </View>
 
-              <View style={styles.upcomingDashboardGrid}>
-                <View
-                  onLayout={(event) => {
-                    sectionOffsetsRef.current.bring = event.nativeEvent.layout.y;
-                  }}
-                  style={[styles.upcomingPanelCard, styles.upcomingPanelWide]}
-                >
+              <View
+                onLayout={(event) => {
+                  sectionOffsetsRef.current.bring = event.nativeEvent.layout.y;
+                }}
+                style={styles.upcomingMockCard}
+              >
                   <View style={styles.upcomingPanelHeader}>
                     <View style={styles.upcomingPanelHeaderLeft}>
-                      <Ionicons color={theme.colors.accentPink} name="calendar-outline" size={16} />
+                      <Ionicons color={theme.colors.accentPink} name="briefcase-outline" size={16} />
                       <Text style={styles.upcomingPanelTitle}>Things to Bring</Text>
                     </View>
-                    <Text style={styles.upcomingPanelActionText}>Help make this shindig amazing</Text>
+                    {activeFeedShindig.ownerId === userId ? (
+                      <Pressable onPress={() => scrollToUpcomingSection('bring')}>
+                        <Text style={styles.upcomingPanelActionLink}>+ Add Item</Text>
+                      </Pressable>
+                    ) : (
+                      <Text style={styles.upcomingPanelActionText}>Help make this shindig amazing</Text>
+                    )}
                   </View>
 
                   {activeFeedShindig.ownerId === userId ? (
@@ -3045,7 +3715,7 @@ export function HomeScreen({
                         .slice(0, 3);
 
                       return (
-                        <View key={item.id} style={styles.bringListItemCard}>
+                        <View key={item.id} style={styles.upcomingMockItemRow}>
                           <View style={styles.bringListItemTopRow}>
                             <View style={styles.bringListItemLead}>
                               <Text style={styles.bringListEmoji}>
@@ -3201,129 +3871,80 @@ export function HomeScreen({
                       />
                     </Pressable>
                   ) : null}
-                </View>
+              </View>
 
-                <View style={styles.upcomingDashboardSide}>
-                  <View style={styles.upcomingPanelCard}>
+              <View
+                onLayout={(event) => {
+                  sectionOffsetsRef.current.chat = event.nativeEvent.layout.y;
+                }}
+                style={styles.upcomingMockCard}
+              >
                     <View style={styles.upcomingPanelHeader}>
                       <View style={styles.upcomingPanelHeaderLeft}>
-                        <Ionicons color={theme.colors.accentPink} name="people" size={16} />
-                        <Text style={styles.upcomingPanelTitle}>Attendees</Text>
+                        <Ionicons color={theme.colors.accentPink} name="chatbubble-outline" size={16} />
+                        <Text style={styles.upcomingPanelTitle}>Chat</Text>
                       </View>
-                      <Text style={styles.upcomingPanelActionLink}>See all</Text>
-                    </View>
-                    <View style={styles.upcomingAttendeeGroup}>
-                      <Text style={styles.upcomingAttendeeGroupLabel}>
-                        Going ({upcomingAttendeeGroups.accepted.length})
-                      </Text>
-                      <View style={styles.upcomingAttendeeAvatarRow}>
-                        {upcomingAttendeeGroups.accepted.slice(0, 7).map((person) => (
-                          <Image
-                            key={`accepted-${person.id}`}
-                            source={{ uri: person.avatar }}
-                            style={styles.upcomingAttendeeAvatar}
-                          />
-                        ))}
-                        {upcomingAttendeeGroups.accepted.length > 7 ? (
-                          <View style={styles.upcomingAttendeeOverflow}>
-                            <Text style={styles.upcomingAttendeeOverflowText}>
-                              +{upcomingAttendeeGroups.accepted.length - 7}
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </View>
-                    <View style={styles.upcomingAttendeeGroup}>
-                      <Text style={styles.upcomingAttendeeGroupLabel}>
-                        Maybe ({upcomingAttendeeGroups.maybe.length})
-                      </Text>
-                      <View style={styles.upcomingAttendeeAvatarRow}>
-                        {upcomingAttendeeGroups.maybe.slice(0, 5).map((person) => (
-                          <Image
-                            key={`maybe-${person.id}`}
-                            source={{ uri: person.avatar }}
-                            style={styles.upcomingAttendeeAvatar}
-                          />
-                        ))}
-                      </View>
-                    </View>
-                    <View style={styles.upcomingAttendeeGroup}>
-                      <Text style={styles.upcomingAttendeeGroupLabel}>
-                        Invited ({upcomingAttendeeGroups.pending.length})
-                      </Text>
-                      <View style={styles.upcomingAttendeeAvatarRow}>
-                        {upcomingAttendeeGroups.pending.slice(0, 5).map((person) => (
-                          <Image
-                            key={`pending-${person.id}`}
-                            source={{ uri: person.avatar }}
-                            style={styles.upcomingAttendeeAvatar}
-                          />
-                        ))}
-                      </View>
-                    </View>
-                  </View>
-
-                  <View
-                    onLayout={(event) => {
-                      sectionOffsetsRef.current.activity = event.nativeEvent.layout.y;
-                    }}
-                    style={styles.upcomingPanelCard}
-                  >
-                    <View style={styles.upcomingPanelHeader}>
-                      <View style={styles.upcomingPanelHeaderLeft}>
-                        <Ionicons color={theme.colors.accentPink} name="flash" size={16} />
-                        <Text style={styles.upcomingPanelTitle}>Activity</Text>
-                      </View>
-                      <Text style={styles.upcomingPanelActionLink}>See all</Text>
+                      <Pressable onPress={() => onOpenShindigChat?.(activeFeedShindig.id)}>
+                        <Text style={styles.upcomingPanelActionLink}>View messages</Text>
+                      </Pressable>
                     </View>
                     <View style={styles.upcomingActivityList}>
-                      {upcomingActivity.map((item) => (
-                        <View key={item.id} style={styles.upcomingActivityItem}>
-                          <View style={styles.upcomingActivityLead}>
-                            {item.imageUrl ? (
-                              <Image
-                                source={{ uri: item.imageUrl }}
-                                style={styles.upcomingActivityThumb}
-                              />
-                            ) : (
-                              <View style={styles.upcomingActivityIcon}>
-                                <Ionicons color={theme.colors.textPrimary} name={item.icon} size={14} />
-                              </View>
-                            )}
-                            <View style={styles.upcomingActivityCopy}>
-                              <Text style={styles.upcomingActivityTitle}>{item.title}</Text>
-                              <Text style={styles.upcomingActivityTime}>{item.detail}</Text>
+                      {upcomingChatPreview.map((comment) => (
+                        <View key={comment.id} style={styles.upcomingMockChatRow}>
+                          <Image source={{ uri: comment.author.avatar }} style={styles.upcomingMockChatAvatar} />
+                          <View style={styles.upcomingActivityCopy}>
+                            <View style={styles.upcomingMockChatTopRow}>
+                              <Text style={styles.upcomingActivityTitle}>{comment.author.name}</Text>
+                              <Text style={styles.upcomingActivityTime}>
+                                {formatRelativeTimestamp(comment.createdAt)}
+                              </Text>
                             </View>
+                            <Text style={styles.upcomingMockChatBody}>{comment.body}</Text>
                           </View>
                         </View>
                       ))}
-                      {upcomingActivity.length === 0 ? (
-                        <Text style={styles.bringListEmptyText}>No activity yet.</Text>
+                      {upcomingChatPreview.length === 0 ? (
+                        <Text style={styles.bringListEmptyText}>No chat messages yet.</Text>
                       ) : null}
                     </View>
+                    <View style={styles.commentComposer}>
+                      <TextInput
+                        onChangeText={setShindigCommentDraft}
+                        onSubmitEditing={() => void handleSendUpcomingChatMessage()}
+                        placeholder="Type a message..."
+                        placeholderTextColor={theme.colors.textMuted}
+                        style={styles.commentInput}
+                        value={shindigCommentDraft}
+                      />
+                      <Pressable
+                        onPress={() => void handleSendUpcomingChatMessage()}
+                        style={styles.commentButton}
+                      >
+                        <Ionicons color="#FFFFFF" name="send" size={16} />
+                      </Pressable>
+                    </View>
                   </View>
-                </View>
 
-                <View
-                  onLayout={(event) => {
-                    sectionOffsetsRef.current.memories = event.nativeEvent.layout.y;
-                  }}
-                  style={[styles.upcomingPanelCard, styles.upcomingPanelWide]}
-                >
+              <View
+                onLayout={(event) => {
+                  sectionOffsetsRef.current.memories = event.nativeEvent.layout.y;
+                }}
+                style={styles.upcomingMockCard}
+              >
                   <View style={styles.upcomingPanelHeader}>
                     <View style={styles.upcomingPanelHeaderLeft}>
                       <Ionicons color={theme.colors.accentPink} name="camera" size={16} />
-                      <Text style={styles.upcomingPanelTitle}>Feed</Text>
+                      <Text style={styles.upcomingPanelTitle}>Photos</Text>
                     </View>
                     <Pressable
-                      onPress={() => scrollToUpcomingSection('memories')}
+                      onPress={() => setPlannedFeedViewMode('feed')}
                       style={styles.upcomingMemoriesAction}
                     >
-                      <Text style={styles.upcomingPanelActionLink}>+ Add Photo</Text>
+                      <Text style={styles.upcomingPanelActionLink}>See all</Text>
                     </Pressable>
                   </View>
                   <View style={styles.upcomingMemoriesGrid}>
-                    {feedPhotos.slice(0, 6).map((photo) => (
+                    {feedPhotos.slice(0, 3).map((photo) => (
                       <Pressable
                         key={photo.id}
                         onPress={() => setExpandedPhoto(photo)}
@@ -3335,6 +3956,13 @@ export function HomeScreen({
                         />
                       </Pressable>
                     ))}
+                    <Pressable
+                      onPress={() => void handleUpcomingPrimaryPhotoAction()}
+                      style={styles.upcomingMockAddPhotoTile}
+                    >
+                      <Ionicons color={theme.colors.accentPink} name="add" size={28} />
+                      <Text style={styles.upcomingMockAddPhotoText}>Add Photo</Text>
+                    </Pressable>
                     {feedPhotos.length === 0 ? (
                       <View style={styles.upcomingMemoriesEmpty}>
                         <Text style={styles.bringListEmptyText}>
@@ -3343,34 +3971,7 @@ export function HomeScreen({
                       </View>
                     ) : null}
                   </View>
-                  <Pressable
-                    onPress={() => setPlannedFeedViewMode('feed')}
-                    style={styles.upcomingMemoriesFooter}
-                  >
-                    <Text style={styles.upcomingPanelFooterLink}>
-                      View feed ({feedPhotos.length})
-                    </Text>
-                  </Pressable>
                 </View>
-              </View>
-
-              {canCurrentUserClaimBringItems && claimedByMeCount === 0 ? (
-                <View style={styles.upcomingBottomCta}>
-                  <View style={styles.upcomingBottomCtaCopy}>
-                    <Text style={styles.upcomingBottomCtaTitle}>Haven't claimed anything yet!</Text>
-                    <Text style={styles.upcomingBottomCtaText}>
-                      Pick something to bring and make it epic.
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() => scrollToUpcomingSection('bring')}
-                    style={styles.upcomingBottomCtaButton}
-                  >
-                    <Text style={styles.upcomingBottomCtaButtonText}>Browse Items</Text>
-                    <Ionicons color={theme.colors.accentPurple} name="arrow-forward" size={16} />
-                  </Pressable>
-                </View>
-              ) : null}
             </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
@@ -4099,10 +4700,18 @@ export function HomeScreen({
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          ref={createFlowScrollRef}
           showsVerticalScrollIndicator={false}
         >
           <PageHeader
-            onBack={() => setStep('welcome')}
+            onBack={() => {
+              if (step === 'invite' && inviteFlowMode === 'existing') {
+                closeInvitePicker();
+                return;
+              }
+
+              setStep('welcome');
+            }}
             right={headerActions}
             title={step === 'create' ? 'Create' : 'Invite'}
           />
@@ -4110,465 +4719,651 @@ export function HomeScreen({
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           {step === 'create' ? (
-            <View style={styles.panel}>
-              <Text style={styles.fieldLabel}>Date*</Text>
-              <View style={styles.plannedDateSection}>
-                <Pressable
-                  onPress={() => {
-                    setShowPlannedTimePicker(false);
-                    setShowPlannedDatePicker((current) => !current);
-                  }}
-                  style={styles.plannedDateButton}
-                >
-                  <Ionicons color={theme.colors.accentSoft} name="calendar-outline" size={18} />
-                  <Text style={styles.plannedDateButtonText}>
-                    {new Date(plannedFor).toLocaleDateString('en-US', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </Text>
-                </Pressable>
-                {showPlannedDatePicker ? (
-                  <View style={styles.plannedDatePickerWrap}>
-                    <DateTimePicker
-                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                      minimumDate={new Date()}
-                      mode="date"
-                      onChange={(event: DateTimePickerEvent, nextValue?: Date) => {
-                        if (Platform.OS !== 'ios') {
-                          setShowPlannedDatePicker(false);
-                        }
-
-                        if (event.type === 'set' && nextValue) {
-                          const merged = new Date(plannedFor);
-                          merged.setFullYear(
-                            nextValue.getFullYear(),
-                            nextValue.getMonth(),
-                            nextValue.getDate()
-                          );
-                          setPlannedFor(merged);
-                        }
-                      }}
-                      textColor={theme.colors.textPrimary}
-                      themeVariant="dark"
-                      value={plannedFor}
-                    />
-                  </View>
-                ) : null}
-
-                <Text style={[styles.fieldLabel, styles.spacedLabel]}>Start Time*</Text>
-                <Pressable
-                  onPress={() => {
-                    setShowPlannedDatePicker(false);
-                    setShowPlannedTimePicker((current) => !current);
-                  }}
-                  style={styles.plannedDateButton}
-                >
-                  <Ionicons color={theme.colors.accentSoft} name="time-outline" size={18} />
-                  <Text style={styles.plannedDateButtonText}>
-                    {formatPlannedTimeLabel(plannedFor.toISOString())}
-                  </Text>
-                </Pressable>
-                {showPlannedTimePicker ? (
-                  <View style={styles.plannedDatePickerWrap}>
-                    <DateTimePicker
-                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                      mode="time"
-                      onChange={(event: DateTimePickerEvent, nextValue?: Date) => {
-                        if (Platform.OS !== 'ios') {
-                          setShowPlannedTimePicker(false);
-                        }
-
-                        if (event.type === 'set' && nextValue) {
-                          const merged = new Date(plannedFor);
-                          merged.setHours(nextValue.getHours(), nextValue.getMinutes(), 0, 0);
-                          setPlannedFor(merged);
-                        }
-                      }}
-                      textColor={theme.colors.textPrimary}
-                      themeVariant="dark"
-                      value={plannedFor}
-                    />
-                  </View>
-                ) : null}
-              </View>
-
-              <Text style={styles.fieldLabel}>Shindig Name*</Text>
-              <TextInput
-                onChangeText={setShindigName}
-                placeholder="Give this ShinDig a name"
-                placeholderTextColor={theme.colors.textMuted}
-                style={styles.input}
-                value={shindigName}
-              />
-
-              <Text style={[styles.fieldLabel, styles.spacedLabel]}>Location*</Text>
-              <TextInput
-                onChangeText={(value) => {
-                  setLocationQuery(value);
-                  setSelectedLocation(null);
-                  setError('');
-                }}
-                placeholder="Search address or type any place"
-                placeholderTextColor={theme.colors.textMuted}
-                style={styles.input}
-                value={locationQuery}
-              />
-              {isLoadingLocation ? (
-                <Text style={styles.helperText}>Getting your location...</Text>
-              ) : null}
-              {isSearchingLocations ? (
-                <Text style={styles.helperText}>Searching nearby places...</Text>
-              ) : null}
-
-              <View style={styles.suggestionList}>
-                {locationResults.map((place) => (
-                  <Pressable
-                    key={place.id}
-                    onPress={() => selectLocation(place)}
-                    style={styles.suggestionItem}
-                  >
-                    <Text style={styles.suggestionTitle}>{place.title}</Text>
-                    <Text style={styles.suggestionMeta}>{place.address}</Text>
-                  </Pressable>
-                ))}
-                {!isSearchingLocations &&
-                deferredLocationQuery.trim().length >= 2 &&
-                locationResults.length === 0 ? (
-                  <Text style={styles.helperText}>
-                    No exact match found. You can still continue with the typed location.
-                  </Text>
-                ) : null}
-              </View>
-
-              <Text style={[styles.fieldLabel, styles.spacedLabel]}>
-                {shindigTiming === 'planned' ? 'Cover Photo' : 'Add Photo'}
+            <View style={styles.createShindigCard}>
+              <Text style={styles.createShindigTitle}>Create Shindig</Text>
+              <Text style={styles.createShindigSubtitle}>
+                Fill in the details to get started.
               </Text>
-              {shindigTiming === 'planned' ? (
-                <Text style={styles.helperText}>
-                  Choose one cover photo now. More photos can be added after the ShinDig starts.
-                </Text>
-              ) : null}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.photoRow}>
-                  <Pressable onPress={openPhotoSourcePicker} style={styles.addPhotoCard}>
-                    <Text style={styles.addPhotoPlus}>+</Text>
-                    <Text style={styles.addPhotoText}>
-                      {shindigTiming === 'planned' ? 'Choose Cover' : 'Add Photo'}
-                    </Text>
-                  </Pressable>
-                  {shindigTiming === 'planned' ? (
-                    <View style={styles.aiPhotoCardDisabled}>
-                      <View style={styles.aiPhotoCard}>
-                      <Ionicons color={theme.colors.accentPink} name="sparkles" size={24} />
-                      <Text style={styles.aiPhotoCardTitle}>AI Cover</Text>
-                      <Text style={styles.aiPhotoCardText}>Prompt a cover image</Text>
+
+              <View style={styles.createSectionCard}>
+                <View style={styles.createSectionBlock}>
+                  <View style={styles.createSectionHeader}>
+                    <View style={styles.createSectionIcon}>
+                      <Ionicons color={theme.colors.accentPink} name="sparkles-outline" size={20} />
+                    </View>
+                    <View style={styles.createSectionHeaderCopy}>
+                      <Text style={styles.createSectionTitle}>Shindig Name*</Text>
+                      <Text style={styles.createSectionSubtitle}>Give your ShinDig a name</Text>
+                    </View>
+                  </View>
+                  <View style={styles.createFieldWrap}>
+                    <TextInput
+                      maxLength={50}
+                      onChangeText={setShindigName}
+                      placeholder="e.g. Barry's Birthday Bash"
+                      placeholderTextColor={theme.colors.textMuted}
+                      style={styles.createFieldInput}
+                      value={shindigName}
+                    />
+                    <Text style={styles.createFieldCount}>{shindigName.length}/50</Text>
+                  </View>
+                </View>
+
+                <View style={styles.createDivider} />
+
+                <View style={styles.createSectionBlock}>
+                  <View style={styles.createSectionHeader}>
+                    <View style={styles.createSectionIcon}>
+                      <Ionicons color={theme.colors.accentPink} name="location-outline" size={20} />
+                    </View>
+                    <View style={styles.createSectionHeaderCopy}>
+                      <Text style={styles.createSectionTitle}>Location*</Text>
+                      <Text style={styles.createSectionSubtitle}>
+                        Where&apos;s the shindig happening?
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.createLocationInputWrap}>
+                    <Ionicons color={theme.colors.accentPink} name="search" size={22} />
+                    <TextInput
+                      onChangeText={(value) => {
+                        setLocationQuery(value);
+                        setSelectedLocation(null);
+                        setError('');
+                      }}
+                      placeholder="Search address or type any place"
+                      placeholderTextColor={theme.colors.textMuted}
+                      style={styles.createLocationInput}
+                      value={locationQuery}
+                    />
+                    <Ionicons color={theme.colors.accentPink} name="locate-outline" size={20} />
+                  </View>
+                  {isSearchingLocations ? (
+                    <Text style={styles.helperText}>Searching addresses...</Text>
+                  ) : null}
+                  <View style={styles.suggestionList}>
+                    {locationResults.map((place) => (
+                      <Pressable
+                        key={place.id}
+                        onPress={() => selectLocation(place)}
+                        style={styles.suggestionItem}
+                      >
+                        <Text style={styles.suggestionTitle}>{place.title}</Text>
+                        <Text style={styles.suggestionMeta}>{place.address}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.createDivider} />
+
+                <View style={styles.createDateTimeRow}>
+                  <View style={styles.createDateTimeCell}>
+                    <View style={styles.createSectionHeader}>
+                      <View style={styles.createSectionIcon}>
+                        <Ionicons color={theme.colors.accentPink} name="calendar-outline" size={20} />
                       </View>
-                      <View style={styles.comingSoonOverlay}>
-                        <Text style={styles.comingSoonOverlayText}>Coming Soon</Text>
+                      <View style={styles.createSectionHeaderCopy}>
+                        <Text style={styles.createSectionTitle}>Date*</Text>
+                        <Text style={styles.createSectionSubtitle}>Pick a date</Text>
                       </View>
+                    </View>
+                    <Pressable
+                      onPress={() => {
+                        setShowPlannedTimePicker(false);
+                        setShowPlannedDatePicker((current) => !current);
+                      }}
+                      style={styles.createDateTimeButton}
+                    >
+                      <View style={styles.createDateTimeButtonLeft}>
+                        <Ionicons color="#F2B4A0" name="calendar-outline" size={18} />
+                        <Text style={styles.createDateTimeButtonText}>
+                          {new Date(plannedFor).toLocaleDateString('en-US', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </Text>
+                      </View>
+                      <Ionicons color={theme.colors.textSecondary} name="chevron-down" size={18} />
+                    </Pressable>
+                    {showPlannedDatePicker ? (
+                      <View style={styles.createDateTimePickerPanel}>
+                        <View style={styles.plannedDatePickerWrap}>
+                        <DateTimePicker
+                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                          minimumDate={new Date()}
+                          mode="date"
+                          onChange={(event: DateTimePickerEvent, nextValue?: Date) => {
+                              if (Platform.OS !== 'ios') {
+                                setShowPlannedDatePicker(false);
+                              }
+
+                              if (event.type === 'set' && nextValue) {
+                                const merged = new Date(plannedFor);
+                                merged.setFullYear(
+                                  nextValue.getFullYear(),
+                                  nextValue.getMonth(),
+                                  nextValue.getDate()
+                                );
+                                setPlannedFor(merged);
+                              }
+                          }}
+                          style={[
+                            styles.createDateTimePicker,
+                            Platform.OS === 'ios' ? styles.createDateSpinnerPicker : null,
+                          ]}
+                          textColor={theme.colors.textPrimary}
+                          themeVariant="dark"
+                          value={plannedFor}
+                        />
+                        </View>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.createDateTimeDivider} />
+
+                  <View style={styles.createDateTimeCell}>
+                    <View style={styles.createSectionHeader}>
+                      <View style={styles.createSectionIcon}>
+                        <Ionicons color={theme.colors.accentPink} name="time-outline" size={20} />
+                      </View>
+                      <View style={styles.createSectionHeaderCopy}>
+                        <Text style={styles.createSectionTitle}>Start Time*</Text>
+                        <Text style={styles.createSectionSubtitle}>Pick a start time</Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      onPress={() => {
+                        setShowPlannedDatePicker(false);
+                        setShowPlannedTimePicker((current) => !current);
+                      }}
+                      style={styles.createDateTimeButton}
+                    >
+                      <View style={styles.createDateTimeButtonLeft}>
+                        <Ionicons color="#F2B4A0" name="time-outline" size={18} />
+                        <Text style={styles.createDateTimeButtonText}>
+                          {formatPlannedTimeLabel(plannedFor.toISOString())}
+                        </Text>
+                      </View>
+                      <Ionicons color={theme.colors.textSecondary} name="chevron-down" size={18} />
+                    </Pressable>
+                    {showPlannedTimePicker ? (
+                      <View style={styles.createDateTimePickerPanel}>
+                        <View style={styles.plannedDatePickerWrap}>
+                        <DateTimePicker
+                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                          mode="time"
+                          onChange={(event: DateTimePickerEvent, nextValue?: Date) => {
+                              if (Platform.OS !== 'ios') {
+                                setShowPlannedTimePicker(false);
+                              }
+
+                              if (event.type === 'set' && nextValue) {
+                                const merged = new Date(plannedFor);
+                                merged.setHours(nextValue.getHours(), nextValue.getMinutes(), 0, 0);
+                                setPlannedFor(merged);
+                              }
+                          }}
+                          style={styles.createDateTimePicker}
+                          textColor={theme.colors.textPrimary}
+                          themeVariant="dark"
+                          value={plannedFor}
+                        />
+                        </View>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+
+                <View style={styles.createDivider} />
+
+                <View style={styles.createSectionBlock}>
+                  <View style={styles.createSectionHeader}>
+                    <View style={styles.createSectionIcon}>
+                      <Ionicons color={theme.colors.accentPink} name="gift-outline" size={20} />
+                    </View>
+                    <View style={styles.createSectionHeaderCopy}>
+                      <Text style={styles.createSectionTitle}>Things To Bring</Text>
+                      <Text style={styles.createSectionSubtitle}>
+                        Add items so guests can claim them.
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.bringListComposer}>
+                    <TextInput
+                      onChangeText={setInitialBringItemDraft}
+                      onSubmitEditing={handleAddInitialBringItem}
+                      placeholder="Add an item to bring"
+                      placeholderTextColor={theme.colors.textMuted}
+                      returnKeyType="done"
+                      style={styles.bringListInput}
+                      value={initialBringItemDraft}
+                    />
+                    <Pressable onPress={handleAddInitialBringItem} style={styles.bringListAddButton}>
+                      <Text style={styles.bringListAddButtonText}>Add</Text>
+                    </Pressable>
+                  </View>
+                  <Text style={styles.createPopularIdeasLabel}>Popular ideas</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.createIdeasScroll}
+                  >
+                    <View style={styles.createIdeasRow}>
+                      {[
+                        ['beer-outline', 'Drinks'],
+                        ['fast-food-outline', 'Snacks'],
+                        ['cube-outline', 'Ice'],
+                        ['restaurant-outline', 'Utensils'],
+                        ['mail-outline', 'Napkins'],
+                      ].map(([icon, label]) => (
+                        <Pressable
+                          key={label}
+                          onPress={() => handleAddSuggestedBringItem(label)}
+                          style={styles.createIdeaChip}
+                        >
+                          <Ionicons color="#FFFFFF" name={icon as never} size={18} />
+                          <Text style={styles.createIdeaChipText}>{label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </ScrollView>
+                  {initialBringItems.length > 0 ? (
+                    <View style={styles.createSelectedItemsWrap}>
+                      {initialBringItems.map((item) => (
+                        <Pressable
+                          key={item}
+                          onPress={() => handleRemoveInitialBringItem(item)}
+                          style={styles.createSelectedItemChip}
+                        >
+                          <Text style={styles.createSelectedItemText}>{item}</Text>
+                          <Ionicons color={theme.colors.accentPink} name="close" size={14} />
+                        </Pressable>
+                      ))}
                     </View>
                   ) : null}
-                  {photos.map((photo) => (
-                    <View key={photo.localUri} style={styles.photoPreviewWrap}>
-                      <Image source={{ uri: photo.localUri }} style={styles.photoPreview} />
-                      {photo.isPreferredCover ? (
-                        <View style={styles.generatedCoverBadge}>
-                          <Text style={styles.generatedCoverBadgeText}>Cover</Text>
-                        </View>
-                      ) : null}
-                      <Pressable
-                        onPress={() => removePhoto(photo.localUri)}
-                        style={styles.removePhotoButton}
-                      >
-                        <Text style={styles.removePhotoText}>x</Text>
-                      </Pressable>
-                    </View>
-                  ))}
                 </View>
-              </ScrollView>
 
-              <Pressable onPress={continueToInvite} style={styles.ctaButton}>
-                <Text style={styles.ctaButtonText}>Continue</Text>
-              </Pressable>
+                <View style={styles.createDivider} />
+
+                <View style={styles.createSectionBlock}>
+                  <View style={styles.createSectionHeader}>
+                    <View style={styles.createSectionIcon}>
+                      <Ionicons color={theme.colors.accentPink} name="image-outline" size={20} />
+                    </View>
+                    <View style={styles.createSectionHeaderCopy}>
+                      <Text style={styles.createSectionTitle}>Cover Photo</Text>
+                      <Text style={styles.createSectionSubtitle}>
+                        Choose a cover photo for your Shindig.
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.createCoverRow}>
+                    <Pressable onPress={openPhotoSourcePicker} style={styles.createCoverTile}>
+                      <Ionicons color={theme.colors.accentPink} name="camera-outline" size={34} />
+                      <Text style={styles.createCoverTileTitle}>Upload Photo</Text>
+                      <Text style={styles.createCoverTileSubtitle}>Choose from gallery</Text>
+                    </Pressable>
+                    <View style={[styles.createCoverTile, styles.createCoverTileMuted]}>
+                      <Ionicons color="rgba(255,79,160,0.7)" name="sparkles" size={34} />
+                      <Text style={styles.createCoverTileComingSoon}>COMING SOON</Text>
+                      <Text style={styles.createCoverTileSubtitle}>
+                        We&apos;ll help you pick the perfect shot
+                      </Text>
+                    </View>
+                  </View>
+                  {photos.length > 0 ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.createCoverPreviewScroll}
+                    >
+                      <View style={styles.photoRow}>
+                        {photos.map((photo) => (
+                          <View key={photo.localUri} style={styles.photoPreviewWrap}>
+                            <Image source={{ uri: photo.localUri }} style={styles.photoPreview} />
+                            {photo.isPreferredCover ? (
+                              <View style={styles.generatedCoverBadge}>
+                                <Text style={styles.generatedCoverBadgeText}>Cover</Text>
+                              </View>
+                            ) : null}
+                            <Pressable
+                              onPress={() => removePhoto(photo.localUri)}
+                              style={styles.removePhotoButton}
+                            >
+                              <Text style={styles.removePhotoText}>x</Text>
+                            </Pressable>
+                          </View>
+                        ))}
+                      </View>
+                    </ScrollView>
+                  ) : null}
+                </View>
+
+                <Pressable onPress={continueToInvite} style={styles.createContinueButton}>
+                  <Text style={styles.createContinueButtonText}>Continue</Text>
+                </Pressable>
+              </View>
             </View>
           ) : null}
 
           {step === 'invite' ? (
             <View style={styles.panel}>
-              {!isInvitePickerOpen ? (
-                <View style={styles.inviteIntroCard}>
-                  <Text style={styles.inviteHeroTitle}>Invite people to this ShinDig</Text>
-                  <Text style={styles.inviteSubtitle}>
-                    Choose friends and contacts to invite to this future ShinDig. Invited
-                    people can accept, reject, or maybe.
-                  </Text>
-                  <View style={styles.inviteSummaryRow}>
-                    <View style={styles.inviteSummaryPill}>
-                      <Text style={styles.inviteSummaryValue}>{selectedContacts.length}</Text>
-                      <Text style={styles.inviteSummaryLabel}>Phone Contacts</Text>
+              <View style={styles.createInviteCard}>
+                <Text style={styles.createInviteTitle}>Invite People</Text>
+                <Text style={styles.createInviteSubtitle}>
+                  {inviteFlowMode === 'existing'
+                    ? 'Add more friends or contacts to this ShinDig'
+                    : 'Add friends or contacts to your ShinDig'}
+                </Text>
+
+                {inviteFlowMode === 'create' ? (
+                  <View style={styles.createInviteMessageCard}>
+                    <View style={styles.createInviteMessageHeader}>
+                      <View style={styles.createInviteMessageIconWrap}>
+                        <Ionicons color="#FFFFFF" name="chatbubble-ellipses" size={22} />
+                      </View>
+                      <View style={styles.createInviteMessageCopy}>
+                        <Text style={styles.createInviteMessageTitle}>Personalize your invite</Text>
+                        <Text style={styles.createInviteMessageSubtitle}>
+                          Add a message to make it special.
+                        </Text>
+                      </View>
+                      <Ionicons
+                        color={theme.colors.textMuted}
+                        name="chevron-forward"
+                        size={20}
+                      />
                     </View>
-                    <View style={styles.inviteSummaryPill}>
-                      <Text style={styles.inviteSummaryValue}>{selectedFriends.length}</Text>
-                      <Text style={styles.inviteSummaryLabel}>ShinDig Friends</Text>
+
+                    <Text style={styles.createInviteSectionTitle}>Invite Message</Text>
+                    <View style={styles.createInviteMessageInputWrap}>
+                      <TextInput
+                        maxLength={120}
+                        multiline
+                        onChangeText={setInviteMessageDraft}
+                        placeholder="Write something guests should know..."
+                        placeholderTextColor={theme.colors.textMuted}
+                        style={styles.createInviteMessageInput}
+                        textAlignVertical="top"
+                        value={inviteMessageDraft}
+                      />
+                      <Text style={styles.createInviteMessageCount}>
+                        {inviteMessageDraft.length}/120
+                      </Text>
                     </View>
                   </View>
-                  <Pressable onPress={() => void openInvitePicker()} style={styles.ctaButton}>
-                    <Text style={styles.ctaButtonText}>Select Contacts</Text>
-                  </Pressable>
+                ) : null}
+
+                <Text style={styles.createInviteSectionTitle}>Add People</Text>
+                <View style={styles.createInviteSearchRow}>
+                  <View style={styles.createInviteSearchInputWrap}>
+                    <Ionicons
+                      color={theme.colors.textMuted}
+                      name="search"
+                      size={20}
+                      style={styles.createInviteSearchIcon}
+                    />
+                    <TextInput
+                      onChangeText={(value) => {
+                        setInviteSearch(value);
+                        setError('');
+                      }}
+                      placeholder="Search friends or Shindig users..."
+                      placeholderTextColor={theme.colors.textMuted}
+                      style={styles.createInviteSearchInput}
+                      value={inviteSearch}
+                    />
+                  </View>
                   <Pressable
-                    disabled={isSavingShindig}
-                    onPress={skipInvites}
-                    style={styles.secondaryTextButton}
+                    onPress={() => setShowCreateInviteContacts((current) => !current)}
+                    style={styles.createInviteSearchAction}
                   >
-                    <Text style={styles.secondaryTextButtonLabel}>
-                      {isSavingShindig ? 'Starting...' : 'Select Contacts Later'}
-                    </Text>
+                    <Ionicons color={theme.colors.accentPink} name="person-add-outline" size={22} />
                   </Pressable>
                 </View>
-              ) : (
-                <View style={styles.invitePickerCard}>
-                  <View style={styles.invitePickerHeader}>
-                    <Pressable onPress={closeInvitePicker} style={styles.inlineBackButton}>
-                      <Ionicons color={theme.colors.accentSoft} name="chevron-back" size={22} />
-                      <Text style={styles.inlineBackLabel}>Back</Text>
-                    </Pressable>
-                    <Text style={styles.invitePickerTitle}>Select Contacts</Text>
-                    <View style={styles.inlineBackSpacer} />
-                  </View>
 
-                  <TextInput
-                    onChangeText={(value) => {
-                      setInviteSearch(value);
-                      setError('');
-                    }}
-                    placeholder="Search friends and ShinDig users..."
-                    placeholderTextColor={theme.colors.textMuted}
-                    style={styles.input}
-                    value={inviteSearch}
-                  />
+                {isSearchingInviteUsers ? (
+                  <Text style={styles.helperText}>Searching ShinDig users...</Text>
+                ) : null}
+                {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-                  {isSearchingInviteUsers ? (
-                    <Text style={styles.helperText}>Searching ShinDig users...</Text>
-                  ) : null}
+                {inviteFlowMode === 'create' && selectedAppInviteCount > 0 ? (
+                  <>
+                    <View style={styles.inviteSectionHeader}>
+                      <Text style={styles.inviteSectionLabel}>Friends On This Shindig</Text>
+                      <Pressable
+                        onPress={() => {
+                          setSelectedFriendIds([]);
+                          setSelectedInviteUsersById({});
+                        }}
+                      >
+                        <Text style={styles.createInviteDeselectText}>Deselect All</Text>
+                      </Pressable>
+                    </View>
+                    <View style={styles.contactList}>
+                      {selectedFriends.map((friend) => (
+                        <View key={friend.id} style={styles.createInvitePersonCard}>
+                          <Image source={{ uri: friend.avatar }} style={styles.createInviteAvatar} />
+                          <View style={styles.createInvitePersonCopy}>
+                            <Text style={styles.createInvitePersonName}>{friend.name}</Text>
+                            <Text style={styles.createInvitePersonMeta}>
+                              {friend.handle} {friend.city ? `| ${friend.city}` : ''}
+                            </Text>
+                          </View>
+                          <Pressable
+                            onPress={() => toggleFriend(friend.id)}
+                            style={[styles.createInviteActionButton, styles.createInviteRemoveButton]}
+                          >
+                            <Text style={styles.createInviteRemoveButtonText}>Remove</Text>
+                          </Pressable>
+                        </View>
+                      ))}
+                      {selectedInviteUsers.map((profile) => (
+                        <View key={profile.id} style={styles.createInvitePersonCard}>
+                          <Image source={{ uri: profile.avatar }} style={styles.createInviteAvatar} />
+                          <View style={styles.createInvitePersonCopy}>
+                            <Text style={styles.createInvitePersonName}>{profile.name}</Text>
+                            <Text style={styles.createInvitePersonMeta}>
+                              {profile.handle} {profile.city ? `| ${profile.city}` : ''}
+                            </Text>
+                          </View>
+                          <Pressable
+                            onPress={() => toggleInviteUser(profile)}
+                            style={[styles.createInviteActionButton, styles.createInviteRemoveButton]}
+                          >
+                            <Text style={styles.createInviteRemoveButtonText}>Remove</Text>
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                ) : null}
 
-                  {friends.length > 0 ? (
-                    <>
-                      <View style={styles.inviteSectionHeader}>
-                        <Text style={styles.inviteSectionLabel}>Friends On ShinDig</Text>
-                        <Pressable
-                          onPress={toggleAllVisibleFriends}
-                          style={styles.inviteSectionAction}
-                        >
-                          <Text style={styles.inviteSectionActionText}>
-                            {filteredFriends.length > 0 &&
-                            filteredFriends.every((friend) =>
-                              selectedFriendIds.includes(friend.id)
-                            )
-                              ? 'Deselect All'
-                              : 'Select All'}
-                          </Text>
-                        </Pressable>
-                      </View>
+                {inviteSearch.trim().length >= 2 ? (
+                  <>
+                    <Text style={styles.inviteSectionLabel}>
+                      {inviteSearchResults.length > 0
+                        ? 'Suggested ShinDig Users'
+                        : 'Other Users On ShinDig'}
+                    </Text>
+                    {inviteSearchResults.length > 0 ? (
                       <View style={styles.contactList}>
-                        {filteredFriends.map((friend) => {
-                          const isSelected = selectedFriendIds.includes(friend.id);
+                        {inviteSearchResults.map((profile) => {
+                          const isSelected = Boolean(selectedInviteUsersById[profile.id]);
+                          const isAccepted = acceptedInviteeIds.has(profile.id);
+                          const actionKey = `user:${profile.id}`;
+                          const isActing = actingInviteActionKey === actionKey;
                           return (
-                            <Pressable
-                              key={friend.id}
-                              onPress={() => toggleFriend(friend.id)}
-                              style={styles.contactItem}
-                            >
-                              <View
-                                style={[
-                                  styles.contactCheckbox,
-                                  isSelected && styles.contactCheckboxActive,
-                                ]}
-                              >
-                                <Text style={styles.contactCheckboxText}>
-                                  {isSelected ? 'x' : ''}
+                            <View key={profile.id} style={styles.createInvitePersonCard}>
+                              <Image source={{ uri: profile.avatar }} style={styles.createInviteAvatar} />
+                              <View style={styles.createInvitePersonCopy}>
+                                <Text style={styles.createInvitePersonName}>{profile.name}</Text>
+                                <Text style={styles.createInvitePersonMeta}>
+                                  {profile.handle} {profile.city ? `| ${profile.city}` : ''}
                                 </Text>
                               </View>
-                              <View style={styles.contactCopy}>
-                                <Text style={styles.contactName}>{friend.name}</Text>
-                                <Text style={styles.contactPhone}>
-                                  {friend.handle} {friend.city ? ` | ${friend.city}` : ''}
-                                </Text>
-                              </View>
-                            </Pressable>
+                              {inviteFlowMode === 'existing' && isAccepted ? (
+                                <View
+                                  style={[
+                                    styles.createInviteActionButton,
+                                    styles.createInviteAcceptedButton,
+                                  ]}
+                                >
+                                  <Ionicons color="#63D89A" name="checkmark" size={16} />
+                                  <Text style={styles.createInviteAcceptedButtonText}>Accepted</Text>
+                                </View>
+                              ) : (
+                                <Pressable
+                                  disabled={inviteFlowMode === 'existing' ? isSelected || isActing : false}
+                                  onPress={() =>
+                                    inviteFlowMode === 'existing'
+                                      ? void handleImmediateInvite({
+                                          actionKey,
+                                          inviteUsers: [profile],
+                                        })
+                                      : toggleInviteUser(profile)
+                                  }
+                                  style={[
+                                    styles.createInviteActionButton,
+                                    isSelected
+                                      ? styles.createInviteRemoveButton
+                                      : styles.createInviteAddButton,
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.createInviteActionButtonText,
+                                      isSelected && styles.createInviteRemoveButtonText,
+                                    ]}
+                                  >
+                                    {inviteFlowMode === 'existing'
+                                      ? isSelected
+                                        ? 'Invited'
+                                        : isActing
+                                          ? 'Sending...'
+                                          : 'Invite'
+                                      : isSelected
+                                        ? 'Remove'
+                                        : 'Add'}
+                                  </Text>
+                                </Pressable>
+                              )}
+                            </View>
                           );
                         })}
                       </View>
-                    </>
-                  ) : null}
+                    ) : !isSearchingInviteUsers ? (
+                      <Text style={styles.helperText}>
+                        No other ShinDig users matched that search.
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
 
-                  {inviteSearch.trim().length >= 2 ? (
-                    <>
-                      <Text style={styles.inviteSectionLabel}>Other Users On ShinDig</Text>
-                      {inviteSearchResults.length > 0 ? (
-                        <View style={styles.contactList}>
-                          {inviteSearchResults.map((profile) => {
-                            const isSelected = Boolean(selectedInviteUsersById[profile.id]);
-                            return (
-                              <Pressable
-                                key={profile.id}
-                                onPress={() => toggleInviteUser(profile)}
-                                style={styles.contactItem}
-                              >
-                                <View
-                                  style={[
-                                    styles.contactCheckbox,
-                                    isSelected && styles.contactCheckboxActive,
-                                  ]}
-                                >
-                                  <Text style={styles.contactCheckboxText}>
-                                    {isSelected ? 'x' : ''}
-                                  </Text>
-                                </View>
-                                <View style={styles.contactCopy}>
-                                  <Text style={styles.contactName}>{profile.name}</Text>
-                                  <Text style={styles.contactPhone}>
-                                    {profile.handle} {profile.city ? ` | ${profile.city}` : ''}
-                                  </Text>
-                                </View>
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-                      ) : !isSearchingInviteUsers ? (
-                        <Text style={styles.helperText}>
-                          No other ShinDig users matched that search.
-                        </Text>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  <Text style={styles.inviteSectionLabel}>Phone Contacts</Text>
-                  {isLoadingContacts ? (
-                    <Text style={styles.helperText}>Loading contacts...</Text>
-                  ) : (
-                    <>
-                      {contacts.length === 0 ? (
-                        <Text style={styles.helperText}>
-                          No phone contacts with numbers were returned from your device right now.
-                        </Text>
-                      ) : (
-                        <View style={styles.contactList}>
-                          {filteredContacts.map((contact) => {
-                            const isSelected = Boolean(selectedContactsById[contact.id]);
-                            return (
-                              <Pressable
-                                key={contact.id}
-                                onPress={() => toggleContact(contact)}
-                                style={styles.contactItem}
-                              >
-                                <View
-                                  style={[
-                                    styles.contactCheckbox,
-                                    isSelected && styles.contactCheckboxActive,
-                                  ]}
-                                >
-                                  <Text style={styles.contactCheckboxText}>
-                                    {isSelected ? 'x' : ''}
-                                  </Text>
-                                </View>
-                                <View style={styles.contactCopy}>
-                                  <Text style={styles.contactName}>{contact.name}</Text>
-                                  <Text style={styles.contactPhone}>{contact.phoneNumber}</Text>
-                                </View>
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-                      )}
-                    </>
-                  )}
-
-                  {selectedContacts.length > 0 ? (
+                {unselectedFriends.length > 0 ? (
+                  <>
+                    <Text style={styles.inviteSectionLabel}>Suggested Friends</Text>
                     <View style={styles.contactList}>
-                      {selectedContacts.map((contact) => (
-                        <Pressable
-                          key={contact.id}
-                          onPress={() => toggleContact(contact)}
-                          style={styles.contactItem}
-                        >
-                          <View style={[styles.contactCheckbox, styles.contactCheckboxActive]}>
-                            <Text style={styles.contactCheckboxText}>x</Text>
+                      {unselectedFriends.slice(0, 3).map((friend) => (
+                        (() => {
+                          const isAccepted = acceptedInviteeIds.has(friend.id);
+                          const isActing = actingInviteActionKey === `friend:${friend.id}`;
+                          return (
+                        <View key={friend.id} style={styles.createInvitePersonCard}>
+                          <Image source={{ uri: friend.avatar }} style={styles.createInviteAvatar} />
+                          <View style={styles.createInvitePersonCopy}>
+                            <Text style={styles.createInvitePersonName}>{friend.name}</Text>
+                            <Text style={styles.createInvitePersonMeta}>{friend.handle}</Text>
                           </View>
-                          <View style={styles.contactCopy}>
-                            <Text style={styles.contactName}>{contact.name}</Text>
-                            <Text style={styles.contactPhone}>{contact.phoneNumber}</Text>
-                          </View>
-                        </Pressable>
+                          {inviteFlowMode === 'existing' && isAccepted ? (
+                            <View
+                              style={[
+                                styles.createInviteActionButton,
+                                styles.createInviteAcceptedButton,
+                              ]}
+                            >
+                              <Ionicons color="#63D89A" name="checkmark" size={16} />
+                              <Text style={styles.createInviteAcceptedButtonText}>Accepted</Text>
+                            </View>
+                          ) : (
+                            <Pressable
+                              disabled={inviteFlowMode === 'existing' && isActing}
+                              onPress={() =>
+                                inviteFlowMode === 'existing'
+                                  ? void handleImmediateInvite({
+                                      actionKey: `friend:${friend.id}`,
+                                      inviteUsers: [friend],
+                                    })
+                                  : toggleFriend(friend.id)
+                              }
+                              style={[styles.createInviteActionButton, styles.createInviteAddButton]}
+                            >
+                              <Text style={styles.createInviteActionButtonText}>
+                                {inviteFlowMode === 'existing' && isActing
+                                  ? 'Sending...'
+                                  : inviteFlowMode === 'existing'
+                                    ? 'Invite'
+                                    : 'Add'}
+                              </Text>
+                            </Pressable>
+                          )}
+                        </View>
+                          );
+                        })()
                       ))}
                     </View>
-                  ) : (
-                    <Text style={styles.helperText}>
-                      No phone contacts selected yet. Search or load contacts from your phone.
-                    </Text>
-                  )}
+                  </>
+                ) : null}
 
-                  {selectedInviteUsers.length > 0 ? (
-                    <>
-                      <Text style={styles.inviteSectionLabel}>Selected ShinDig Users</Text>
-                      <View style={styles.contactList}>
-                        {selectedInviteUsers.map((profile) => (
-                          <Pressable
-                            key={profile.id}
-                            onPress={() => toggleInviteUser(profile)}
-                            style={styles.contactItem}
-                          >
-                            <View style={[styles.contactCheckbox, styles.contactCheckboxActive]}>
-                              <Text style={styles.contactCheckboxText}>x</Text>
-                            </View>
-                            <View style={styles.contactCopy}>
-                              <Text style={styles.contactName}>{profile.name}</Text>
-                              <Text style={styles.contactPhone}>
-                                {profile.handle} {profile.city ? ` | ${profile.city}` : ''}
-                              </Text>
-                            </View>
-                          </Pressable>
-                        ))}
+                {inviteFlowMode === 'create' ? (
+                  <View style={styles.createInviteShareCard}>
+                    <View style={styles.createInviteShareCopyRow}>
+                      <View style={styles.createInviteShareCopy}>
+                        <Text style={styles.createInviteShareTitle}>Invite friends</Text>
+                        <Text style={styles.createInviteShareSubtitle}>
+                          Share your Shindig and invite friends to join the fun!
+                        </Text>
                       </View>
-                    </>
-                  ) : null}
+                    </View>
+                    <Pressable
+                      disabled={isSavingShindig}
+                      onPress={() => void saveShindigAndOpenFeed({ shareAfterSave: true })}
+                      style={styles.createInviteShareButton}
+                    >
+                      <Ionicons color={theme.colors.accentPink} name="share-social-outline" size={20} />
+                      <Text style={styles.createInviteShareButtonText}>
+                        {isSavingShindig ? 'Sharing...' : 'Invite'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
 
-                  <Pressable
-                    disabled={
-                      isSavingShindig ||
-                      selectedContacts.length + selectedFriends.length + selectedInviteUsers.length === 0
-                    }
-                    onPress={saveShindigAndOpenFeed}
-                    style={[
-                      styles.ctaButton,
-                      (isSavingShindig ||
-                        selectedContacts.length +
-                          selectedFriends.length +
-                          selectedInviteUsers.length ===
-                          0) &&
-                        styles.buttonDisabled,
-                    ]}
-                  >
-                    <Text style={styles.ctaButtonText}>
-                      {isSavingShindig
-                        ? 'Starting...'
-                        : `Continue with ${
-                            selectedContacts.length +
-                            selectedFriends.length +
-                            selectedInviteUsers.length
-                          }`}
-                    </Text>
-                  </Pressable>
+                {inviteFlowMode === 'create' ? (
                   <Pressable
                     disabled={isSavingShindig}
-                    onPress={skipInvites}
-                    style={styles.secondaryTextButton}
+                    onPress={() => void saveShindigAndOpenFeed()}
+                    style={[styles.createInviteSendButton, isSavingShindig && styles.buttonDisabled]}
                   >
-                    <Text style={styles.secondaryTextButtonLabel}>Select Contacts Later</Text>
+                    <Ionicons color="#FFFFFF" name="arrow-forward" size={20} />
+                    <Text style={styles.createInviteSendButtonText}>
+                      {isSavingShindig ? 'Continuing...' : 'Continue'}
+                    </Text>
                   </Pressable>
-                </View>
-              )}
+                ) : null}
+
+                <Pressable
+                  disabled={isSavingShindig}
+                  onPress={skipInvites}
+                  style={styles.secondaryTextButton}
+                >
+                  <Text style={styles.createInviteSkipText}>
+                    {inviteFlowMode === 'existing' ? 'Back to ShinDig' : 'Skip for now'}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           ) : null}
         </ScrollView>
@@ -4690,8 +5485,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: theme.spacing.sm,
     overflow: 'hidden',
-    paddingHorizontal: theme.spacing.sm,
+    paddingHorizontal: 0,
     paddingVertical: theme.spacing.xs,
+  },
+  createDateTimePicker: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  createDateSpinnerPicker: {
+    alignSelf: 'center',
+    transform: [{ scaleX: 0.92 }, { scaleY: 0.92 }],
   },
   sectionHeader: {
     marginTop: theme.spacing.xl,
@@ -4917,6 +5720,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.md,
   },
+  inviteMessageInput: {
+    minHeight: 96,
+    paddingTop: theme.spacing.md,
+  },
   helperText: {
     color: theme.colors.textMuted,
     fontSize: 13,
@@ -4999,25 +5806,717 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   suggestionList: {
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.sm,
+    gap: theme.spacing.xs,
+    marginTop: theme.spacing.xs,
   },
   suggestionItem: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: 20,
+    backgroundColor: 'rgba(20, 31, 55, 0.68)',
+    borderColor: 'rgba(120, 139, 184, 0.18)',
+    borderRadius: 16,
     borderWidth: 1,
-    padding: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
   },
   suggestionTitle: {
     color: theme.colors.textPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
   suggestionMeta: {
     color: theme.colors.textMuted,
-    fontSize: 12,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  createShindigCard: {
+    paddingBottom: theme.spacing.xl,
+  },
+  createShindigTitle: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+  createShindigSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: 16,
+    marginTop: theme.spacing.xs,
+  },
+  createSectionCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 30,
+    borderWidth: 1,
+    marginTop: theme.spacing.xl,
+    overflow: 'hidden',
+  },
+  createSectionBlock: {
+    padding: theme.spacing.lg,
+  },
+  createDivider: {
+    backgroundColor: theme.colors.border,
+    height: 1,
+  },
+  createSectionHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
+  createSectionIcon: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(65, 29, 73, 0.75)',
+    borderRadius: 18,
+    height: 52,
+    justifyContent: 'center',
+    width: 52,
+  },
+  createSectionHeaderCopy: {
+    flex: 1,
+  },
+  createSectionTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  createSectionSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: 14,
     marginTop: 4,
+  },
+  createFieldWrap: {
+    backgroundColor: 'rgba(20, 31, 55, 0.82)',
+    borderColor: theme.colors.border,
+    borderRadius: 22,
+    borderWidth: 1,
+    marginTop: theme.spacing.md,
+    minHeight: 92,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+  },
+  createFieldInput: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    lineHeight: 24,
+    minHeight: 40,
+  },
+  createFieldCount: {
+    alignSelf: 'flex-end',
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: theme.spacing.sm,
+  },
+  createLocationInputWrap: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(20, 31, 55, 0.82)',
+    borderColor: theme.colors.border,
+    borderRadius: 22,
+    borderWidth: 1,
+    flexDirection: 'row',
+    marginTop: theme.spacing.md,
+    minHeight: 64,
+    paddingHorizontal: theme.spacing.md,
+  },
+  createLocationInput: {
+    color: '#FFFFFF',
+    flex: 1,
+    fontSize: 16,
+    marginHorizontal: theme.spacing.sm,
+    minHeight: 52,
+  },
+  createDateTimeRow: {
+    flexDirection: 'column',
+    overflow: 'visible',
+  },
+  createDateTimeCell: {
+    overflow: 'visible',
+    padding: theme.spacing.lg,
+  },
+  createDateTimePickerPanel: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.lg,
+  },
+  createDateTimeDivider: {
+    backgroundColor: theme.colors.border,
+    height: 1,
+  },
+  createDateTimeButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(20, 31, 55, 0.82)',
+    borderColor: theme.colors.border,
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: theme.spacing.md,
+    minHeight: 60,
+    paddingHorizontal: theme.spacing.md,
+  },
+  createDateTimeButtonLeft: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  createDateTimeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  createPopularIdeasLabel: {
+    color: theme.colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: theme.spacing.md,
+  },
+  createIdeasScroll: {
+    marginTop: theme.spacing.md,
+  },
+  createIdeasRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    paddingRight: theme.spacing.sm,
+  },
+  createIdeaChip: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(20, 31, 55, 0.82)',
+    borderColor: theme.colors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    minHeight: 56,
+    paddingHorizontal: theme.spacing.md,
+  },
+  createIdeaChipText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  createSelectedItemsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  createSelectedItemChip: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 79, 160, 0.12)',
+    borderColor: 'rgba(255, 79, 160, 0.38)',
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  createSelectedItemText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  createCoverRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md,
+  },
+  createCoverTile: {
+    alignItems: 'center',
+    borderColor: 'rgba(255, 79, 160, 0.45)',
+    borderRadius: 24,
+    borderStyle: 'dashed',
+    borderWidth: 2,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 190,
+    padding: theme.spacing.lg,
+  },
+  createCoverTileMuted: {
+    backgroundColor: 'rgba(16, 24, 43, 0.72)',
+    borderColor: 'rgba(94, 73, 126, 0.4)',
+    borderStyle: 'solid',
+  },
+  createCoverTileTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: theme.spacing.md,
+    textAlign: 'center',
+  },
+  createCoverTileSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: theme.spacing.xs,
+    textAlign: 'center',
+  },
+  createCoverTileComingSoon: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    marginTop: theme.spacing.md,
+  },
+  createCoverPreviewScroll: {
+    marginTop: theme.spacing.md,
+  },
+  createContinueButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.accentPink,
+    borderRadius: 24,
+    justifyContent: 'center',
+    margin: theme.spacing.lg,
+    minHeight: 62,
+  },
+  createContinueButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  shindigsWelcomeContent: {
+    padding: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxxl,
+    paddingTop: 20,
+  },
+  shindigsWelcomeHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  shindigsWelcomeCopy: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: theme.spacing.md,
+  },
+  shindigsWelcomeActions: {
+    flexShrink: 0,
+  },
+  shindigsWelcomeTitle: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+  shindigsWelcomeSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: 16,
+    marginTop: theme.spacing.xs,
+  },
+  shindigsWelcomePrimaryCta: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.accentPink,
+    borderRadius: 28,
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    justifyContent: 'center',
+    marginTop: theme.spacing.xl,
+    minHeight: 82,
+  },
+  shindigsWelcomePrimaryCtaText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  shindigsWelcomeSectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: theme.spacing.xl,
+  },
+  shindigsWelcomeSectionTitleWrap: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  shindigsWelcomeSectionTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  shindigsWelcomeSeeAll: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  shindigsWelcomeSeeAllText: {
+    color: theme.colors.accentPink,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  shindigsWelcomeCardList: {
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md,
+  },
+  shindigsWelcomeUpcomingCard: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 28,
+    borderWidth: 1,
+    flexDirection: 'row',
+    minHeight: 142,
+    padding: theme.spacing.md,
+  },
+  shindigsWelcomeUpcomingImage: {
+    borderRadius: 20,
+    height: 110,
+    width: 110,
+  },
+  shindigsWelcomeUpcomingCopy: {
+    flex: 1,
+    marginLeft: theme.spacing.md,
+    marginRight: theme.spacing.md,
+  },
+  shindigsWelcomeUpcomingTitle: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '900',
+    marginVertical: 10,
+  },
+  shindigsWelcomeMetaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.xs,
+  },
+  shindigsWelcomeMetaText: {
+    color: theme.colors.textSecondary,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  shindigsWelcomeEmptyCard: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 28,
+    borderWidth: 1,
+    flexDirection: 'row',
+    marginTop: theme.spacing.md,
+    minHeight: 170,
+    padding: theme.spacing.lg,
+  },
+  shindigsWelcomeEmptyIconWrap: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(54, 36, 92, 0.6)',
+    borderRadius: 999,
+    height: 124,
+    justifyContent: 'center',
+    width: 124,
+  },
+  shindigsWelcomeEmptyCopy: {
+    flex: 1,
+    marginLeft: theme.spacing.lg,
+  },
+  shindigsWelcomeEmptyTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  shindigsWelcomeEmptyText: {
+    color: theme.colors.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: theme.spacing.sm,
+  },
+  createInviteCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 30,
+    borderWidth: 1,
+    padding: theme.spacing.lg,
+  },
+  createInviteTitle: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+  createInviteSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: 15,
+    marginTop: theme.spacing.xs,
+  },
+  createInviteMessageCard: {
+    backgroundColor: 'rgba(18, 29, 53, 0.82)',
+    borderColor: theme.colors.border,
+    borderRadius: 24,
+    borderWidth: 1,
+    marginTop: theme.spacing.xl,
+    padding: theme.spacing.md,
+  },
+  createInviteMessageHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
+  createInviteMessageIconWrap: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.accentPink,
+    borderRadius: 18,
+    height: 58,
+    justifyContent: 'center',
+    width: 58,
+  },
+  createInviteMessageCopy: {
+    flex: 1,
+  },
+  createInviteMessageTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  createInviteMessageSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  createInviteSectionTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: theme.spacing.lg,
+  },
+  createInviteMessageInputWrap: {
+    backgroundColor: 'rgba(8, 16, 34, 0.86)',
+    borderColor: theme.colors.accentPink,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginTop: theme.spacing.sm,
+    minHeight: 140,
+    padding: theme.spacing.md,
+  },
+  createInviteMessageInput: {
+    color: '#FFFFFF',
+    flex: 1,
+    fontSize: 16,
+    lineHeight: 22,
+    minHeight: 88,
+    textAlignVertical: 'top',
+  },
+  createInviteMessageCount: {
+    alignSelf: 'flex-end',
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: theme.spacing.sm,
+  },
+  createInviteSearchRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  createInviteSearchInputWrap: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 18, 37, 0.9)',
+    borderColor: theme.colors.border,
+    borderRadius: 20,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: 'row',
+    minHeight: 58,
+    paddingHorizontal: theme.spacing.md,
+  },
+  createInviteSearchIcon: {
+    marginRight: theme.spacing.sm,
+  },
+  createInviteSearchInput: {
+    color: '#FFFFFF',
+    flex: 1,
+    fontSize: 16,
+    minHeight: 52,
+  },
+  createInviteSearchAction: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 18, 37, 0.9)',
+    borderColor: theme.colors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    height: 58,
+    justifyContent: 'center',
+    width: 58,
+  },
+  createInviteDeselectText: {
+    color: theme.colors.accentPink,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  createInvitePersonCard: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(23, 35, 62, 0.88)',
+    borderColor: theme.colors.border,
+    borderRadius: 22,
+    borderWidth: 1,
+    flexDirection: 'row',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+  },
+  createInviteAvatar: {
+    borderRadius: theme.radius.round,
+    height: 52,
+    width: 52,
+  },
+  createInviteContactAvatar: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(72, 92, 138, 0.4)',
+    borderRadius: theme.radius.round,
+    height: 52,
+    justifyContent: 'center',
+    width: 52,
+  },
+  createInvitePersonCopy: {
+    flex: 1,
+    marginLeft: theme.spacing.md,
+  },
+  createInvitePersonName: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  createInvitePersonMeta: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  createInviteActionButton: {
+    alignItems: 'center',
+    borderRadius: theme.radius.round,
+    borderWidth: 2,
+    justifyContent: 'center',
+    minHeight: 42,
+    minWidth: 86,
+    paddingHorizontal: theme.spacing.md,
+  },
+  createInviteAddButton: {
+    borderColor: theme.colors.accentPink,
+  },
+  createInviteRemoveButton: {
+    backgroundColor: 'rgba(23, 35, 62, 0.96)',
+    borderColor: theme.colors.border,
+  },
+  createInviteAcceptedButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 44, 31, 0.72)',
+    borderColor: 'rgba(99, 216, 154, 0.4)',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  createInviteActionButtonText: {
+    color: theme.colors.accentPink,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  createInviteAcceptedButtonText: {
+    color: '#63D89A',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  createInviteRemoveButtonText: {
+    color: theme.colors.textPrimary,
+  },
+  createInviteShareCard: {
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(16, 24, 46, 0.92)',
+    borderColor: theme.colors.border,
+    borderRadius: 28,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.lg,
+  },
+  createInviteShareCopyRow: {
+    alignItems: 'flex-start',
+    flex: 1,
+    minWidth: 0,
+  },
+  createInviteShareCopy: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: theme.spacing.sm,
+  },
+  createInviteShareTitle: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '900',
+    lineHeight: 30,
+  },
+  createInviteShareSubtitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 16,
+    lineHeight: 24,
+    marginTop: theme.spacing.sm,
+    opacity: 0.86,
+  },
+  createInviteShareButton: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    borderColor: theme.colors.accentPink,
+    borderRadius: theme.radius.round,
+    borderWidth: 1.5,
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginLeft: theme.spacing.md,
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+  },
+  createInviteShareButtonText: {
+    color: theme.colors.accentPink,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  createInvitePhoneRow: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(18, 29, 53, 0.82)',
+    borderColor: theme.colors.border,
+    borderRadius: 22,
+    borderWidth: 1,
+    flexDirection: 'row',
+    marginTop: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+  },
+  createInvitePhoneIconWrap: {
+    alignItems: 'center',
+    borderColor: 'rgba(255, 79, 160, 0.34)',
+    borderRadius: 16,
+    borderWidth: 1,
+    height: 50,
+    justifyContent: 'center',
+    width: 50,
+  },
+  createInvitePhoneCopy: {
+    flex: 1,
+    marginLeft: theme.spacing.md,
+  },
+  createInvitePhoneTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  createInvitePhoneSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  createInviteSendButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.accentPink,
+    borderRadius: 22,
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    justifyContent: 'center',
+    marginTop: theme.spacing.xl,
+    minHeight: 58,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  createInviteSendButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  createInviteSkipText: {
+    color: theme.colors.accentPink,
+    fontSize: 16,
+    fontWeight: '800',
   },
   inviteSubtitle: {
     color: theme.colors.textSecondary,
@@ -5105,6 +6604,7 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     fontSize: 18,
     fontWeight: '800',
+    marginTop: theme.spacing.md,
   },
   inviteSectionHeader: {
     alignItems: 'center',
@@ -5632,6 +7132,222 @@ const styles = StyleSheet.create({
   upcomingScreenContent: {
     paddingBottom: theme.spacing.xxxl,
     paddingHorizontal: theme.spacing.xs,
+  },
+  upcomingMockContent: {
+    paddingBottom: theme.spacing.xxxl,
+    paddingHorizontal: theme.spacing.sm,
+    paddingTop: theme.spacing.lg,
+  },
+  upcomingMockHeaderRow: {
+    gap: theme.spacing.md,
+  },
+  upcomingMockHeaderTopBar: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  upcomingMockBackButton: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    width: 36,
+  },
+  upcomingMockHeaderMain: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    minWidth: 0,
+  },
+  upcomingMockThumb: {
+    borderRadius: theme.radius.lg,
+    flexShrink: 0,
+    height: 96,
+    width: 96,
+  },
+  upcomingMockHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  upcomingMockHeaderActions: {
+    flexShrink: 0,
+  },
+  upcomingMockTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: -0.9,
+  },
+  upcomingMockMetaLine: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  upcomingMockMetaText: {
+    color: theme.colors.textMuted,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  upcomingMockTabs: {
+    borderBottomColor: theme.colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    justifyContent: 'space-between',
+    marginTop: theme.spacing.lg,
+    paddingBottom: theme.spacing.sm,
+  },
+  upcomingMockTab: {
+    alignItems: 'center',
+    flexShrink: 1,
+    flexDirection: 'row',
+    gap: 6,
+    paddingBottom: theme.spacing.sm,
+  },
+  upcomingMockTabActive: {
+    borderBottomColor: theme.colors.accentPink,
+    borderBottomWidth: 3,
+    flexShrink: 1,
+    paddingBottom: theme.spacing.sm,
+  },
+  upcomingMockTabText: {
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  upcomingMockTabActiveText: {
+    color: theme.colors.accentPink,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  upcomingMockCountBadge: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.accentPink,
+    borderRadius: theme.radius.round,
+    height: 22,
+    justifyContent: 'center',
+    minWidth: 22,
+    paddingHorizontal: 6,
+  },
+  upcomingMockCountBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  upcomingMockActionRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
+  },
+  upcomingMockActionTile: {
+    backgroundColor: '#21153F',
+    borderColor: 'rgba(166, 107, 255, 0.26)',
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    flex: 1,
+    minHeight: 96,
+    padding: theme.spacing.md,
+  },
+  upcomingMockActionTilePink: {
+    backgroundColor: 'rgba(71, 23, 66, 0.9)',
+    borderColor: 'rgba(255, 79, 160, 0.26)',
+  },
+  upcomingMockActionIconPink: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.accentPink,
+    borderRadius: 18,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  upcomingMockActionIconPurple: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.accentPurple,
+    borderRadius: 18,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  upcomingMockActionText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 18,
+    marginTop: theme.spacing.sm,
+    maxWidth: '85%',
+  },
+  upcomingMockActionBadge: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.accentPink,
+    borderRadius: theme.radius.round,
+    height: 24,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: theme.spacing.md,
+    top: theme.spacing.md,
+    width: 24,
+  },
+  upcomingMockActionBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  upcomingMockCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    marginTop: theme.spacing.lg,
+    padding: theme.spacing.lg,
+  },
+  upcomingMockItemRow: {
+    backgroundColor: 'transparent',
+    borderBottomColor: theme.colors.border,
+    borderBottomWidth: 1,
+    paddingBottom: theme.spacing.md,
+    paddingTop: theme.spacing.xs,
+  },
+  upcomingMockChatRow: {
+    alignItems: 'flex-start',
+    borderBottomColor: theme.colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
+  },
+  upcomingMockChatAvatar: {
+    borderRadius: theme.radius.round,
+    height: 42,
+    width: 42,
+  },
+  upcomingMockChatTopRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  upcomingMockChatBody: {
+    color: theme.colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 4,
+  },
+  upcomingMockAddPhotoTile: {
+    alignItems: 'center',
+    borderColor: 'rgba(255, 79, 160, 0.4)',
+    borderRadius: theme.radius.lg,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 110,
+    width: '31%',
+  },
+  upcomingMockAddPhotoText: {
+    color: theme.colors.accentPink,
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: theme.spacing.sm,
   },
   upcomingHeroCard: {
     backgroundColor: theme.colors.surface,
@@ -6280,4 +7996,3 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 });
-

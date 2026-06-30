@@ -110,6 +110,39 @@ function countOwnedShindigs(userId: string, shindigs: SavedShindig[]) {
   return shindigs.filter((shindig) => shindig.ownerId === userId).length;
 }
 
+type HomeScreenViewState = {
+  activeFeedShindig: SavedShindig | null;
+  plannedFeedViewMode: 'feed' | 'overview';
+  step: 'create' | 'feed' | 'invite' | 'welcome';
+};
+
+type OverlayReturnTarget =
+  | { kind: 'chats'; activeShindigId: string | null }
+  | {
+      detail: {
+        friends: FriendProfile[];
+        profile: UserProfile;
+        shindigs: SavedShindig[];
+      };
+      kind: 'friendProfile';
+      tab: AppTab;
+    }
+  | {
+      detail: {
+        friends: FriendProfile[];
+        ownerId?: string;
+        ownerName: string;
+        showAddButtons: boolean;
+      };
+      kind: 'profileFriends';
+      tab: AppTab;
+    }
+  | { kind: 'more' }
+  | { kind: 'notifications' }
+  | { kind: 'settings' }
+  | { kind: 'shindigs'; view: HomeScreenViewState }
+  | { kind: 'tab'; tab: AppTab };
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
@@ -151,8 +184,18 @@ export default function App() {
   >({ kind: 'shindigs' });
   const [showNotifications, setShowNotifications] = useState(false);
   const [showChats, setShowChats] = useState(false);
+  const [activeChatShindigId, setActiveChatShindigId] = useState<string | null>(null);
   const [showMore, setShowMore] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [overlayReturnTarget, setOverlayReturnTarget] = useState<OverlayReturnTarget | null>(null);
+  const [homeScreenViewState, setHomeScreenViewState] = useState<HomeScreenViewState>({
+    activeFeedShindig: null,
+    plannedFeedViewMode: 'overview',
+    step: 'welcome',
+  });
+  const [restoredPlannedFeedViewMode, setRestoredPlannedFeedViewMode] = useState<
+    'feed' | 'overview' | null
+  >(null);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [bootError, setBootError] = useState('');
   const [pendingInviteToken, setPendingInviteToken] = useState<string | null>(null);
@@ -169,6 +212,149 @@ export default function App() {
   useEffect(() => {
     profileRef.current = profile;
   }, [profile]);
+
+  function captureCurrentView(): OverlayReturnTarget {
+    if (showNotifications) {
+      return { kind: 'notifications' };
+    }
+
+    if (showChats) {
+      return { activeShindigId: activeChatShindigId, kind: 'chats' };
+    }
+
+    if (showMore) {
+      return { kind: 'more' };
+    }
+
+    if (showSettings) {
+      return { kind: 'settings' };
+    }
+
+    if (profileFriendsDetail) {
+      return {
+        detail: profileFriendsDetail,
+        kind: 'profileFriends',
+        tab: activeTab,
+      };
+    }
+
+    if (friendProfileDetail) {
+      return {
+        detail: friendProfileDetail,
+        kind: 'friendProfile',
+        tab: activeTab,
+      };
+    }
+
+    if (activeTab === 'shindigs') {
+      return {
+        kind: 'shindigs',
+        view: homeScreenViewState,
+      };
+    }
+
+    return { kind: 'tab', tab: activeTab };
+  }
+
+  function restoreOverlayTarget(target: OverlayReturnTarget | null) {
+    setShowNotifications(false);
+    setShowChats(false);
+    setShowMore(false);
+    setShowSettings(false);
+    setFriendProfileDetail(null);
+    setProfileFriendsDetail(null);
+    setOverlayReturnTarget(null);
+
+    if (!target) {
+      return;
+    }
+
+    if (target.kind === 'friendProfile') {
+      setFeedShindig(null);
+      setHighlightedPhotoId(null);
+      setPendingShindigStep(null);
+      setRestoredPlannedFeedViewMode(null);
+      setHideShindigsTabSelection(false);
+      setActiveTab(target.tab);
+      setFriendProfileDetail(target.detail);
+      return;
+    }
+
+    if (target.kind === 'profileFriends') {
+      setFeedShindig(null);
+      setHighlightedPhotoId(null);
+      setPendingShindigStep(null);
+      setRestoredPlannedFeedViewMode(null);
+      setHideShindigsTabSelection(false);
+      setActiveTab(target.tab);
+      setProfileFriendsDetail(target.detail);
+      return;
+    }
+
+    if (target.kind === 'chats') {
+      setFeedShindig(null);
+      setHighlightedPhotoId(null);
+      setPendingShindigStep(null);
+      setRestoredPlannedFeedViewMode(null);
+      setHideShindigsTabSelection(false);
+      setActiveChatShindigId(target.activeShindigId);
+      setShowChats(true);
+      return;
+    }
+
+    if (target.kind === 'more') {
+      setFeedShindig(null);
+      setHighlightedPhotoId(null);
+      setPendingShindigStep(null);
+      setRestoredPlannedFeedViewMode(null);
+      setHideShindigsTabSelection(false);
+      setShowMore(true);
+      return;
+    }
+
+    if (target.kind === 'notifications') {
+      setFeedShindig(null);
+      setHighlightedPhotoId(null);
+      setPendingShindigStep(null);
+      setRestoredPlannedFeedViewMode(null);
+      setHideShindigsTabSelection(false);
+      setShowNotifications(true);
+      return;
+    }
+
+    if (target.kind === 'settings') {
+      setFeedShindig(null);
+      setHighlightedPhotoId(null);
+      setPendingShindigStep(null);
+      setRestoredPlannedFeedViewMode(null);
+      setHideShindigsTabSelection(false);
+      setShowSettings(true);
+      return;
+    }
+
+    if (target.kind === 'shindigs') {
+      setActiveTab('shindigs');
+      setHighlightedPhotoId(null);
+      setRestoredPlannedFeedViewMode(
+        target.view.step === 'feed' ? target.view.plannedFeedViewMode : null
+      );
+      setFeedShindig(target.view.step === 'feed' ? target.view.activeFeedShindig : null);
+      setPendingShindigStep(
+        target.view.step === 'create' ? 'create' : target.view.step === 'welcome' ? 'welcome' : null
+      );
+      setHideShindigsTabSelection(
+        target.view.step === 'create' || target.view.step === 'invite'
+      );
+      return;
+    }
+
+    setFeedShindig(null);
+    setHighlightedPhotoId(null);
+    setPendingShindigStep(null);
+    setRestoredPlannedFeedViewMode(null);
+    setHideShindigsTabSelection(false);
+    setActiveTab(target.tab);
+  }
 
   function scheduleRefresh(
     kind: 'friends' | 'notifications' | 'shindigs',
@@ -351,6 +537,7 @@ export default function App() {
       const shindigId =
         typeof data?.shindigId === 'string' && data.shindigId ? data.shindigId : null;
       const photoId = typeof data?.photoId === 'string' && data.photoId ? data.photoId : null;
+      const type = typeof data?.type === 'string' ? data.type : null;
 
       if (!shindigId) {
         await handleOpenNotifications();
@@ -371,9 +558,20 @@ export default function App() {
       }
 
       setShowNotifications(false);
+      setShowChats(false);
       setShowMore(false);
       setShowSettings(false);
       setFriendProfileDetail(null);
+      setProfileFriendsDetail(null);
+
+      if (type === 'shindig_chat_message') {
+        setOverlayReturnTarget({ kind: 'tab', tab: activeTab });
+        setActiveChatShindigId(targetShindig.id);
+        setActiveTab('shindigs');
+        setShowChats(true);
+        return;
+      }
+
       setFeedShindig(targetShindig);
       setHighlightedPhotoId(photoId);
       setActiveTab('shindigs');
@@ -885,6 +1083,7 @@ export default function App() {
       return;
     }
 
+    setOverlayReturnTarget(captureCurrentView());
     setFriendProfileDetail(null);
     setShowChats(false);
     setShowMore(false);
@@ -988,6 +1187,18 @@ export default function App() {
 
   function handleOpenNotification(notification: AppNotification) {
     if (notification.type === 'shindig_invite' && notification.inviteStatus === 'pending') {
+      return;
+    }
+
+    if (notification.type === 'shindig_chat_message' && notification.shindigId) {
+      setShowNotifications(false);
+      setShowMore(false);
+      setShowSettings(false);
+      setFriendProfileDetail(null);
+      setProfileFriendsDetail(null);
+      setOverlayReturnTarget({ kind: 'notifications' });
+      setActiveChatShindigId(notification.shindigId);
+      setShowChats(true);
       return;
     }
 
@@ -1252,7 +1463,9 @@ export default function App() {
     );
   }
 
-  if (isLoading) {
+  const shouldShowBootScreen = isLoading || (!!session && !profile);
+
+  if (shouldShowBootScreen) {
     return (
       <SafeAreaView style={styles.loadingScreen}>
         <StatusBar style="light" />
@@ -1289,6 +1502,7 @@ export default function App() {
             ).length
       }
       onOpenMenu={() => {
+        setOverlayReturnTarget(captureCurrentView());
         setFriendProfileDetail(null);
         setProfileFriendsDetail(null);
         setShowChats(false);
@@ -1297,8 +1511,10 @@ export default function App() {
         setShowMore(true);
       }}
       onOpenChats={() => {
+        setOverlayReturnTarget(captureCurrentView());
         setFriendProfileDetail(null);
         setProfileFriendsDetail(null);
+        setActiveChatShindigId(null);
         setShowNotifications(false);
         setShowSettings(false);
         setShowMore(false);
@@ -1322,7 +1538,7 @@ export default function App() {
               onMaybeShindigInvite={handleMaybeShindigInvite}
               onOpenNotification={handleOpenNotification}
               onApprovePhotoRequest={handleApprovePhotoRequest}
-              onBack={() => setShowNotifications(false)}
+              onBack={() => restoreOverlayTarget(overlayReturnTarget)}
               onOpenFriend={handleOpenFriendProfile}
               onRejectShindigInvite={handleRejectShindigInvite}
               onRejectPhotoRequest={handleRejectPhotoRequest}
@@ -1331,8 +1547,11 @@ export default function App() {
           ) : showChats ? (
             <ShindigChatsScreen
               headerActions={headerActions}
+              initialShindigId={activeChatShindigId}
               notifications={notifications}
-              onBack={() => setShowChats(false)}
+              onBack={() => {
+                restoreOverlayTarget(overlayReturnTarget);
+              }}
               shindigs={shindigs}
               userId={session.user.id}
             />
@@ -1350,7 +1569,7 @@ export default function App() {
           ) : showMore ? (
             <MoreScreen
               headerActions={headerActions}
-              onBack={() => setShowMore(false)}
+              onBack={() => restoreOverlayTarget(overlayReturnTarget)}
               onOpenSettings={() => {
                 setShowMore(false);
                 setShowSettings(true);
@@ -1434,6 +1653,7 @@ export default function App() {
               headerActions={headerActions}
               initialFeedShindig={feedShindig}
               initialHighlightedPhotoId={highlightedPhotoId}
+              initialPlannedFeedViewMode={restoredPlannedFeedViewMode}
               initialStep={pendingShindigStep}
               onBackFromFeed={handleBackFromFeed}
               onFlowStepChange={(step) => {
@@ -1441,15 +1661,25 @@ export default function App() {
               }}
               onConsumeInitialFeedShindig={() => setFeedShindig(null)}
               onConsumeInitialHighlightedPhotoId={() => setHighlightedPhotoId(null)}
+              onConsumeInitialPlannedFeedViewMode={() => setRestoredPlannedFeedViewMode(null)}
               onConsumeInitialStep={() => setPendingShindigStep(null)}
               onAcceptUpcomingInvite={handleAcceptUpcomingShindigInvite}
               onMaybeUpcomingInvite={handleMaybeUpcomingShindigInvite}
               onRejectUpcomingInvite={handleRejectUpcomingShindigInvite}
+              onOpenShindigChat={(shindigId) => {
+                setOverlayReturnTarget(captureCurrentView());
+                setActiveChatShindigId(shindigId);
+                setShowNotifications(false);
+                setShowMore(false);
+                setShowSettings(false);
+                setShowChats(true);
+              }}
               onShindigSaved={handleShindigSaved}
               onShindigDeleted={handleShindigDeleted}
               onShindigCoverPhotoChanged={handleShindigCoverPhotoChanged}
               onShindigPhotoDeleted={handleShindigPhotoDeleted}
               onShindigStateChanged={handleShindigStateChanged}
+              onViewStateChange={setHomeScreenViewState}
               profile={profile}
               shindigs={shindigs}
               userId={session.user.id}

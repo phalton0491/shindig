@@ -42,7 +42,7 @@ export async function registerForPushNotifications(userId: string) {
 
   if (Constants.executionEnvironment === 'storeClient' && Platform.OS === 'android') {
     throw new Error(
-      'Push notifications require a development build or release app on Android. Expo Go does not support remote push on Expo SDK 54.'
+      'Push notifications require a development build or release app on Android. Expo Go does not support remote push on Expo SDK 56.'
     );
   }
 
@@ -104,7 +104,10 @@ export async function sendPushNotification(args: {
   title?: string;
 }) {
   try {
-    await client().functions.invoke('send-push', {
+    const { data, error } = await client().functions.invoke<{
+      delivered?: number;
+      error?: string;
+    }>('send-push', {
       body: {
         body: args.body,
         data: args.data || {},
@@ -112,7 +115,21 @@ export async function sendPushNotification(args: {
         title: args.title || 'ShinDig',
       },
     });
-  } catch {
-    return;
+
+    if (error) {
+      throw error;
+    }
+
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    return data?.delivered ?? 0;
+  } catch (error) {
+    console.warn(
+      'Push notification delivery failed:',
+      error instanceof Error ? error.message : error
+    );
+    return 0;
   }
 }
